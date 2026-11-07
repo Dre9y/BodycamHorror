@@ -36,6 +36,12 @@ namespace BodycamHorror.Player
             public Vector3 thumbAim;
             [Tooltip("Push the thumb out of the capsule (off for a capsule that stands for the other hand).")]
             public bool thumbStaysOut = true;
+            [Tooltip("Point the thumb tip goes to, weapon space relative to the grip point (overrides Thumb Aim). Zero = off.")]
+            public Vector3 thumbPoint;
+            [Tooltip("Trigger finger: where the pad of the index finger rests (the trigger face), weapon space relative to the grip point. Zero = index just wraps like the others.")]
+            public Vector3 indexPoint;
+            [Tooltip("Bend of the index finger's two outer joints while it rests on the trigger (0..1).")]
+            public float indexBend = 0.35f;
         }
 
         [Header("References (found automatically)")]
@@ -57,9 +63,12 @@ namespace BodycamHorror.Player
         [Header("Gun grips (weapon space)")]
         public GripPose pistolRight = new GripPose
         {
-            axisA = new Vector3(0f, 0.03f, -0.004f), axisB = new Vector3(0f, -0.045f, -0.024f), radius = 0.018f, along = 0.2f,
+            axisA = new Vector3(0f, 0.03f, -0.004f), axisB = new Vector3(0f, -0.045f, -0.024f), radius = 0.018f, along = 0.3f,
             forward = new Vector3(0f, 0.3f, 1f), back = new Vector3(1f, 0.1f, -0.15f), curl = new[] { 0.5f, 0.25f, 1f, 1f, 1f },
+            offset = new Vector3(0f, -0.006f, -0.03f),
             thumbAim = new Vector3(-0.1f, -0.15f, 1f),
+            thumbPoint = new Vector3(-0.02f, 0.046f, 0.055f),
+            indexPoint = new Vector3(0.002f, 0.036f, 0.046f), indexBend = 0.2f,
         };
         public GripPose pistolLeft = new GripPose
         {
@@ -73,6 +82,8 @@ namespace BodycamHorror.Player
             axisA = new Vector3(0f, 0.03f, 0.022f), axisB = new Vector3(0f, -0.035f, -0.016f), radius = 0.017f, along = 0.35f,
             forward = new Vector3(0f, 0.3f, 1f), back = new Vector3(1f, 0.1f, -0.15f), curl = new[] { 0.5f, 0.25f, 1f, 1f, 1f },
             thumbAim = new Vector3(-0.8f, 0.1f, 0.45f),
+            thumbPoint = new Vector3(-0.02f, 0.035f, 0.06f),
+            indexPoint = new Vector3(0.003f, 0.007f, 0.098f), indexBend = 0.35f,
         };
         public GripPose shotgunLeft = new GripPose
         {
@@ -105,7 +116,12 @@ namespace BodycamHorror.Player
         }
 
         /// <summary>What a hand wraps this frame, in world space.</summary>
-        struct Capsule { public Vector3 a, b; public float r; public bool on; public Vector3 thumb; public bool thumbOut; }
+        struct Capsule
+        {
+            public Vector3 a, b; public float r; public bool on;
+            public Vector3 thumb; public bool thumbOut; public Vector3 thumbPoint; public bool hasThumbPoint;
+            public Vector3 index; public bool hasIndex; public float indexBend;
+        }
 
         class Arm
         {
@@ -126,7 +142,10 @@ namespace BodycamHorror.Player
         float lastShotTime = -10f;
         Firearm subscribed;
 
-        void Awake()
+        void Awake() => Init();
+
+        /// <summary>Finds the bones and records the bind pose. Runs again after a script reload in Play Mode.</summary>
+        void Init()
         {
             if (!player) player = GetComponentInParent<BodycamPlayerController>();
             if (!poseSource && player) poseSource = player.GetComponentInChildren<PlaceholderArms>();
@@ -223,6 +242,28 @@ namespace BodycamHorror.Player
             return a;
         }
 
+        /// <summary>Puts every skinned bone back where the mesh was bound (parents first).</summary>
+        static void RestoreBindPose(Transform root)
+        {
+            foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                var bones = smr.bones;
+                var bind = smr.sharedMesh ? smr.sharedMesh.bindposes : null;
+                if (bind == null || bind.Length != bones.Length) continue;
+                var order = new int[bones.Length];
+                for (int i = 0; i < order.Length; i++) order[i] = i;
+                System.Array.Sort(order, (x, y) => Depth(bones[x]).CompareTo(Depth(bones[y])));
+                foreach (int i in order)
+                {
+                    if (!bones[i]) continue;
+                    Matrix4x4 m = smr.transform.localToWorldMatrix * bind[i].inverse;
+                    bones[i].SetPositionAndRotation(m.GetColumn(3), m.rotation);
+                }
+            }
+        }
+
+        static int Depth(Transform t) { int d = 0; while (t) { t = t.parent; d++; } return d; }
+
         static Transform Find(Transform root, string n)
         {
             foreach (var t in root.GetComponentsInChildren<Transform>(true)) if (t.name == n) return t;
@@ -233,6 +274,13 @@ namespace BodycamHorror.Player
 
         void LateUpdate()
         {
+            if (left == null || right == null)
+            {
+                // script reload in Play Mode drops the bone data: rebuild from the bind pose
+                if (rigRoot) RestoreBindPose(rigRoot);
+                Init();
+                OnEnable();
+            }
             if (left == null || right == null || !left.ok || !right.ok || !poseSource) return;
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
@@ -266,7 +314,11 @@ namespace BodycamHorror.Player
                 GripTarget(gun.transform, gun.transform.position, rg, out rPos, out rRot, out rCap);
                 rCurl = (float[])rg.curl.Clone();
                 bool pulling = Time.time - lastShotTime < 0.12f;
-                if (pulling) rCurl[1] = triggerPullCurl;
+                if (pulling)
+                {
+                    rCurl[1] = triggerPullCurl;
+                    if (rCap.hasIndex) { rCap.index -= gun.transform.forward * 0.007f; rCap.indexBend += 0.2f; }
+                }
 
                 // left hand: on the fore-end / support grip, blended to the placeholder's free pose
                 GripPose lg = shotgun ? shotgunLeft : pistolLeft;
@@ -307,6 +359,8 @@ namespace BodycamHorror.Player
                 a = point + q * g.axisA, b = point + q * g.axisB, r = g.radius, on = true,
                 thumb = g.thumbAim.sqrMagnitude > 1e-6f ? q * g.thumbAim.normalized : Vector3.zero,
                 thumbOut = g.thumbStaysOut,
+                thumbPoint = point + q * g.thumbPoint, hasThumbPoint = g.thumbPoint.sqrMagnitude > 1e-8f,
+                index = point + q * g.indexPoint, hasIndex = g.indexPoint.sqrMagnitude > 1e-8f, indexBend = g.indexBend,
             };
             Vector3 onAxis = Vector3.Lerp(cap.a, cap.b, g.along);
             palmPos = onAxis + b * g.radius + q * g.offset;
@@ -394,6 +448,27 @@ namespace BodycamHorror.Player
                 SetCurl(fin, f, fin.curl);
             }
 
+            // trigger finger: bend the outer joints, then swing the finger from the knuckle onto the trigger
+            Finger trig = a.fingers[1];
+            if (cap.on && cap.hasIndex && trig != null && trig.joints[0] && trig.joints[2])
+            {
+                Transform k0 = trig.joints[0];
+                SetCurl(trig, 1, 0f);
+                float reachWanted = Vector3.Distance(k0.position, cap.index);
+                // bend the two outer joints just enough that the pad lands on the trigger, never less than indexBend
+                float bestBend = cap.indexBend, bestErr = float.MaxValue;
+                for (int i = 0; i <= 16; i++)
+                {
+                    float bnd = Mathf.Lerp(cap.indexBend, 1.6f, i / 16f);
+                    BendIndex(trig, bnd);
+                    float err = Mathf.Abs(Vector3.Distance(k0.position, IndexPad(trig)) - reachWanted);
+                    if (err < bestErr) { bestErr = err; bestBend = bnd; }
+                }
+                BendIndex(trig, bestBend);
+                trig.curl = bestBend;
+                k0.rotation = Quaternion.FromToRotation(IndexPad(trig) - k0.position, cap.index - k0.position) * k0.rotation;
+            }
+
             Finger th = a.fingers[0];
             // fist: the thumb folds over the index and middle fingers
             Finger ix = a.fingers[1];
@@ -406,11 +481,12 @@ namespace BodycamHorror.Player
             }
 
             // thumb along the frame / fore-end instead of sticking out
-            if (cap.on && cap.thumb != Vector3.zero && th != null && th.joints[0] && th.tip)
+            if (cap.on && (cap.thumb != Vector3.zero || cap.hasThumbPoint) && th != null && th.joints[0] && th.tip)
             {
                 Transform t0 = th.joints[0];
                 Vector3 cur = th.tip.position - t0.position;
-                t0.rotation = Quaternion.FromToRotation(cur, cap.thumb) * t0.rotation;
+                Vector3 want = cap.hasThumbPoint ? cap.thumbPoint - t0.position : cap.thumb;
+                t0.rotation = Quaternion.FromToRotation(cur, want) * t0.rotation;
                 // don't let it sink into what it holds
                 for (int i = 0; i < 6 && cap.thumbOut && (Inside(th.tip, cap) || Inside(th.joints[2], cap)); i++)
                 {
@@ -419,6 +495,15 @@ namespace BodycamHorror.Player
                 }
             }
         }
+
+        void BendIndex(Finger fin, float bend)
+        {
+            fin.joints[1].localRotation = fin.bind[1] * Quaternion.AngleAxis(fingerCurlAngles.y * bend * 0.7f, fin.axis[1]);
+            fin.joints[2].localRotation = fin.bind[2] * Quaternion.AngleAxis(fingerCurlAngles.z * bend * 0.7f, fin.axis[2]);
+        }
+
+        /// <summary>The pad of the index finger: just past its last joint.</summary>
+        static Vector3 IndexPad(Finger fin) => fin.tip ? Vector3.Lerp(fin.joints[2].position, fin.tip.position, 0.45f) : fin.joints[2].position;
 
         void SetCurl(Finger fin, int f, float c)
         {
@@ -443,7 +528,9 @@ namespace BodycamHorror.Player
                 if (Inside(fin.joints[1], cap) || Inside(fin.joints[2], cap) || Inside(fin.tip, cap)) break;
                 best = c;
             }
-            return best;
+            // touching almost at once: the finger starts at the edge of the grip (pinky below it) - close it
+            // around rather than leaving it sticking out straight
+            return best < max * 0.25f ? max * 0.8f : best;
         }
 
         static bool Inside(Transform t, Capsule cap)

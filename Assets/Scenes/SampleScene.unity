@@ -1723,10 +1723,10 @@ MonoBehaviour:
     axisA: {x: 0, y: 0.03, z: -0.004}
     axisB: {x: 0, y: -0.045, z: -0.024}
     radius: 0.018
-    along: 0.2
+    along: 0.3
     forward: {x: 0, y: 0.3, z: 1}
     back: {x: 1, y: 0.1, z: -0.15}
-    offset: {x: 0, y: 0, z: 0}
+    offset: {x: 0, y: -0.006, z: -0.03}
     curl:
     - 0.5
     - 0.25
@@ -1735,6 +1735,9 @@ MonoBehaviour:
     - 1
     thumbAim: {x: -0.1, y: -0.15, z: 1}
     thumbStaysOut: 1
+    thumbPoint: {x: -0.02, y: 0.046, z: 0.055}
+    indexPoint: {x: 0.002, y: 0.036, z: 0.046}
+    indexBend: 0.2
   pistolLeft:
     axisA: {x: 0.036, y: 0.045, z: 0.002}
     axisB: {x: 0.036, y: -0.025, z: -0.016}
@@ -1751,6 +1754,9 @@ MonoBehaviour:
     - 1
     thumbAim: {x: -0.1, y: -0.2, z: 1}
     thumbStaysOut: 0
+    thumbPoint: {x: 0, y: 0, z: 0}
+    indexPoint: {x: 0, y: 0, z: 0}
+    indexBend: 0.35
   shotgunRight:
     axisA: {x: 0, y: 0.03, z: 0.022}
     axisB: {x: 0, y: -0.035, z: -0.016}
@@ -1767,6 +1773,9 @@ MonoBehaviour:
     - 1
     thumbAim: {x: -0.8, y: 0.1, z: 0.45}
     thumbStaysOut: 1
+    thumbPoint: {x: -0.02, y: 0.035, z: 0.06}
+    indexPoint: {x: 0.003, y: 0.007, z: 0.098}
+    indexBend: 0.35
   shotgunLeft:
     axisA: {x: 0.034, y: 0.022, z: -0.08}
     axisB: {x: 0.034, y: 0.022, z: 0.08}
@@ -1783,6 +1792,9 @@ MonoBehaviour:
     - 1
     thumbAim: {x: 0.1, y: 0.3, z: 1}
     thumbStaysOut: 1
+    thumbPoint: {x: 0, y: 0, z: 0}
+    indexPoint: {x: 0, y: 0, z: 0}
+    indexBend: 0.35
   fistCurl:
   - 0.85
   - 1

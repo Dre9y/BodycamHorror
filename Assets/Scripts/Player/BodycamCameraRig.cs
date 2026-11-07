@@ -56,6 +56,9 @@ namespace BodycamHorror.Player
         public float posDamping = 16f;
         public float rotStiffness = 110f;
         public float rotDamping = 13f;
+        [Tooltip("Stiff spring for AddKick (gun recoil): short, sharp jolts.")]
+        public float kickStiffness = 420f;
+        public float kickDamping = 30f;
 
         [Header("Shake")]
         public float traumaDecay = 1.3f;
@@ -63,18 +66,32 @@ namespace BodycamHorror.Player
         public float shakePosition = 0.05f;
         public float shakeFrequency = 18f;
 
+        [Header("Tremor (fast, fine shudder: shots, hard knocks)")]
+        public float tremorDecay = 7f;
+        public float tremorAngle = 0.9f;
+        public float tremorPosition = 0.004f;
+        public float tremorFrequency = 42f;
+
+        [Header("Knocks (landings, trips, wall hits)")]
+        [Tooltip("Scales every landing / stumble / wall-hit reaction at once.")]
+        [Range(0f, 3f)] public float impactStrength = 1f;
+
         [Header("Idle breathing")]
         public float breathAmount = 0.006f;
         public float breathAngle = 0.5f;
         public float breathRate = 0.3f;
+        [Tooltip("Optional. Stress makes breathing deeper and faster.")]
+        public PlayerStress stress;
+        public float stressBreathAmount = 2.5f;
+        public float stressBreathRate = 2.2f;
 
         /// <summary>Footstep phase in radians (one full cycle = left + right step).</summary>
         public float StepPhase { get; private set; }
         /// <summary>0..1 bob strength this frame.</summary>
         public float BobAmount { get; private set; }
 
-        Vector3 posValue, posVelocity, rotValue, rotVelocity;
-        float trauma, stumbleSide = 1f, seed;
+        Vector3 posValue, posVelocity, rotValue, rotVelocity, kickValue, kickVelocity;
+        float trauma, tremor, stumbleSide = 1f, seed, breathPhase;
         Quaternion followRot;
         bool followInit;
 
@@ -84,16 +101,20 @@ namespace BodycamHorror.Player
             if (!cam) cam = GetComponentInChildren<Camera>();
             if (!player) player = GetComponentInParent<BodycamPlayerController>();
             if (!weapon && player) weapon = player.GetComponentInChildren<PlayerShooting>();
+            if (!stress && player) stress = player.GetComponent<PlayerStress>();
         }
 
         /// <summary>Adds camera shake (0..1, decays over time).</summary>
         public void AddTrauma(float amount) => trauma = Mathf.Clamp01(Mathf.Max(trauma, 0f) + amount);
 
-        /// <summary>Kicks the camera springs: positional (m/s) and rotational (deg/s) velocity.</summary>
+        /// <summary>Adds a fast, fine shudder (decays within a fraction of a second).</summary>
+        public void AddTremor(float amount) => tremor = Mathf.Min(1.5f, tremor + amount);
+
+        /// <summary>Snappy kick (e.g. gun recoil) on a stiff spring: positional (m/s) and rotational (deg/s) velocity.</summary>
         public void AddKick(Vector3 positionVelocity, Vector3 rotationVelocity)
         {
             posVelocity += positionVelocity;
-            rotVelocity += rotationVelocity;
+            kickVelocity += rotationVelocity;
         }
 
         void OnEnable()
@@ -139,11 +160,13 @@ namespace BodycamHorror.Player
             targetRot.z += s * bobRoll * bob;
             targetRot.x += step * bobPitch * bob;
 
-            // Breathing (stronger after sprinting would be a nice later addition)
-            float bt = Time.time * breathRate * Mathf.PI * 2f;
-            targetPos.y += Mathf.Sin(bt) * breathAmount;
-            targetRot.x += Noise(seed, Time.time * 0.3f) * breathAngle;
-            targetRot.y += Noise(seed + 7f, Time.time * 0.25f) * breathAngle;
+            // Breathing: deeper and faster under stress
+            float stress01 = stress ? stress.Value : 0f;
+            float breathK = 1f + stress01 * (stressBreathAmount - 1f);
+            breathPhase += breathRate * (1f + stress01 * (stressBreathRate - 1f)) * Mathf.PI * 2f * dt;
+            targetPos.y += Mathf.Sin(breathPhase) * breathAmount * breathK;
+            targetRot.x += (Noise(seed, Time.time * 0.3f) * breathAngle - Mathf.Sin(breathPhase) * 0.25f * stress01) * breathK;
+            targetRot.y += Noise(seed + 7f, Time.time * 0.25f) * breathAngle * breathK;
 
             // Heavy camera rolls into turns (the trailing itself comes from following the hands below)
             Vector2 lv = player.LookVelocity;
@@ -175,10 +198,15 @@ namespace BodycamHorror.Player
                 }
                 case MoveState.Stumbling:
                 {
-                    float a = Mathf.Sin(player.ActionProgress * Mathf.PI);
-                    targetRot.x += a * 28f;
-                    targetRot.z += a * 12f * stumbleSide;
-                    targetPos.y -= a * 0.3f;
+                    // fast pitch forward, slower recovery
+                    float p = player.ActionProgress;
+                    float a = p < 0.2f ? Smooth(p / 0.2f) : 1f - Smooth((p - 0.2f) / 0.8f);
+                    a *= impactStrength;
+                    targetRot.x += a * 40f;
+                    targetRot.z += a * 18f * stumbleSide;
+                    targetRot.y += a * 6f * stumbleSide;
+                    targetPos.y -= a * 0.45f;
+                    targetPos.z += a * 0.1f;
                     break;
                 }
                 case MoveState.Bumped:
@@ -189,6 +217,7 @@ namespace BodycamHorror.Player
             // Springs
             StepSpring(ref posValue, ref posVelocity, targetPos, posStiffness, posDamping, dt);
             StepSpring(ref rotValue, ref rotVelocity, targetRot, rotStiffness, rotDamping, dt);
+            StepSpring(ref kickValue, ref kickVelocity, Vector3.zero, kickStiffness, kickDamping, dt);
 
             // Trauma shake
             trauma = Mathf.Max(0f, trauma - traumaDecay * dt);
@@ -196,6 +225,15 @@ namespace BodycamHorror.Player
             float t = Time.time * shakeFrequency;
             Vector3 shakeRot = new Vector3(Noise(seed + 1f, t), Noise(seed + 2f, t), Noise(seed + 3f, t)) * (shakeAngle * shake);
             Vector3 shakePos = new Vector3(Noise(seed + 4f, t), Noise(seed + 5f, t), 0f) * (shakePosition * shake);
+
+            // Tremor: fast fine shudder on top
+            tremor *= Mathf.Exp(-tremorDecay * dt);
+            if (tremor > 0.001f)
+            {
+                float tt = Time.time * tremorFrequency;
+                shakeRot += new Vector3(Noise(seed + 21f, tt), Noise(seed + 22f, tt), Noise(seed + 23f, tt) * 1.5f) * (tremorAngle * tremor);
+                shakePos += new Vector3(Noise(seed + 24f, tt), Noise(seed + 25f, tt), 0f) * (tremorPosition * tremor);
+            }
 
             // Follow the hands: the pivot (mouse look) and the gun lead, the camera catches up in world
             // space a moment later, so on screen the gun swings ahead and the view settles onto it.
@@ -212,7 +250,7 @@ namespace BodycamHorror.Player
             Quaternion followLocal = Quaternion.Inverse(pivotRot) * followRot;
 
             transform.localPosition = posValue + shakePos;
-            transform.localRotation = followLocal * Quaternion.Euler(rotValue + shakeRot);
+            transform.localRotation = followLocal * Quaternion.Euler(rotValue + kickValue + shakeRot);
 
             if (cam)
             {
@@ -225,29 +263,43 @@ namespace BodycamHorror.Player
         void OnLanded(float impact)
         {
             if (impact < 2f) return;
-            float k = Mathf.Clamp01((impact - 2f) / 12f);
-            posVelocity.y -= Mathf.Lerp(0.5f, 3.5f, k);
-            rotVelocity.x += Mathf.Lerp(20f, 160f, k);
-            trauma = Mathf.Max(trauma, k * 0.6f);
+            float k = Mathf.Clamp01((impact - 2f) / 10f);
+            float m = impactStrength;
+            float side = Random.value < 0.5f ? -1f : 1f;
+            posVelocity.y -= Mathf.Lerp(0.8f, 5f, k) * m;
+            rotVelocity.x += Mathf.Lerp(40f, 280f, k) * m;          // head snaps down
+            rotVelocity.z += side * Mathf.Lerp(10f, 120f, k) * m;   // and twists off-axis
+            trauma = Mathf.Max(trauma, Mathf.Clamp01(k * 0.9f * m));
+            AddTremor(Mathf.Lerp(0.2f, 1.1f, k) * m);
         }
 
         void OnImpacted(ImpactKind kind, float speed)
         {
             float k = Mathf.InverseLerp(3f, 9f, speed);
+            float m = impactStrength;
+            float side = Random.value < 0.5f ? -1f : 1f;
             if (kind == ImpactKind.Wall)
             {
-                posVelocity.z -= 1f + 2.5f * k;
-                rotVelocity.x -= 120f * k;
-                rotVelocity.z += (Random.value < 0.5f ? -1f : 1f) * 90f * k;
-                trauma = Mathf.Max(trauma, 0.5f + 0.5f * k);
+                posVelocity.z -= (1.5f + 3f * k) * m;
+                rotVelocity.x -= (60f + 160f * k) * m;
+                rotVelocity.z += side * (50f + 130f * k) * m;
+                trauma = Mathf.Max(trauma, Mathf.Clamp01((0.55f + 0.45f * k) * m));
+                AddTremor((0.6f + 0.6f * k) * m);
             }
             else
             {
-                stumbleSide = Random.value < 0.5f ? -1f : 1f;
-                rotVelocity.x += 150f * k;
-                trauma = Mathf.Max(trauma, 0.45f + 0.3f * k);
+                stumbleSide = side;
+                float s = 0.5f + 0.5f * k;
+                rotVelocity.x += 300f * s * m;
+                rotVelocity.z += side * 180f * s * m;
+                posVelocity.y -= 1.6f * s * m;
+                posVelocity.z += 0.8f * s * m;
+                trauma = Mathf.Max(trauma, Mathf.Clamp01((0.6f + 0.35f * k) * m));
+                AddTremor(0.9f * m);
             }
         }
+
+        static float Smooth(float t) { t = Mathf.Clamp01(t); return t * t * (3f - 2f * t); }
 
         void OnStateChanged(MoveState from, MoveState to)
         {

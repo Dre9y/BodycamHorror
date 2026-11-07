@@ -61,8 +61,40 @@ namespace BodycamHorror.Weapons
         public float recoilRotDamping = 24f;
         public float recoilPosStiffness = 380f;
         public float recoilPosDamping = 28f;
-        [Tooltip("Shake added to the camera per shot (on top of following the gun).")]
+        [Header("Recoil in the camera itself (on top of following the gun)")]
+        [Tooltip("Slow shake per shot.")]
         public float cameraTraumaPerShot = 0.14f;
+        [Tooltip("Fast fine shudder per shot.")]
+        public float cameraTremorPerShot = 0.55f;
+        [Tooltip("Upward kick of the camera springs per shot (deg/s).")]
+        public float cameraKickPitch = 110f;
+        public float cameraKickRoll = 60f;
+        [Tooltip("Backward shove of the camera per shot (m/s).")]
+        public float cameraKickBack = 0.25f;
+
+        [Header("Look inertia (hands swing ahead of sharp moves)")]
+        [Tooltip("Degrees the gun leads the view per deg/s of look speed. Negative makes it trail instead.")]
+        public float lookLead = 0.025f;
+        [Tooltip("Extra swing from sudden changes of look speed (flicks and hard stops).")]
+        public float lookJerkLead = 0.18f;
+        public float maxLookLead = 12f;
+        public float leadStiffness = 280f;
+        public float leadDamping = 19f;
+        [Tooltip("How far (m) the gun travels sideways per radian of lead.")]
+        public float leadArm = 0.3f;
+        [Range(0f, 1f)] public float aimLeadScale = 0.6f;
+
+        [Header("Stress tremor (needs PlayerStress on the player)")]
+        public PlayerStress stress;
+        [Tooltip("Hand tremor at full stress (deg).")]
+        public float stressTremorAngle = 1.6f;
+        public float stressTremorPosition = 0.005f;
+        public float stressTremorFrequency = 9f;
+        [Tooltip("Share of the tremor the camera follows; the rest shows as hands shaking in frame.")]
+        [Range(0f, 1f)] public float stressTremorCameraShare = 0.35f;
+        [Tooltip("Breathing sway multiplier at full stress.")]
+        public float stressBreathBoost = 2f;
+        public float stressSpread = 1.5f;
 
         [Header("Spread (degrees)")]
         public float hipSpread = 0.7f;
@@ -99,6 +131,7 @@ namespace BodycamHorror.Weapons
         Quaternion carryRot = Quaternion.identity;
 
         Vector3 recoilPos, recoilPosVel, recoilRot, recoilRotVel;
+        Vector2 lead, leadVel, smoothLook, prevSmoothLook;
         float seed;
 
         bool reloading, reloadMagOut, reloadMagIn, reloadRacked, reloadFromEmpty;
@@ -109,6 +142,7 @@ namespace BodycamHorror.Weapons
             if (!player) player = GetComponentInParent<BodycamPlayerController>();
             if (!rig && player) rig = player.GetComponentInChildren<BodycamCameraRig>();
             if (!pistol) pistol = GetComponentInChildren<Pistol>();
+            if (!stress && player) stress = player.GetComponent<PlayerStress>();
             seed = Random.value * 100f;
             if (pistol) pistol.transform.SetLocalPositionAndRotation(readyPosition, AimAt(readyPosition));
 
@@ -123,7 +157,7 @@ namespace BodycamHorror.Weapons
         void OnEnable()
         {
             fireAction.Enable(); aimAction.Enable(); reloadAction.Enable();
-            if (player) player.Landed += OnLanded;
+            if (player) { player.Landed += OnLanded; player.Impacted += OnImpacted; }
         }
 
         void OnDisable()
@@ -132,6 +166,7 @@ namespace BodycamHorror.Weapons
             if (player)
             {
                 player.Landed -= OnLanded;
+                player.Impacted -= OnImpacted;
                 player.sprintBlocked = false;
                 player.moveSpeedScale = 1f;
             }
@@ -225,19 +260,50 @@ namespace BodycamHorror.Weapons
             Vector3 localVel = player.transform.InverseTransformDirection(player.HorizontalVelocity);
             rot *= Quaternion.Euler(0f, 0f, -localVel.x * strafeRoll);
 
-            // --- breathing sway (the camera follows this)
-            float breath = breathSway * Mathf.Lerp(1f, aimBreathScale, aimW) * (1f + player.SprintBlend);
+            float sdt = Mathf.Min(dt, 1f / 30f);   // clamped step keeps the stiff springs stable on frame spikes
+
+            // --- look inertia: a sharp flick throws the hands ahead of the view, a hard stop lets them swing
+            // back past centre. The camera does not follow this, so it reads as the hands moving on screen.
+            Vector2 lookVel = player.LookVelocity;   // deg/s, x = yaw, y = pitch (down positive)
+            smoothLook = Vector2.Lerp(smoothLook, lookVel, 1f - Mathf.Exp(-dt / 0.015f));
+            Vector2 leadTarget = Vector2.ClampMagnitude(smoothLook * lookLead, maxLookLead);
+            leadVel += (smoothLook - prevSmoothLook) * lookJerkLead;
+            prevSmoothLook = smoothLook;
+            leadVel += ((leadTarget - lead) * leadStiffness - leadVel * leadDamping) * sdt;
+            lead += leadVel * sdt;
+            lead = Vector2.ClampMagnitude(lead, maxLookLead);
+            Vector2 leadNow = lead * Mathf.Lerp(1f, aimLeadScale, aimW) * (1f - 0.5f * carryW);
+            pos += new Vector3(leadNow.x, -leadNow.y, 0f) * (Mathf.Deg2Rad * leadArm);
+            rot = Quaternion.Euler(leadNow.y, leadNow.x, 0f) * rot * Quaternion.Euler(0f, 0f, -leadNow.x * 0.4f);
+
+            // --- breathing sway (the camera follows this); heavier under stress
+            float stress01 = stress ? stress.Value : 0f;
+            float breath = breathSway * Mathf.Lerp(1f, aimBreathScale, aimW) * (1f + player.SprintBlend)
+                           * (1f + stress01 * (stressBreathBoost - 1f));
             Vector3 sway = new Vector3(Noise(seed, Time.time * 0.35f), Noise(seed + 3f, Time.time * 0.28f), 0f) * breath;
 
-            // --- recoil spring (clamped step keeps the stiff springs stable on frame spikes)
-            float sdt = Mathf.Min(dt, 1f / 30f);
+            // --- stress tremor: fine, fast shake of the hands
+            float tremor01 = stress ? stress.Tremor : 0f;
+            Vector3 tremor = Vector3.zero, tremorPos = Vector3.zero;
+            if (tremor01 > 0.001f)
+            {
+                float tf = Time.time * stressTremorFrequency;
+                tremor = new Vector3(Noise(seed + 11f, tf) + 0.5f * Noise(seed + 12f, tf * 2.3f),
+                                     Noise(seed + 13f, tf) + 0.5f * Noise(seed + 14f, tf * 2.3f),
+                                     Noise(seed + 15f, tf) * 0.6f)
+                         * (stressTremorAngle * tremor01 * Mathf.Lerp(1f, 0.75f, aimW));
+                tremorPos = new Vector3(Noise(seed + 16f, tf * 1.3f), Noise(seed + 17f, tf * 1.3f), 0f)
+                            * (stressTremorPosition * tremor01);
+            }
+
+            // --- recoil spring
             StepSpring(ref recoilPos, ref recoilPosVel, Vector3.zero, recoilPosStiffness, recoilPosDamping, sdt);
             StepSpring(ref recoilRot, ref recoilRotVel, Vector3.zero, recoilRotStiffness, recoilRotDamping, sdt);
 
-            pistol.transform.localPosition = pos + recoilPos;
-            pistol.transform.localRotation = rot * Quaternion.Euler(recoilRot + sway);
+            pistol.transform.localPosition = pos + recoilPos + tremorPos;
+            pistol.transform.localRotation = rot * Quaternion.Euler(recoilRot + sway + tremor);
 
-            AimOffset = recoilRot + sway;
+            AimOffset = recoilRot + sway + tremor * stressTremorCameraShare;
             CameraFollowWeight = (1f - carryW) * (1f - lowW) * (1f - tuckW);
 
             TryFire();
@@ -255,7 +321,8 @@ namespace BodycamHorror.Weapons
             float speed01 = Mathf.Clamp01(player.Speed / Mathf.Max(player.sprintSpeed, 0.1f));
             float spread = Mathf.Lerp(hipSpread, aimSpread, aimW) + moveSpread * speed01
                            + (player.State == MoveState.Airborne ? airSpread : 0f)
-                           + oneHandSpread * (1f - twoHandW);
+                           + oneHandSpread * (1f - twoHandW)
+                           + (stress ? stress.Tremor * stressSpread : 0f);
 
             if (!pistol.Fire(transform.position, spread, player.gameObject)) return;
 
@@ -264,7 +331,13 @@ namespace BodycamHorror.Weapons
                                         Random.Range(-kickYaw, kickYaw),
                                         Random.Range(-kickRoll, kickRoll)) * k;
             recoilPosVel += new Vector3(Random.Range(-0.05f, 0.05f), kickUp, -kickBack) * k;
-            if (rig) rig.AddTrauma(cameraTraumaPerShot * k);
+            if (rig)
+            {
+                rig.AddTrauma(cameraTraumaPerShot * k);
+                rig.AddTremor(cameraTremorPerShot * k);
+                rig.AddKick(new Vector3(0f, 0f, -cameraKickBack * k),
+                            new Vector3(-cameraKickPitch * Random.Range(0.8f, 1.2f), 0f, Random.Range(-cameraKickRoll, cameraKickRoll)) * k);
+            }
             Fired?.Invoke();
         }
 
@@ -352,7 +425,16 @@ namespace BodycamHorror.Weapons
             if (impact < 2f) return;
             float k = Mathf.Clamp01((impact - 2f) / 12f);
             recoilPosVel.y -= Mathf.Lerp(0.3f, 1.6f, k);
-            recoilRotVel.x += Mathf.Lerp(15f, 90f, k);
+            recoilRotVel.x += Mathf.Lerp(15f, 140f, k);
+            recoilRotVel.z += Random.Range(-1f, 1f) * Mathf.Lerp(10f, 120f, k);
+        }
+
+        void OnImpacted(ImpactKind kind, float speed)
+        {
+            // the hands get thrown about by trips and wall hits
+            float k = Mathf.InverseLerp(3f, 9f, speed) * 0.6f + 0.4f;
+            recoilRotVel += new Vector3(Random.Range(-1f, 1f) * 260f, Random.Range(-1f, 1f) * 200f, Random.Range(-1f, 1f) * 260f) * k;
+            recoilPosVel += new Vector3(Random.Range(-0.6f, 0.6f), Random.Range(-0.8f, 0.4f), kind == ImpactKind.Wall ? -1.2f : 0.6f) * k;
         }
 
         Quaternion AimAt(Vector3 gripPos)

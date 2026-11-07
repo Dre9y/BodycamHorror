@@ -54,13 +54,13 @@ namespace BodycamHorror.Player
         void OnEnable()
         {
             if (player) { player.LandingResolved += OnLanded; player.Impacted += OnImpacted; }
-            if (shooting) shooting.Fired += OnFired;
+            if (shooting) { shooting.Fired += OnFired; shooting.Meleed += OnMeleed; }
         }
 
         void OnDisable()
         {
             if (player) { player.LandingResolved -= OnLanded; player.Impacted -= OnImpacted; }
-            if (shooting) shooting.Fired -= OnFired;
+            if (shooting) { shooting.Fired -= OnFired; shooting.Meleed -= OnMeleed; }
         }
 
         /// <summary>Adds stress (scaled by the current exertion streak) and counts as exertion.</summary>
@@ -93,6 +93,8 @@ namespace BodycamHorror.Player
         }
 
         void OnFired() => Add(perShot);
+
+        void OnMeleed(bool connected) => Add(perShot * (connected ? 1.2f : 0.6f));
 
         void OnLanded(LandingKind kind, float drop)
         {

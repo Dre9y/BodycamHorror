@@ -113,6 +113,13 @@ namespace BodycamHorror.Player
         [Range(0f, 1f)] public float braceReverseKeepSpeed = 0.6f;
         [Tooltip("How much the push-off angles away from the wall.")]
         public float bracePushOff = 0.3f;
+        [Tooltip("Looking at / along the wall at the push-off: run along it and turn the camera that way "
+                 + "(side from A/D, else the sideways part of the run, else right).")]
+        public bool braceAutoTurn = true;
+        [Tooltip("The view counts as already turned away (no auto-turn) when it points this much away from the wall (0..1).")]
+        [Range(0f, 1f)] public float braceLookAwayThreshold = 0.35f;
+        [Tooltip("Smoothing of the camera auto-turn (s); it settles in about 4x this.")]
+        public float braceTurnSmoothing = 0.07f;
         [Tooltip("After a push-off, sharp-turn braking is off for this long so you can line up.")]
         public float pushOffGrace = 0.35f;
 
@@ -191,6 +198,7 @@ namespace BodycamHorror.Player
         Vector3 braceNormal, braceIncomingDir;
         float braceIncomingSpeed;
         float lastScrapeContactTime = -10f;
+        float autoYawTarget, autoYawTimer;
 
         Vector3 hVel;
         float vVel;
@@ -339,9 +347,17 @@ namespace BodycamHorror.Player
             if (State == MoveState.Stumbling || State == MoveState.Bumped || State == MoveState.HardLanding) d *= 0.35f;
             else if (State == MoveState.Rolling) d *= 0.5f;
 
-            yaw += d.x;
+            float yawStep = d.x;
+            if (autoYawTimer > 0f)
+            {
+                // Brace push-off turning the view along the wall; mouse input still steers on top.
+                autoYawTimer -= dt;
+                autoYawTarget += d.x;
+                yawStep += Mathf.DeltaAngle(yaw + d.x, autoYawTarget) * (1f - Mathf.Exp(-dt / Mathf.Max(braceTurnSmoothing, 0.001f)));
+            }
+            yaw += yawStep;
             float newPitch = Mathf.Clamp(pitch - d.y, -maxPitch, maxPitch);
-            LookVelocity = new Vector2(d.x, newPitch - pitch) / dt;
+            LookVelocity = new Vector2(yawStep, newPitch - pitch) / dt;
             pitch = newPitch;
 
             transform.rotation = Quaternion.Euler(0f, yaw, 0f);
@@ -606,11 +622,31 @@ namespace BodycamHorror.Player
             bool grounded = MoveCharacter(dt);
             if (stateTimer < braceContactTime) return;
 
-            // Push off where the camera looks; if it looks into the wall, mirror it off the wall,
-            // so you always leave away from it. Looking straight at the wall sends you back.
             Vector3 n = braceNormal;
             Vector3 view = Flat(transform.forward).normalized;
-            Vector3 dir = Vector3.Dot(view, n) >= 0f ? view : Flat(Vector3.Reflect(view, n)).normalized;
+            Vector3 dir;
+            if (braceAutoTurn && Vector3.Dot(view, n) < braceLookAwayThreshold)
+            {
+                // Looking at / along the wall: run along it and swing the camera round for the player.
+                Vector3 tangent = Vector3.Cross(Vector3.up, n).normalized;
+                float side;
+                if (Mathf.Abs(moveInput.x) > 0.2f) side = Mathf.Sign(Vector3.Dot(transform.right * moveInput.x, tangent));
+                else
+                {
+                    float t = Vector3.Dot(Flat(braceIncomingDir), tangent);
+                    side = Mathf.Abs(t) > 0.1f ? Mathf.Sign(t) : Mathf.Sign(Vector3.Dot(transform.right, tangent));
+                    if (side == 0f) side = 1f;
+                }
+                Vector3 along = tangent * side;
+                autoYawTarget = Mathf.Atan2(along.x, along.z) * Mathf.Rad2Deg;
+                autoYawTimer = braceTurnSmoothing * 5f;
+                dir = along;
+            }
+            else
+            {
+                // Already looking away: go where the camera looks (mirrored off the wall if needed).
+                dir = Vector3.Dot(view, n) >= 0f ? view : Flat(Vector3.Reflect(view, n)).normalized;
+            }
             dir = (dir + n * bracePushOff).normalized;
             float turn = Vector3.Angle(Flat(braceIncomingDir), dir);
             float keep = Mathf.Lerp(braceKeepSpeed, braceReverseKeepSpeed, Mathf.InverseLerp(90f, 180f, turn));
@@ -949,6 +985,7 @@ namespace BodycamHorror.Player
             IsTucked = false;
             recoveryTimer = recoveryDuration = 0f;
             lastBracePressTime = -10f;
+            autoYawTimer = 0f;
         }
 
         static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);

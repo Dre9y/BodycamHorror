@@ -71,7 +71,8 @@ namespace BodycamHorror.AI
 
         MonsterBrain brain;
         PlayerShooting shooting;
-        Pistol pistol;
+        Firearm[] weapons = new Firearm[0];
+        System.Action<bool>[] weaponHandlers = new System.Action<bool>[0];
         BodycamFlashlight flashlight;
         bool knowsTarget;
         float seenFor;
@@ -87,32 +88,40 @@ namespace BodycamHorror.AI
             {
                 PlayerHealth = Player.GetComponent<PlayerHealth>();
                 shooting = Player.GetComponentInChildren<PlayerShooting>();
-                pistol = Player.GetComponentInChildren<Pistol>();
+                // every gun the player carries (inactive ones included), so any of them can be heard
+                weapons = Player.GetComponentsInChildren<Firearm>(true);
+                weaponHandlers = new System.Action<bool>[weapons.Length];
+                for (int i = 0; i < weapons.Length; i++)
+                {
+                    Firearm w = weapons[i];
+                    weaponHandlers[i] = _ => OnPlayerFired(w);
+                }
                 flashlight = Player.GetComponentInChildren<BodycamFlashlight>();
             }
         }
 
         void OnEnable()
         {
-            if (pistol) pistol.Fired += OnPlayerFired;
+            for (int i = 0; i < weapons.Length; i++) if (weapons[i]) weapons[i].Fired += weaponHandlers[i];
             if (Player) Player.LandingResolved += OnPlayerLanded;
         }
 
         void OnDisable()
         {
-            if (pistol) pistol.Fired -= OnPlayerFired;
+            for (int i = 0; i < weapons.Length; i++) if (weapons[i]) weapons[i].Fired -= weaponHandlers[i];
             if (Player) Player.LandingResolved -= OnPlayerLanded;
         }
 
         // ------------------------------------------------------------------ player read
 
-        /// <summary>Player is busy and can't shoot back well: reloading, stumbling, climbing, landing hard.</summary>
+        /// <summary>Player is busy and can't shoot back well: reloading, switching weapons, bare-handed,
+        /// out of ammo, stumbling, climbing, landing hard.</summary>
         public bool PlayerVulnerable
         {
             get
             {
                 if (!Player) return false;
-                if (shooting && shooting.IsReloading) return true;
+                if (shooting && (shooting.IsReloading || shooting.IsSwitching || !shooting.CurrentWeapon)) return true;
                 switch (Player.State)
                 {
                     case MoveState.Mantling: case MoveState.Vaulting: case MoveState.Stumbling:
@@ -120,7 +129,7 @@ namespace BodycamHorror.AI
                     case MoveState.HandLanding:
                         return true;
                 }
-                return pistol && pistol.Ammo <= 0;
+                return shooting && shooting.CurrentWeapon && shooting.CurrentWeapon.Ammo <= 0;
             }
         }
 
@@ -224,13 +233,17 @@ namespace BodycamHorror.AI
             LastSuppressedTime = Time.time;
         }
 
-        void OnPlayerFired(bool hit, RaycastHit info)
+        void OnPlayerFired(Firearm weapon)
         {
-            if (!Player) return;
-            Vector3 origin = pistol.muzzle ? pistol.muzzle.position : PlayerEye;
-            Vector3 end = hit ? info.point : origin + (pistol.muzzle ? pistol.muzzle.forward : PlayerForward) * pistol.range;
+            if (!Player || !weapon) return;
+            // the shot line: from the muzzle along the barrel to the first wall
+            Vector3 origin = weapon.muzzle ? weapon.muzzle.position : PlayerEye;
+            Vector3 dir = weapon.muzzle ? weapon.muzzle.forward : PlayerForward;
+            float len = Physics.Raycast(origin, dir, out RaycastHit wall, weapon.range, Sight.Mask, QueryTriggerInteraction.Ignore)
+                ? wall.distance : weapon.range;
             Vector3 chest = transform.position + Vector3.up * 1f;
-            if (Sight.DistanceToSegment(chest, origin, end) < suppressionRadius) LastSuppressedTime = Time.time;
+            float radius = suppressionRadius * (weapon.pelletsPerShot > 1 ? 1.5f : 1f);   // buckshot spreads
+            if (Sight.DistanceToSegment(chest, origin, origin + dir * (len + 0.5f)) < radius) LastSuppressedTime = Time.time;
 
             float d = Vector3.Distance(transform.position, Player.transform.position);
             if (d < shotNoise)

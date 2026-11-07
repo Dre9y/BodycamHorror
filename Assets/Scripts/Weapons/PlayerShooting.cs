@@ -208,8 +208,7 @@ namespace BodycamHorror.Weapons
             if (dt <= 0f || !pistol || !player) return;
 
             MoveState state = player.State;
-            bool parkour = state == MoveState.Mantling || state == MoveState.Vaulting
-                        || state == MoveState.Stumbling || state == MoveState.Bumped;
+            bool parkour = IsParkourState(state);
 
             UpdateReload(dt);
 
@@ -221,7 +220,9 @@ namespace BodycamHorror.Weapons
 
             bool lowerTarget = player.IsSprinting && raiseTimer <= 0f;
             bool aimTarget = aimHeld && !parkour && !reloading && tuckTarget < 0.5f;
-            bool twoHandTarget = !parkour && state != MoveState.Sliding && !(reloading && InReloadHandPhase());
+            // Brace ready: the support hand comes off the gun to meet the wall.
+            bool twoHandTarget = !parkour && state != MoveState.Sliding && !player.IsBraceReady
+                                 && !(reloading && InReloadHandPhase());
 
             aimW = Approach(aimW, aimTarget ? 1f : 0f, aimSpeed, dt);
             lowW = Approach(lowW, lowerTarget ? 1f : 0f, lowerSpeed, dt);
@@ -370,8 +371,30 @@ namespace BodycamHorror.Weapons
                     carryRot = Quaternion.Slerp(readyRot, Quaternion.Euler(-30f, -10f, 10f), brace);
                     break;
                 }
+                case MoveState.BraceWall:
+                    // gun hand flat against the wall, gun turned on its side
+                    carryPos = new Vector3(0.2f, -0.08f, 0.4f);
+                    carryRot = Quaternion.Euler(-15f, -20f, 75f);
+                    break;
+                case MoveState.HandLanding:
+                    carryPos = new Vector3(0.22f, -0.5f, 0.34f);
+                    carryRot = Quaternion.Euler(65f, -10f, 15f);
+                    break;
+                case MoveState.Rolling:
+                    // tucked to the chest
+                    carryPos = new Vector3(0.1f, -0.22f, 0.2f);
+                    carryRot = Quaternion.Euler(-30f, -25f, 60f);
+                    break;
+                case MoveState.HardLanding:
+                    carryPos = new Vector3(0.3f, -0.42f, 0.38f);
+                    carryRot = Quaternion.Euler(50f, -20f, 35f);
+                    break;
             }
         }
+
+        static bool IsParkourState(MoveState s) =>
+            s == MoveState.Mantling || s == MoveState.Vaulting || s == MoveState.Stumbling || s == MoveState.Bumped
+            || s == MoveState.BraceWall || s == MoveState.HandLanding || s == MoveState.Rolling || s == MoveState.HardLanding;
 
         // ------------------------------------------------------------------ reload
 
@@ -424,6 +447,8 @@ namespace BodycamHorror.Weapons
         {
             if (impact < 2f) return;
             float k = Mathf.Clamp01((impact - 2f) / 12f);
+            if (player.LastLandingKind == LandingKind.Hard) k = Mathf.Min(1f, k * 1.6f + 0.2f);
+            else if (player.LastLandingKind != LandingKind.Normal) k *= 0.4f;
             recoilPosVel.y -= Mathf.Lerp(0.3f, 1.6f, k);
             recoilRotVel.x += Mathf.Lerp(15f, 140f, k);
             recoilRotVel.z += Random.Range(-1f, 1f) * Mathf.Lerp(10f, 120f, k);
@@ -433,6 +458,7 @@ namespace BodycamHorror.Weapons
         {
             // the hands get thrown about by trips and wall hits
             float k = Mathf.InverseLerp(3f, 9f, speed) * 0.6f + 0.4f;
+            if (kind == ImpactKind.Brace) k *= 0.3f;
             recoilRotVel += new Vector3(Random.Range(-1f, 1f) * 260f, Random.Range(-1f, 1f) * 200f, Random.Range(-1f, 1f) * 260f) * k;
             recoilPosVel += new Vector3(Random.Range(-0.6f, 0.6f), Random.Range(-0.8f, 0.4f), kind == ImpactKind.Wall ? -1.2f : 0.6f) * k;
         }

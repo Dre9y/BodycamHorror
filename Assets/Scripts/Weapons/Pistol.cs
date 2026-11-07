@@ -1,5 +1,6 @@
 using System;
 using BodycamHorror.Combat;
+using BodycamHorror.Player;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Random = UnityEngine.Random;
@@ -71,6 +72,8 @@ namespace BodycamHorror.Weapons
         {
             if (!muzzle) BuildPlaceholderModel();
             Ammo = magazineSize;
+            ViewModelLighting.MarkViewModel(gameObject);                  // keep the flashlight beam off the gun
+            if (flashLight) ViewModelLighting.AlsoLightViewModel(flashLight);   // the muzzle flash lights hands and world
             if (slide) slideRest = slide.localPosition;
             if (flashMesh) flashMesh.gameObject.SetActive(false);
             if (flashLight) flashLight.intensity = 0f;

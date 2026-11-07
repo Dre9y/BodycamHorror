@@ -67,6 +67,7 @@ namespace BodycamHorror.Player
             var r = go.GetComponent<MeshRenderer>();
             r.shadowCastingMode = ShadowCastingMode.Off;
             r.receiveShadows = false;
+            r.renderingLayerMask = ViewModelLighting.ViewModelLayer;
             if (baseMat)
             {
                 var m = new Material(baseMat) { color = color };
@@ -131,7 +132,31 @@ namespace BodycamHorror.Player
                     pl = new Vector3(-0.32f, -0.30f, 0.6f); rl = new Vector3(20f, 15f, -20f);
                     pr = new Vector3(0.32f, -0.30f, 0.6f); rr = new Vector3(20f, -15f, 20f);
                     break;
+                case MoveState.BraceWall:
+                    // both palms flat on the wall
+                    pl = new Vector3(-0.2f, -0.08f, 0.42f); rl = new Vector3(-25f, 5f, 0f);
+                    pr = new Vector3(0.2f, -0.08f, 0.42f); rr = new Vector3(-25f, -5f, 0f);
+                    break;
+                case MoveState.HandLanding:
+                    // hands slap the ground ahead
+                    pl = new Vector3(-0.2f, -0.55f, 0.38f); rl = new Vector3(65f, 5f, 0f);
+                    pr = new Vector3(0.2f, -0.55f, 0.38f); rr = new Vector3(65f, -5f, 0f);
+                    break;
+                case MoveState.Rolling:
+                    // tucked in
+                    pl = new Vector3(-0.12f, -0.22f, 0.22f); rl = new Vector3(-30f, 25f, -40f);
+                    pr = new Vector3(0.12f, -0.22f, 0.22f); rr = new Vector3(-30f, -25f, 40f);
+                    break;
+                case MoveState.HardLanding:
+                    // flung out, catching balance
+                    pl = new Vector3(-0.36f, -0.42f, 0.42f); rl = new Vector3(50f, 20f, -30f);
+                    pr = new Vector3(0.36f, -0.42f, 0.42f); rr = new Vector3(50f, -20f, 30f);
+                    break;
             }
+
+            // Brace ready: the left hand comes up to meet the wall.
+            bool normalMove = player.State == MoveState.Grounded || player.State == MoveState.Airborne || player.State == MoveState.Sliding;
+            if (player.IsBraceReady && normalMove) { pl = new Vector3(-0.2f, -0.1f, 0.5f); rl = new Vector3(-20f, 10f, 0f); }
 
             float k = 1f - Mathf.Exp(-poseSharpness * dt);
             bool armed = shooting && shooting.isActiveAndEnabled && shooting.pistol;
@@ -147,13 +172,12 @@ namespace BodycamHorror.Player
 
             // Holding the pistol: the right hand never lets go of the grip; the left hand supports it
             // and lets go for parkour moves, slides and reloads.
-            bool parkour = player.State == MoveState.Mantling || player.State == MoveState.Vaulting
-                        || player.State == MoveState.Stumbling || player.State == MoveState.Bumped;
-            if (player.State == MoveState.Sliding)
+            bool parkour = !normalMove;
+            if (player.State == MoveState.Sliding && !player.IsBraceReady)
             {
                 pl = new Vector3(-0.38f, -0.55f, 0.08f); rl = new Vector3(40f, 10f, 0f);   // free hand skims the floor
             }
-            else if (shooting.IsReloading && !parkour)
+            else if (shooting.IsReloading && !parkour && !player.IsBraceReady)
             {
                 pl = new Vector3(-0.12f, -0.47f, 0.2f); rl = new Vector3(55f, 25f, 0f);     // fresh mag from the belt
             }

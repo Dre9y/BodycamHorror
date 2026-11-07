@@ -212,6 +212,41 @@ namespace BodycamHorror.Player
                 case MoveState.Bumped:
                     targetRot.x -= 4f * (1f - player.ActionProgress);
                     break;
+                case MoveState.BraceWall:
+                {
+                    // body compresses into the hands, then springs off
+                    float a = Mathf.Sin(Mathf.Min(player.StateTime / 0.18f, 1f) * Mathf.PI * 0.5f);
+                    targetRot.x += a * 7f;
+                    targetPos.y -= a * 0.05f;
+                    targetPos.z += a * 0.06f;
+                    break;
+                }
+                case MoveState.HandLanding:
+                {
+                    // quick drop onto the hands, snap back up
+                    float p = player.ActionProgress;
+                    float a = p < 0.3f ? Smooth(p / 0.3f) : 1f - Smooth((p - 0.3f) / 0.7f);
+                    targetRot.x += a * 24f;
+                    targetRot.z += a * 4f * stumbleSide;
+                    targetPos.y -= a * 0.1f;
+                    break;
+                }
+                case MoveState.Rolling:
+                    // the head-over-heels turn itself is on the pivot (RollAngle); add a little sideways wobble
+                    targetRot.z += Mathf.Sin(player.ActionProgress * Mathf.PI) * 6f * stumbleSide;
+                    trauma = Mathf.Max(trauma, 0.18f);
+                    break;
+                case MoveState.HardLanding:
+                {
+                    // slammed down, slow to straighten up
+                    float p = player.ActionProgress;
+                    float a = (p < 0.12f ? Smooth(p / 0.12f) : 1f - Smooth((p - 0.12f) / 0.88f)) * impactStrength;
+                    float sev = 0.6f + 0.4f * player.LastLandingSeverity;
+                    targetRot.x += a * 38f * sev;
+                    targetRot.z += a * 14f * sev * stumbleSide;
+                    targetPos.y -= a * 0.25f * sev;
+                    break;
+                }
             }
 
             // Springs
@@ -254,7 +289,7 @@ namespace BodycamHorror.Player
 
             if (cam)
             {
-                float targetFov = state == MoveState.Sliding ? slideFov : Mathf.Lerp(baseFov, sprintFov, sprint01);
+                float targetFov = state == MoveState.Sliding || state == MoveState.Rolling ? slideFov : Mathf.Lerp(baseFov, sprintFov, sprint01);
                 if (weapon && weapon.isActiveAndEnabled) targetFov = Mathf.Lerp(targetFov, aimFov, weapon.AimWeight);
                 cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, targetFov, 1f - Mathf.Exp(-fovSharpness * dt));
             }
@@ -264,8 +299,16 @@ namespace BodycamHorror.Player
         {
             if (impact < 2f) return;
             float k = Mathf.Clamp01((impact - 2f) / 10f);
-            float m = impactStrength;
             float side = Random.value < 0.5f ? -1f : 1f;
+            stumbleSide = side;
+            // A tucked landing is absorbed by the hands / roll; an untucked one is a slam.
+            float m = impactStrength * player.LastLandingKind switch
+            {
+                LandingKind.Hands => 0.4f,
+                LandingKind.Roll => 0.2f,
+                LandingKind.Hard => 1.4f,
+                _ => 1f,
+            };
             posVelocity.y -= Mathf.Lerp(0.8f, 5f, k) * m;
             rotVelocity.x += Mathf.Lerp(40f, 280f, k) * m;          // head snaps down
             rotVelocity.z += side * Mathf.Lerp(10f, 120f, k) * m;   // and twists off-axis
@@ -278,7 +321,15 @@ namespace BodycamHorror.Player
             float k = Mathf.InverseLerp(3f, 9f, speed);
             float m = impactStrength;
             float side = Random.value < 0.5f ? -1f : 1f;
-            if (kind == ImpactKind.Wall)
+            if (kind == ImpactKind.Brace)
+            {
+                // hands took it: a firm thud, no stagger
+                posVelocity.z -= (0.6f + 0.8f * k) * m;
+                rotVelocity.x -= (20f + 30f * k) * m;
+                trauma = Mathf.Max(trauma, 0.2f * m);
+                AddTremor(0.35f * m);
+            }
+            else if (kind == ImpactKind.Wall)
             {
                 posVelocity.z -= (1.5f + 3f * k) * m;
                 rotVelocity.x -= (60f + 160f * k) * m;

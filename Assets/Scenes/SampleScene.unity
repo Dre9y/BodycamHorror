@@ -822,7 +822,7 @@ MeshRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: 02e41e58010be4649b988faf84ef5746, type: 2}
@@ -1397,7 +1397,7 @@ Light:
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 3
   m_Lightmapping: 4
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
@@ -1448,7 +1448,7 @@ MonoBehaviour:
   m_SoftShadowQuality: 1
   m_RenderingLayersMask:
     serializedVersion: 0
-    m_Bits: 1
+    m_Bits: 3
   m_ShadowRenderingLayersMask:
     serializedVersion: 0
     m_Bits: 1
@@ -1490,6 +1490,66 @@ Transform:
   - {fileID: 789167593}
   m_Father: {fileID: 1923181789}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &476838439
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 476838440}
+  - component: {fileID: 476838441}
+  m_Layer: 2
+  m_Name: Flashlight
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &476838440
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 476838439}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.11, y: -0.2, z: 0.06}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1350628732}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &476838441
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 476838439}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c76c68106ad8533448a58586e7f0c1ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.BodycamFlashlight
+  player: {fileID: 0}
+  startOn: 1
+  intensity: 160
+  range: 26
+  spotAngle: 58
+  innerSpotAngle: 22
+  color: {r: 1, g: 0.94, b: 0.82, a: 1}
+  shadows: 2
+  spillIntensity: 5
+  spillAngle: 120
+  spillRange: 10
+  handFillIntensity: 0.5
+  handFillRange: 1.2
+  swingLag: 0.06
+  maxSwing: 10
+  knockFlickerTime: 0.45
 --- !u!1 &486345256
 GameObject:
   m_ObjectHideFlags: 0
@@ -2399,7 +2459,7 @@ Light:
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 3
   m_Lightmapping: 4
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
@@ -2435,7 +2495,7 @@ MonoBehaviour:
   m_SoftShadowQuality: 0
   m_RenderingLayersMask:
     serializedVersion: 0
-    m_Bits: 1
+    m_Bits: 3
   m_ShadowRenderingLayersMask:
     serializedVersion: 0
     m_Bits: 1
@@ -2559,7 +2619,7 @@ Light:
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 3
   m_Lightmapping: 4
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
@@ -2595,7 +2655,7 @@ MonoBehaviour:
   m_SoftShadowQuality: 0
   m_RenderingLayersMask:
     serializedVersion: 0
-    m_Bits: 1
+    m_Bits: 3
   m_ShadowRenderingLayersMask:
     serializedVersion: 0
     m_Bits: 1
@@ -3422,7 +3482,7 @@ MeshRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: c2b9e953f83833b4bbeac0fb3d4ec895, type: 2}
@@ -3619,7 +3679,6 @@ MonoBehaviour:
   gravity: -22
   coyoteTime: 0.12
   jumpBufferTime: 0.15
-  hardLandingSpeed: 11
   standHeight: 1.8
   crouchHeight: 1.1
   slideHeight: 0.8
@@ -3645,6 +3704,27 @@ MonoBehaviour:
   stumbleMaxObstacleHeight: 0.65
   bumpStunTime: 0.6
   stumbleTime: 0.8
+  braceWindow: 0.4
+  braceMinSpeed: 2.5
+  braceContactTime: 0.18
+  braceMaxHold: 0.6
+  braceKeepSpeed: 0.8
+  braceReverseKeepSpeed: 0.6
+  bracePushOff: 0.3
+  pushOffGrace: 0.35
+  landingMinDrop: 1.2
+  hardLandingDrop: 2
+  rollDrop: 2.7
+  severeDrop: 5.5
+  handLandingTime: 0.34
+  handLandingKeepSpeed: 0.85
+  rollTime: 0.75
+  rollKeepSpeed: 0.9
+  rollMinSpeed: 4
+  hardLandingStun: {x: 0.5, y: 1.2}
+  hardLandingKeepSpeed: {x: 0.35, y: 0.05}
+  hardLandingSpeedCap: {x: 0.6, y: 0.35}
+  hardLandingRecovery: {x: 1.5, y: 3}
   environmentMask:
     serializedVersion: 2
     m_Bits: 4294967291
@@ -4760,7 +4840,7 @@ Light:
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 3
   m_Lightmapping: 4
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
@@ -4796,7 +4876,7 @@ MonoBehaviour:
   m_SoftShadowQuality: 0
   m_RenderingLayersMask:
     serializedVersion: 0
-    m_Bits: 1
+    m_Bits: 3
   m_ShadowRenderingLayersMask:
     serializedVersion: 0
     m_Bits: 1
@@ -4935,7 +5015,7 @@ MeshRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: ce24b58f71500db428921850538c5e6a, type: 2}
@@ -5225,6 +5305,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 330585546}
+  - {fileID: 476838440}
   m_Father: {fileID: 510896778}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1350628733
@@ -5595,7 +5676,7 @@ MeshRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: 02e41e58010be4649b988faf84ef5746, type: 2}
@@ -5640,6 +5721,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1453785143}
   - component: {fileID: 1453785142}
+  - component: {fileID: 1453785144}
   m_Layer: 2
   m_Name: FlashLight
   m_TagString: Untagged
@@ -5696,7 +5778,7 @@ Light:
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 3
   m_Lightmapping: 4
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
@@ -5727,6 +5809,35 @@ Transform:
   m_Children: []
   m_Father: {fileID: 47399791}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1453785144
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1453785141}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 3
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!1 &1481214848
 GameObject:
   m_ObjectHideFlags: 0
@@ -6006,7 +6117,7 @@ MeshRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: ce24b58f71500db428921850538c5e6a, type: 2}
@@ -6798,7 +6909,7 @@ MeshRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: c2b9e953f83833b4bbeac0fb3d4ec895, type: 2}
@@ -7054,7 +7165,7 @@ MeshRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: ce24b58f71500db428921850538c5e6a, type: 2}
@@ -7724,7 +7835,7 @@ Light:
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 3
   m_Lightmapping: 4
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
@@ -7760,7 +7871,7 @@ MonoBehaviour:
   m_SoftShadowQuality: 0
   m_RenderingLayersMask:
     serializedVersion: 0
-    m_Bits: 1
+    m_Bits: 3
   m_ShadowRenderingLayersMask:
     serializedVersion: 0
     m_Bits: 1
@@ -7864,7 +7975,7 @@ MeshRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: 02e41e58010be4649b988faf84ef5746, type: 2}
@@ -8014,7 +8125,7 @@ Light:
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 3
   m_Lightmapping: 4
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
@@ -8050,7 +8161,7 @@ MonoBehaviour:
   m_SoftShadowQuality: 0
   m_RenderingLayersMask:
     serializedVersion: 0
-    m_Bits: 1
+    m_Bits: 3
   m_ShadowRenderingLayersMask:
     serializedVersion: 0
     m_Bits: 1
@@ -8477,7 +8588,7 @@ Light:
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 3
   m_Lightmapping: 4
   m_LightShadowCasterMode: 0
   m_AreaSize: {x: 1, y: 1}
@@ -8513,7 +8624,7 @@ MonoBehaviour:
   m_SoftShadowQuality: 0
   m_RenderingLayersMask:
     serializedVersion: 0
-    m_Bits: 1
+    m_Bits: 3
   m_ShadowRenderingLayersMask:
     serializedVersion: 0
     m_Bits: 1
@@ -8577,7 +8688,7 @@ MeshRenderer:
   m_SmallMeshCulling: 1
   m_ForceMeshLod: -1
   m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
+  m_RenderingLayerMask: 2
   m_RendererPriority: 0
   m_Materials:
   - {fileID: 2100000, guid: c2b9e953f83833b4bbeac0fb3d4ec895, type: 2}

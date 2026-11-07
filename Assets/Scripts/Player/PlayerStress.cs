@@ -53,13 +53,13 @@ namespace BodycamHorror.Player
 
         void OnEnable()
         {
-            if (player) { player.Landed += OnLanded; player.Impacted += OnImpacted; }
+            if (player) { player.LandingResolved += OnLanded; player.Impacted += OnImpacted; }
             if (shooting) shooting.Fired += OnFired;
         }
 
         void OnDisable()
         {
-            if (player) { player.Landed -= OnLanded; player.Impacted -= OnImpacted; }
+            if (player) { player.LandingResolved -= OnLanded; player.Impacted -= OnImpacted; }
             if (shooting) shooting.Fired -= OnFired;
         }
 
@@ -94,11 +94,17 @@ namespace BodycamHorror.Player
 
         void OnFired() => Add(perShot);
 
-        void OnLanded(float impact)
+        void OnLanded(LandingKind kind, float drop)
         {
-            if (impact > player.hardLandingSpeed * 0.8f) Add(perHardLanding);
+            if (kind == LandingKind.Hard) Add(perHardLanding * (1f + player.LastLandingSeverity));
+            else if (kind != LandingKind.Normal) Add(perHardLanding * 0.2f);   // a good landing is still effort
         }
 
-        void OnImpacted(ImpactKind kind, float speed) => Add(kind == ImpactKind.Stumble ? perStumble : perWallBump);
+        void OnImpacted(ImpactKind kind, float speed) => Add(kind switch
+        {
+            ImpactKind.Stumble => perStumble,
+            ImpactKind.Wall => perWallBump,
+            _ => perWallBump * 0.25f,
+        });
     }
 }

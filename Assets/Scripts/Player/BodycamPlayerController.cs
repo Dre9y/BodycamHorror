@@ -4,13 +4,17 @@ using UnityEngine.InputSystem;
 
 namespace BodycamHorror.Player
 {
-    public enum MoveState { Grounded, Airborne, Sliding, Mantling, Vaulting, Stumbling, Bumped }
-    public enum ImpactKind { Wall, Stumble }
+    public enum MoveState { Grounded, Airborne, Sliding, Mantling, Vaulting, Stumbling, Bumped, BraceWall, HandLanding, Rolling, HardLanding }
+    public enum ImpactKind { Wall, Stumble, Brace }
+    public enum LandingKind { Normal, Hands, Roll, Hard }
 
     /// <summary>
     /// First-person parkour controller with momentum: at speed the body can't turn on the spot,
     /// it has to brake first. Running into walls bumps you, running into low obstacles trips you.
     /// Moves: walk, sprint, crouch, jump, slide, vault, mantle (climb onto ledges).
+    /// Brace (Q / RB) just before running into a tall wall: the hands absorb the hit and push off in a
+    /// new direction keeping most of the speed. Crouch (Ctrl) pressed while falling tucks for the
+    /// landing: a hand landing up to ~1.5x body height, a roll from higher. Untucked drops land hard.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public class BodycamPlayerController : MonoBehaviour
@@ -51,8 +55,6 @@ namespace BodycamHorror.Player
         public float gravity = -22f;
         public float coyoteTime = 0.12f;
         public float jumpBufferTime = 0.15f;
-        [Tooltip("Landing faster than this (m/s) costs speed.")]
-        public float hardLandingSpeed = 11f;
 
         [Header("Body Heights")]
         public float standHeight = 1.8f;
@@ -91,6 +93,46 @@ namespace BodycamHorror.Player
         public float bumpStunTime = 0.6f;
         public float stumbleTime = 0.8f;
 
+        [Header("Brace against walls (Q / RB)")]
+        [Tooltip("Pressing Brace up to this long (s) before hitting a tall wall counts as prepared.")]
+        public float braceWindow = 0.4f;
+        [Tooltip("Slowest run into a wall that still triggers a brace.")]
+        public float braceMinSpeed = 2.5f;
+        [Tooltip("Hands on the wall at least this long (s); holding Brace keeps you there up to braceMaxHold.")]
+        public float braceContactTime = 0.18f;
+        public float braceMaxHold = 0.6f;
+        [Tooltip("Share of the incoming speed kept when pushing off along / away from the wall.")]
+        [Range(0f, 1f)] public float braceKeepSpeed = 0.8f;
+        [Tooltip("Share kept when pushing straight back the way you came.")]
+        [Range(0f, 1f)] public float braceReverseKeepSpeed = 0.6f;
+        [Tooltip("How much the push-off angles away from the wall.")]
+        public float bracePushOff = 0.3f;
+        [Tooltip("After a push-off, sharp-turn braking is off for this long so you can line up.")]
+        public float pushOffGrace = 0.35f;
+
+        [Header("Landing (drop measured from the top of the fall; tuck = Ctrl while falling)")]
+        [Tooltip("Drops below this (m) are ordinary landings.")]
+        public float landingMinDrop = 1.2f;
+        [Tooltip("Untucked drops above this (m) are hard landings.")]
+        public float hardLandingDrop = 2.0f;
+        [Tooltip("Tucked drops above this (m) roll instead of landing on the hands (~1.5x body height).")]
+        public float rollDrop = 2.7f;
+        [Tooltip("Drop (m) at which a hard landing is at its worst.")]
+        public float severeDrop = 5.5f;
+        public float handLandingTime = 0.34f;
+        [Range(0f, 1f)] public float handLandingKeepSpeed = 0.85f;
+        public float rollTime = 0.75f;
+        [Range(0f, 1f)] public float rollKeepSpeed = 0.9f;
+        public float rollMinSpeed = 4f;
+        [Tooltip("Hard landing, mild -> severe: time on the ground (s).")]
+        public Vector2 hardLandingStun = new Vector2(0.5f, 1.2f);
+        [Tooltip("Hard landing, mild -> severe: share of speed kept.")]
+        public Vector2 hardLandingKeepSpeed = new Vector2(0.35f, 0.05f);
+        [Tooltip("Hard landing, mild -> severe: top speed right after (share of normal)...")]
+        public Vector2 hardLandingSpeedCap = new Vector2(0.6f, 0.35f);
+        [Tooltip("...and how long (s) it takes to come back to normal.")]
+        public Vector2 hardLandingRecovery = new Vector2(1.5f, 3f);
+
         [Header("Collision")]
         [Tooltip("Geometry used for ledge/obstacle probes. The player itself sits on Ignore Raycast.")]
         public LayerMask environmentMask = ~(1 << 2);
@@ -104,6 +146,21 @@ namespace BodycamHorror.Player
         public event Action<float> Landed;                 // impact speed (m/s)
         public event Action<ImpactKind, float> Impacted;   // kind, speed into the obstacle
         public event Action<MoveState, MoveState> StateChanged;
+        /// <summary>How a landing from the air was taken, and the drop height (m). Fires right after Landed.</summary>
+        public event Action<LandingKind, float> LandingResolved;
+
+        /// <summary>Brace was pressed recently enough to count for the next wall hit.</summary>
+        public bool IsBraceReady => Time.time - lastBracePressTime <= braceWindow;
+        /// <summary>Ctrl was pressed during this fall: the landing will be a hand landing or a roll.</summary>
+        public bool IsTucked { get; private set; }
+        public LandingKind LastLandingKind { get; private set; }
+        public float LastDropHeight { get; private set; }
+        /// <summary>0..1 how bad the last hard landing was.</summary>
+        public float LastLandingSeverity { get; private set; }
+        /// <summary>Forward roll angle (deg) applied to the view pivot during a roll.</summary>
+        public float RollAngle { get; private set; }
+        /// <summary>Top-speed multiplier while recovering from a hard landing (1 = normal).</summary>
+        public float SpeedCap => recoveryDuration > 0f ? Mathf.Lerp(speedCapStart, 1f, 1f - recoveryTimer / recoveryDuration) : 1f;
 
         public MoveState State { get; private set; } = MoveState.Grounded;
         public Vector3 HorizontalVelocity => hVel;
@@ -122,7 +179,12 @@ namespace BodycamHorror.Player
         public Vector3 LastImpactPoint { get; private set; }
 
         CharacterController cc;
-        InputAction moveAction, lookAction, lookStickAction, jumpAction, sprintAction, crouchAction;
+        InputAction moveAction, lookAction, lookStickAction, jumpAction, sprintAction, crouchAction, braceAction;
+        float lastBracePressTime = -10f, airApexY, graceTimer;
+        float speedCapStart = 1f, recoveryTimer, recoveryDuration;
+        Vector3 braceNormal, braceIncomingDir;
+        float braceIncomingSpeed;
+        bool braceHeld;
 
         Vector3 hVel;
         float vVel;
@@ -148,6 +210,7 @@ namespace BodycamHorror.Player
             yaw = transform.eulerAngles.y;
             spawnPosition = transform.position;
             spawnRotation = transform.rotation;
+            airApexY = transform.position.y;
             CreateInput();
         }
 
@@ -171,12 +234,15 @@ namespace BodycamHorror.Player
             crouchAction = new InputAction("Crouch", InputActionType.Button, "<Keyboard>/leftCtrl");
             crouchAction.AddBinding("<Keyboard>/c");
             crouchAction.AddBinding("<Gamepad>/buttonEast");
+
+            braceAction = new InputAction("Brace", InputActionType.Button, "<Keyboard>/q");
+            braceAction.AddBinding("<Gamepad>/rightShoulder");
         }
 
         void OnEnable()
         {
             moveAction.Enable(); lookAction.Enable(); lookStickAction.Enable();
-            jumpAction.Enable(); sprintAction.Enable(); crouchAction.Enable();
+            jumpAction.Enable(); sprintAction.Enable(); crouchAction.Enable(); braceAction.Enable();
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -184,7 +250,7 @@ namespace BodycamHorror.Player
         void OnDisable()
         {
             moveAction.Disable(); lookAction.Disable(); lookStickAction.Disable();
-            jumpAction.Disable(); sprintAction.Disable(); crouchAction.Disable();
+            jumpAction.Disable(); sprintAction.Disable(); crouchAction.Disable(); braceAction.Disable();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
@@ -192,7 +258,7 @@ namespace BodycamHorror.Player
         void OnDestroy()
         {
             moveAction?.Dispose(); lookAction?.Dispose(); lookStickAction?.Dispose();
-            jumpAction?.Dispose(); sprintAction?.Dispose(); crouchAction?.Dispose();
+            jumpAction?.Dispose(); sprintAction?.Dispose(); crouchAction?.Dispose(); braceAction?.Dispose();
         }
 
         void Update()
@@ -206,6 +272,8 @@ namespace BodycamHorror.Player
 
             stateTimer += dt;
             impactCooldown -= dt;
+            graceTimer -= dt;
+            if (recoveryTimer > 0f) { recoveryTimer -= dt; if (recoveryTimer <= 0f) recoveryDuration = 0f; }
             IsBraking = false;
             IsSprinting = false;
 
@@ -218,6 +286,10 @@ namespace BodycamHorror.Player
                 case MoveState.Vaulting: UpdateScriptedMove(); break;
                 case MoveState.Stumbling:
                 case MoveState.Bumped: UpdateStunned(dt); break;
+                case MoveState.BraceWall: UpdateWallBrace(dt); break;
+                case MoveState.HandLanding: UpdateHandLanding(dt); break;
+                case MoveState.Rolling: UpdateRoll(dt); break;
+                case MoveState.HardLanding: UpdateHardLanding(dt); break;
             }
 
             UpdateHeight(dt);
@@ -235,6 +307,8 @@ namespace BodycamHorror.Player
             crouchPressed = crouchAction.WasPressedThisFrame();
             jumpHeld = jumpAction.IsPressed();
             if (jumpAction.WasPressedThisFrame()) lastJumpPressTime = Time.time;
+            braceHeld = braceAction.IsPressed();
+            if (braceAction.WasPressedThisFrame()) lastBracePressTime = Time.time;
         }
 
         void HandleCursor()
@@ -257,7 +331,8 @@ namespace BodycamHorror.Player
         {
             Vector2 mouse = Cursor.lockState == CursorLockMode.Locked ? lookAction.ReadValue<Vector2>() * mouseSensitivity : Vector2.zero;
             Vector2 d = mouse + lookStickAction.ReadValue<Vector2>() * (gamepadLookSpeed * dt);
-            if (State == MoveState.Stumbling || State == MoveState.Bumped) d *= 0.35f;
+            if (State == MoveState.Stumbling || State == MoveState.Bumped || State == MoveState.HardLanding) d *= 0.35f;
+            else if (State == MoveState.Rolling) d *= 0.5f;
 
             yaw += d.x;
             float newPitch = Mathf.Clamp(pitch - d.y, -maxPitch, maxPitch);
@@ -265,7 +340,8 @@ namespace BodycamHorror.Player
             pitch = newPitch;
 
             transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-            if (cameraPivot) cameraPivot.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+            // The roll turns the whole view (camera, hands, gun) head over heels.
+            if (cameraPivot) cameraPivot.localRotation = Quaternion.Euler(pitch + RollAngle, 0f, 0f);
         }
 
         // ------------------------------------------------------------------ locomotion
@@ -283,11 +359,12 @@ namespace BodycamHorror.Player
                 if (crouchHeld) crouching = true;
                 else if (crouching && CanStandUp()) crouching = false;
             }
+            else if (crouchHeld) IsTucked = true;   // Ctrl while falling: tuck for the landing
 
             bool sprinting = sprintHeld && !sprintBlocked && moveInput.y > 0.3f && !crouching;
             IsSprinting = sprinting && grounded && hVel.magnitude > walkSpeed + 0.5f;
             float target = (crouching ? crouchSpeed : sprinting ? sprintSpeed : walkSpeed) * inputMag;
-            if (grounded) target *= moveSpeedScale;
+            if (grounded) target *= moveSpeedScale * SpeedCap;
             Steer(wishDir, target, dt, grounded ? 1f : airControl, grounded);
 
             // jump / vault / mantle
@@ -344,7 +421,7 @@ namespace BodycamHorror.Player
             float angle = Vector3.Angle(dir, wishDir);
             float sprint01 = Mathf.InverseLerp(walkSpeed, sprintSpeed, speed);
 
-            if (grounded && angle > sharpTurnAngle && speed > walkSpeed + 0.3f)
+            if (grounded && angle > sharpTurnAngle && speed > walkSpeed + 0.3f && graceTimer <= 0f)
             {
                 // Too fast to turn this hard: plant the feet and brake.
                 IsBraking = true;
@@ -387,16 +464,168 @@ namespace BodycamHorror.Player
                 if (!groundedLast)
                 {
                     float impact = -preVVel;
-                    if (impact > hardLandingSpeed) hVel *= 0.5f;
+                    float drop = Mathf.Max(0f, airApexY - transform.position.y);
+                    LastDropHeight = drop;
+                    LastLandingSeverity = 0f;
+                    // Only a free fall gets a landing move; trips, bumps etc. just touch down.
+                    LastLandingKind = State == MoveState.Airborne ? ResolveLanding(drop) : LandingKind.Normal;
                     Landed?.Invoke(impact);
+                    LandingResolved?.Invoke(LastLandingKind, drop);
                 }
                 vVel = -4f;   // keep snapped to slopes and steps
                 lastGroundedTime = Time.time;
                 jumpConsumed = false;
+                IsTucked = false;
+                airApexY = transform.position.y;
             }
+            else airApexY = Mathf.Max(airApexY, transform.position.y);
 
             groundedLast = grounded;
             return grounded;
+        }
+
+        // ------------------------------------------------------------------ landing
+
+        LandingKind ResolveLanding(float drop)
+        {
+            if (drop < landingMinDrop) return LandingKind.Normal;
+
+            if (IsTucked)
+            {
+                if (drop > rollDrop) { StartRoll(); return LandingKind.Roll; }
+                StartHandLanding();
+                return LandingKind.Hands;
+            }
+
+            if (drop >= hardLandingDrop) { StartHardLanding(drop); return LandingKind.Hard; }
+            hVel *= 0.85f;   // a stiff-legged drop still costs a little
+            return LandingKind.Normal;
+        }
+
+        void StartHandLanding()
+        {
+            SetState(MoveState.HandLanding);
+            hVel *= handLandingKeepSpeed;
+        }
+
+        void UpdateHandLanding(float dt)
+        {
+            ActionProgress = Mathf.Clamp01(stateTimer / handLandingTime);
+            hVel = Vector3.MoveTowards(hVel, Vector3.zero, 1.5f * dt);
+            bool grounded = MoveCharacter(dt);
+            if (ActionProgress >= 1f)
+            {
+                crouching = crouchHeld || !CanStandUp();
+                SetState(grounded ? MoveState.Grounded : MoveState.Airborne);
+            }
+        }
+
+        void StartRoll()
+        {
+            float speed = hVel.magnitude;
+            Vector3 dir = speed > 1f ? hVel / speed : transform.forward;
+            hVel = dir * Mathf.Max(speed * rollKeepSpeed, rollMinSpeed);
+            crouching = true;
+            SetState(MoveState.Rolling);
+        }
+
+        void UpdateRoll(float dt)
+        {
+            float p = Mathf.Clamp01(stateTimer / rollTime);
+            ActionProgress = p;
+            RollAngle = 360f * (p * p * (3f - 2f * p));
+
+            float speed = Mathf.MoveTowards(hVel.magnitude, 0f, 1.2f * dt);
+            Vector3 dir = hVel.sqrMagnitude > 0.0001f ? hVel.normalized : transform.forward;
+            Vector3 wish = transform.right * moveInput.x + transform.forward * moveInput.y;
+            if (wish.sqrMagnitude > 0.01f)
+                dir = Vector3.RotateTowards(dir, wish.normalized, slideTurnRate * Mathf.Deg2Rad * dt, 0f);
+            hVel = dir * speed;
+
+            bool grounded = MoveCharacter(dt);   // the roll plays out even if it rolls off an edge
+            if (p >= 1f)
+            {
+                RollAngle = 0f;
+                crouching = crouchHeld || !CanStandUp();
+                SetState(grounded ? MoveState.Grounded : MoveState.Airborne);
+            }
+        }
+
+        void StartHardLanding(float drop)
+        {
+            float sev = Mathf.InverseLerp(hardLandingDrop, severeDrop, drop);
+            LastLandingSeverity = sev;
+            SetState(MoveState.HardLanding);
+            stunDuration = Mathf.Lerp(hardLandingStun.x, hardLandingStun.y, sev);
+            hVel *= Mathf.Lerp(hardLandingKeepSpeed.x, hardLandingKeepSpeed.y, sev);
+            speedCapStart = Mathf.Lerp(hardLandingSpeedCap.x, hardLandingSpeedCap.y, sev);
+            recoveryDuration = recoveryTimer = Mathf.Lerp(hardLandingRecovery.x, hardLandingRecovery.y, sev);
+            crouching = false;
+        }
+
+        void UpdateHardLanding(float dt)
+        {
+            ActionProgress = Mathf.Clamp01(stateTimer / Mathf.Max(stunDuration, 0.01f));
+            hVel = Vector3.MoveTowards(hVel, Vector3.zero, 10f * dt);
+            bool grounded = MoveCharacter(dt);
+            if (ActionProgress >= 1f)
+            {
+                crouching = crouchHeld || !CanStandUp();
+                SetState(grounded ? MoveState.Grounded : MoveState.Airborne);
+            }
+        }
+
+        // ------------------------------------------------------------------ wall brace
+
+        void StartWallBrace(Vector3 flatN, float into)
+        {
+            braceNormal = flatN;
+            braceIncomingSpeed = hVel.magnitude;
+            braceIncomingDir = hVel.sqrMagnitude > 0.0001f ? hVel.normalized : transform.forward;
+            SetState(MoveState.BraceWall);
+            hVel = Vector3.ProjectOnPlane(hVel, flatN) * 0.25f;   // hands soak up the hit
+            if (vVel < -2f) vVel = -2f;
+            lastBracePressTime = -10f;
+            impactCooldown = 0.3f;
+            impactDuringMove = true;
+            Impacted?.Invoke(ImpactKind.Brace, into);
+        }
+
+        void UpdateWallBrace(float dt)
+        {
+            float hold = braceHeld ? braceMaxHold : braceContactTime;
+            ActionProgress = Mathf.Clamp01(stateTimer / hold);
+            hVel = Vector3.MoveTowards(hVel, Vector3.zero, 8f * dt);
+            bool grounded = MoveCharacter(dt);
+            if (stateTimer < braceContactTime || (braceHeld && stateTimer < braceMaxHold)) return;
+
+            // Push off: towards the input (run along the wall if it points into it), or carry the
+            // sideways part of the run; straight into the wall springs you back the way you came.
+            Vector3 n = braceNormal;
+            Vector3 wish = Flat(transform.right * moveInput.x + transform.forward * moveInput.y);
+            Vector3 dir;
+            float keep = braceKeepSpeed;
+            if (wish.sqrMagnitude > 0.01f)
+            {
+                dir = wish.normalized;
+                if (Vector3.Dot(dir, n) < 0.1f)
+                {
+                    Vector3 along = Vector3.ProjectOnPlane(dir, n);
+                    if (along.sqrMagnitude < 0.06f) { dir = n; keep = braceReverseKeepSpeed; }
+                    else dir = along.normalized;
+                }
+            }
+            else
+            {
+                Vector3 along = Flat(Vector3.ProjectOnPlane(braceIncomingDir, n));
+                if (along.sqrMagnitude < 0.06f) { dir = n; keep = braceReverseKeepSpeed; }
+                else dir = along.normalized;
+            }
+            dir = (dir + n * bracePushOff).normalized;
+            hVel = dir * Mathf.Max(braceIncomingSpeed * keep, walkSpeed);
+            graceTimer = pushOffGrace;
+            impactCooldown = 0.4f;
+            SetState(grounded ? MoveState.Grounded : MoveState.Airborne);
         }
 
         // ------------------------------------------------------------------ slide
@@ -544,6 +773,7 @@ namespace BodycamHorror.Player
                 cc.enabled = true;
                 hVel = exitVelocity;
                 vVel = -4f;
+                airApexY = transform.position.y;
                 groundedLast = true;
                 lastGroundedTime = Time.time;
                 jumpConsumed = false;
@@ -555,7 +785,7 @@ namespace BodycamHorror.Player
 
         void OnControllerColliderHit(ControllerColliderHit hit)
         {
-            if (State == MoveState.Mantling || State == MoveState.Vaulting) return;
+            if (State == MoveState.Mantling || State == MoveState.Vaulting || State == MoveState.BraceWall) return;
             if (State == MoveState.Stumbling && (pendingLift > 0f || stateTimer < 0.1f)) return;   // let the trip carry us over
             Vector3 n = hit.normal;
             if (n.y > 0.5f || n.y < -0.5f) return;   // floor or ceiling
@@ -574,7 +804,9 @@ namespace BodycamHorror.Player
                 bool low = top <= stumbleMaxObstacleHeight && top > cc.stepOffset + 0.05f;
 
                 if (low && State == MoveState.Grounded && into >= stumbleMinSpeed) { StartStumble(into, top); return; }
-                if (!low && top > cc.stepOffset + 0.05f && into >= wallBumpMinSpeed) { StartBump(flatN, into); return; }
+                bool tall = !low && top > cc.stepOffset + 0.05f;
+                if (tall && IsBraceReady && into >= braceMinSpeed) { StartWallBrace(flatN, into); return; }
+                if (tall && into >= wallBumpMinSpeed) { StartBump(flatN, into); return; }
             }
 
             hVel += flatN * into;   // drop the into-wall part, keep sliding along it
@@ -634,13 +866,17 @@ namespace BodycamHorror.Player
         void UpdateHeight(float dt)
         {
             if (!cc.enabled) return;
-            float target = State == MoveState.Sliding ? slideHeight : crouching ? crouchHeight : standHeight;
+            bool ducked = crouching || State == MoveState.HandLanding
+                          || (State == MoveState.HardLanding && ActionProgress < 0.6f);
+            float target = State == MoveState.Sliding || State == MoveState.Rolling ? slideHeight
+                         : ducked ? crouchHeight : standHeight;
             float h = Mathf.MoveTowards(cc.height, target, heightChangeSpeed * dt);
             cc.height = h;
             cc.center = Vector3.up * (h * 0.5f);
             // The controller lifts itself by stepOffset on every move; keep it low when ducking
             // or the head clips things the body should pass under.
-            cc.stepOffset = State == MoveState.Sliding ? 0.05f : crouching ? Mathf.Min(standStepOffset, 0.2f) : standStepOffset;
+            cc.stepOffset = State == MoveState.Sliding || State == MoveState.Rolling ? 0.05f
+                          : ducked ? Mathf.Min(standStepOffset, 0.2f) : standStepOffset;
             if (cameraPivot) cameraPivot.localPosition = new Vector3(0f, h - eyeOffsetFromTop, 0f);
         }
 
@@ -679,6 +915,7 @@ namespace BodycamHorror.Player
             if (cameraPivot) cameraPivot.localRotation = Quaternion.Euler(pitch, 0f, 0f);
             hVel = Vector3.zero;
             vVel = 0f;
+            ResetTransientState();
             SetState(MoveState.Airborne);
         }
 
@@ -691,7 +928,17 @@ namespace BodycamHorror.Player
             cc.enabled = true;
             hVel = Vector3.zero;
             vVel = 0f;
+            ResetTransientState();
             SetState(MoveState.Airborne);
+        }
+
+        void ResetTransientState()
+        {
+            airApexY = transform.position.y;   // a teleport is not a fall
+            RollAngle = 0f;
+            IsTucked = false;
+            recoveryTimer = recoveryDuration = 0f;
+            lastBracePressTime = -10f;
         }
 
         static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);

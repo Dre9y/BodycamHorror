@@ -11146,6 +11146,10 @@ MonoBehaviour:
   bashTime: 0.46
   meleeHitAt: 0.38
   impactMaterial: {fileID: 2100000, guid: 9113691d6f6ce3c4ba644e8d3cdcc86f, type: 2}
+  meleeCharges: 2
+  meleeRechargeTime: 3
+  meleePushStrength: 3.2
+  meleePushArc: 100
   lookLead: 0.035
   lookJerkLead: 0.26
   maxLookLead: 16
@@ -12096,6 +12100,9 @@ MonoBehaviour:
   groundMask:
     serializedVersion: 2
     m_Bits: 4294967291
+  modelPrefab: {fileID: 919132149155446097, guid: 5c5f9fda31c02664aa3b2c9a132490f6, type: 3}
+  modelMaterial: {fileID: 2100000, guid: b3f569b207315064cbdbf621c8cd9c51, type: 2}
+  modelScale: 1
 --- !u!4 &1987985679
 Transform:
   m_ObjectHideFlags: 0

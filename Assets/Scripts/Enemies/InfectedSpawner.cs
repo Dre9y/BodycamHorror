@@ -18,6 +18,12 @@ namespace BodycamHorror.Enemies
         public float respawnDelay = 6f;
         public LayerMask groundMask = ~(1 << 2);
 
+        [Header("Look (empty = box placeholder)")]
+        [Tooltip("Rigged model with Mixamo bone names; the infected pose its skeleton procedurally.")]
+        public GameObject modelPrefab;
+        public Material modelMaterial;
+        public float modelScale = 1f;
+
         readonly List<Infected> alive = new List<Infected>();
         float respawnTimer = -1f;
 
@@ -51,6 +57,7 @@ namespace BodycamHorror.Enemies
                 var go = new GameObject("Infected");
                 go.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
                 var inf = go.AddComponent<Infected>();
+                if (modelPrefab) go.GetComponent<InfectedBody>().UseModel(modelPrefab, modelMaterial, modelScale);
                 alive.Add(inf);
                 if (startAlerted) inf.Alert(false, false);
             }

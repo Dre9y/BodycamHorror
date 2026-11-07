@@ -75,35 +75,13 @@ namespace BodycamHorror.Weapons
         /// out under an unscaled Slide pivot, so slideTravel stays in metres.</summary>
         void BuildFromPrefab(Transform model)
         {
-            var mesh = Instantiate(modelPrefab, model, false).transform;
-            mesh.name = modelPrefab.name;
-            mesh.localRotation = Quaternion.identity;
-            mesh.localScale = Vector3.one * modelScale;
-            mesh.localPosition = -modelGripPoint * modelScale;
-
-            foreach (var c in mesh.GetComponentsInChildren<Component>(true))
-                if (c is Collider || c is Animator) DestroyImmediate(c);
-            foreach (var t in mesh.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = gameObject.layer;
-            foreach (var r in mesh.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
+            var mesh = InstantiateModel(model, modelPrefab, modelScale, Vector3.zero, modelGripPoint);
             slide = MakePoint("Slide", model, Vector3.zero);
-            foreach (var partName in slideParts)
-            {
-                var part = FindDeep(mesh, partName);
-                if (part) part.SetParent(slide, true);
-                else Debug.LogWarning($"[Pistol] Slide part '{partName}' not found in {modelPrefab.name}.", this);
-            }
+            MoveParts(mesh, slide, slideParts);
 
-            muzzle = MakePoint("Muzzle", transform, (modelMuzzlePoint - modelGripPoint) * modelScale);
+            muzzle = MakePoint("Muzzle", transform, ModelPoint(mesh, modelMuzzlePoint));
             leftGrip = MakePoint("LeftGrip", transform, new Vector3(-0.036f, -0.022f, 0.004f));
             BuildMuzzleFlash(1f, 8f);
-        }
-
-        static Transform FindDeep(Transform root, string childName)
-        {
-            foreach (var t in root.GetComponentsInChildren<Transform>(true))
-                if (t.name == childName) return t;
-            return null;
         }
     }
 }

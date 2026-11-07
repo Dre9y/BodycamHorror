@@ -11,6 +11,8 @@ namespace BodycamHorror.Combat
         public Vector3 direction;
         public Collider collider;
         public GameObject source;
+        /// <summary>A melee blow rather than a bullet (no headshot bonus, for example).</summary>
+        public bool melee;
     }
 
     /// <summary>Anything that reacts to being shot. Looked up with GetComponentInParent on the hit collider.</summary>

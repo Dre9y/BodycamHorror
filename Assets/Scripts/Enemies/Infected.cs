@@ -14,7 +14,7 @@ namespace BodycamHorror.Enemies
     /// or knock down. Damage to the player goes through <see cref="IDamageable"/> on the player.
     /// </summary>
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
-    public class Infected : MonoBehaviour, IDamageable
+    public class Infected : MonoBehaviour, IDamageable, IPushable
     {
         public enum State { Idle, Chase, Attack, Climb, Stumble, Fallen, GettingUp, Dead }
 
@@ -51,9 +51,10 @@ namespace BodycamHorror.Enemies
 
         [Header("Tripping")]
         [Tooltip("At a run, obstacles up to this tall trip them up instead of being climbed.")]
-        public float tripMaxHeight = 0.7f;
-        public float tripMinSpeed = 3.5f;
-        [Range(0f, 1f)] public float tripFallChance = 0.35f;
+        public float tripMaxHeight = 0.95f;
+        public float tripMinSpeed = 2.5f;
+        [Tooltip("Share of trips that end flat on the ground (the rest stumble over and keep going).")]
+        [Range(0f, 1f)] public float tripFallChance = 0.5f;
         public float stumbleTime = 0.7f;
         public Vector2 fallenTime = new Vector2(1.5f, 3f);
         public float getUpTime = 0.8f;
@@ -67,6 +68,16 @@ namespace BodycamHorror.Enemies
         [Range(0f, 1f)] public float shovedFallChance = 0.12f;
         public float separationRadius = 0.85f;
         public float separationWeight = 0.6f;
+        [Tooltip("Bunched up this close, they elbow each other now and then even without running.")]
+        public float crowdRange = 0.8f;
+        public Vector2 crowdShoveInterval = new Vector2(0.5f, 1.3f);
+        public float crowdShoveImpulse = 1.5f;
+        [Range(0f, 1f)] public float crowdStumbleChance = 0.15f;
+        [Range(0f, 1f)] public float crowdFallChance = 0.04f;
+
+        [Header("Pushed by the player")]
+        [Tooltip("How long a melee shove throws them off balance (and breaks their swing).")]
+        public float pushedStumbleTime = 0.45f;
 
         [Header("Attack")]
         public float attackRange = 1.45f;
@@ -78,6 +89,10 @@ namespace BodycamHorror.Enemies
         [Header("Physics")]
         public LayerMask environmentMask = ~(1 << 2);
         public float mass = 65f;
+
+        [Header("Voice")]
+        [Tooltip("Growls, shrieks and grunts (placeholder synth). Off for now.")]
+        public bool voiceEnabled = false;
 
         public static readonly List<Infected> All = new List<Infected>();
         /// <summary>Raised when an infected dies.</summary>
@@ -107,7 +122,7 @@ namespace BodycamHorror.Enemies
         PlayerShooting playerShooting;
 
         State state = State.Idle;
-        float health, stateTimer, runSpeed, senseTimer, attackCooldownTimer, shoveTimer, voiceTimer;
+        float health, stateTimer, runSpeed, senseTimer, attackCooldownTimer, shoveTimer, voiceTimer, crowdTimer;
         bool alerted, attackHitDone;
         Vector3 moveDir = Vector3.forward;
         float avoidTimer, avoidSide;
@@ -205,6 +220,13 @@ namespace BodycamHorror.Enemies
             {
                 senseTimer = 0.25f;
                 Sense();
+            }
+
+            crowdTimer -= dt;
+            if (crowdTimer <= 0f)
+            {
+                crowdTimer = Random.Range(crowdShoveInterval.x, crowdShoveInterval.y);
+                if (alerted && (state == State.Chase || state == State.Attack)) CrowdJostle();
             }
 
             switch (state)
@@ -404,7 +426,7 @@ namespace BodycamHorror.Enemies
                 return;
             }
             float gap = knee.distance - capsule.radius;
-            if (h <= tripMaxHeight && speed >= tripMinSpeed && gap < 0.2f) { Trip(h, dir); return; }
+            if (h <= tripMaxHeight && speed >= tripMinSpeed && gap < 0.3f) { Trip(h, dir); return; }
             if (gap < 0.3f) StartClimb(knee.point, top, dir);
         }
 
@@ -458,15 +480,50 @@ namespace BodycamHorror.Enemies
             }
         }
 
+        /// <summary>Bunched up: elbow the nearest one out of the way, a little towards the side.</summary>
+        void CrowdJostle()
+        {
+            Infected nearest = null;
+            float best = crowdRange;
+            foreach (var other in All)
+            {
+                if (other == this || other.IsDead || other.state == State.Fallen || other.state == State.Climb
+                    || other.state == State.GettingUp) continue;
+                float d = Flat(other.rb.position - rb.position).magnitude;
+                if (d < best) { best = d; nearest = other; }
+            }
+            if (!nearest) return;
+            Vector3 away = Flat(nearest.rb.position - rb.position);
+            away = away.sqrMagnitude > 0.0001f ? away.normalized : Flat(Random.insideUnitSphere).normalized;
+            Vector3 side = Vector3.Cross(Vector3.up, away) * (Random.value < 0.5f ? -1f : 1f);
+            nearest.GetShoved((away + side * 0.5f).normalized * crowdShoveImpulse, crowdStumbleChance, crowdFallChance);
+            if (!rb.isKinematic) rb.AddForce(-away * (crowdShoveImpulse * 0.35f), ForceMode.VelocityChange);   // push-back on the shover
+        }
+
         /// <summary>Barged by another infected.</summary>
-        public void GetShoved(Vector3 impulse)
+        public void GetShoved(Vector3 impulse) => GetShoved(impulse, shovedStumbleChance, shovedFallChance);
+
+        void GetShoved(Vector3 impulse, float stumbleChance, float fallChance)
         {
             if (state == State.Dead || state == State.Climb || state == State.GettingUp || rb.isKinematic) return;
             rb.AddForce(impulse, ForceMode.VelocityChange);
             float r = Random.value;
             Vector3 dir = Flat(impulse).normalized;
-            if (r < shovedFallChance) Fall(dir, 0.8f);
-            else if (r < shovedFallChance + shovedStumbleChance && state != State.Fallen) Stumble(stumbleTime * 0.7f, 0f, dir);
+            if (r < fallChance) Fall(dir, 0.8f);
+            else if (r < fallChance + stumbleChance && state != State.Fallen) Stumble(stumbleTime * 0.7f, 0f, dir);
+        }
+
+        /// <summary>Shoved by the player's melee: knocked back a step, off balance, swing broken.</summary>
+        public void Push(Vector3 direction, float strength)
+        {
+            if (state == State.Dead || (rb.isKinematic && state != State.Climb)) return;
+            Vector3 dir = Flat(direction).sqrMagnitude > 0.0001f ? Flat(direction).normalized : -transform.forward;
+            if (state == State.Climb) { rb.isKinematic = false; Fall(dir, 0.6f); return; }   // pushed off the ledge
+            Alert(false, true);
+            rb.AddForce(dir * strength + Vector3.up * 0.4f, ForceMode.VelocityChange);
+            if (state == State.Fallen || state == State.GettingUp) return;
+            Stumble(pushedStumbleTime, 0f, dir);
+            attackCooldownTimer = Mathf.Max(attackCooldownTimer, 0.5f);
         }
 
         // ------------------------------------------------------------------ trip / stumble / fall / get up
@@ -622,7 +679,7 @@ namespace BodycamHorror.Enemies
             playerDamageable?.TakeDamage(new DamageInfo
             {
                 amount = attackDamage, point = player.position + Vector3.up * 1.4f, normal = -dir, direction = dir,
-                collider = null, source = gameObject
+                collider = null, source = gameObject, melee = true
             });
             if (playerRig)
             {
@@ -641,7 +698,7 @@ namespace BodycamHorror.Enemies
         public void TakeDamage(in DamageInfo info)
         {
             if (state == State.Dead) return;
-            bool head = body && body.HeadHitbox && info.collider == body.HeadHitbox;
+            bool head = !info.melee && body && body.HeadHitbox && info.collider == body.HeadHitbox;
             float dmg = info.amount * (head ? headshotMultiplier : 1f);
             health -= dmg;
             Alert(false, true);
@@ -690,6 +747,7 @@ namespace BodycamHorror.Enemies
 
         void Say(string kind, float volume, float pitch)
         {
+            if (!voiceEnabled) return;
             string key = kind + voiceVariant;
             if (!ClipCache.TryGetValue(key, out AudioClip clip) || !clip)
             {

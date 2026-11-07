@@ -84,6 +84,14 @@ namespace BodycamHorror.Weapons
         [Range(0.1f, 0.9f)] public float meleeHitAt = 0.38f;
         [Tooltip("Used for melee dust when no gun is around to lend its material.")]
         public Material impactMaterial;
+        [Tooltip("Strikes in a row before the arms need a breather.")]
+        public int meleeCharges = 2;
+        [Tooltip("Seconds without striking to get all strikes back (and the lock-out once they are used up).")]
+        public float meleeRechargeTime = 3f;
+        [Tooltip("Push speed (m/s) given to whatever the strike catches.")]
+        public float meleePushStrength = 3.2f;
+        [Tooltip("Strikes shove everything pushable in this cone in front (deg, full width).")]
+        public float meleePushArc = 100f;
 
         [Header("Look inertia (hands swing ahead of sharp moves)")]
         [Tooltip("Degrees the gun leads the view per deg/s of look speed. Negative makes it trail instead.")]
@@ -142,6 +150,8 @@ namespace BodycamHorror.Weapons
         public int PunchHand => meleeKind switch { MeleeKind.PunchLeft => -1, MeleeKind.Jab => -1, MeleeKind.PunchRight => 1, _ => 0 };
         /// <summary>0..1 extension of the current punch / jab.</summary>
         public float PunchExtend => PunchHand != 0 ? MeleeCurve() : 0f;
+        /// <summary>Melee strikes left before the recharge.</summary>
+        public int MeleeChargesLeft => meleeChargesLeft;
 
         public event Action Fired;
         /// <summary>A melee strike was thrown (true if it connected).</summary>
@@ -175,6 +185,8 @@ namespace BodycamHorror.Weapons
         float meleeTimer, meleeDuration;
         bool meleeHitDone;
         int nextPunchRight = 1;
+        int meleeChargesLeft = 2;
+        float meleeRechargeTimer;
         AudioSource meleeAudio;
         AudioClip whooshClip, thudClip;
 
@@ -190,6 +202,7 @@ namespace BodycamHorror.Weapons
             if (!impactMaterial)
                 foreach (var w in weapons) if (w && w.impactMaterial) { impactMaterial = w.impactMaterial; break; }
             seed = Random.value * 100f;
+            meleeChargesLeft = meleeCharges;
 
             slot = Mathf.Clamp(startSlot, 0, SlotCount - 1);
             for (int i = 0; i < weapons.Length; i++) if (weapons[i]) weapons[i].gameObject.SetActive(i == slot);
@@ -261,6 +274,11 @@ namespace BodycamHorror.Weapons
             }
             if (aimHeld) raiseTimer = raiseHoldTime;
             raiseTimer -= Time.deltaTime;
+            if (meleeChargesLeft < meleeCharges)
+            {
+                meleeRechargeTimer -= Time.deltaTime;
+                if (meleeRechargeTimer <= 0f) meleeChargesLeft = meleeCharges;
+            }
             if (reloadAction.WasPressedThisFrame()) TryStartReload();
             if (meleeAction.WasPressedThisFrame()) { raiseTimer = raiseHoldTime; TryStartMelee(); }
 
@@ -576,6 +594,9 @@ namespace BodycamHorror.Weapons
         {
             if (meleeKind != MeleeKind.None || carryW > 0.5f) return;
             if (switchPhase == SwitchPhase.Lowering) return;
+            if (meleeChargesLeft <= 0) return;   // out of breath: wait for the recharge
+            meleeChargesLeft--;
+            meleeRechargeTimer = meleeRechargeTime;
             CancelReload();
 
             Firearm w = shown;
@@ -629,7 +650,7 @@ namespace BodycamHorror.Weapons
                 info.collider.GetComponentInParent<IDamageable>()?.TakeDamage(new DamageInfo
                 {
                     amount = damage, point = info.point, normal = info.normal, direction = dir,
-                    collider = info.collider, source = player ? player.gameObject : gameObject
+                    collider = info.collider, source = player ? player.gameObject : gameObject, melee = true
                 });
                 if (info.rigidbody && !info.rigidbody.isKinematic)
                     info.rigidbody.AddForceAtPosition(dir * force, info.point, ForceMode.Impulse);
@@ -649,7 +670,35 @@ namespace BodycamHorror.Weapons
                     rig.AddTrauma(0.22f * k);
                 }
             }
-            Meleed?.Invoke(hit);
+            bool pushed = PushInFront(dir);
+            Meleed?.Invoke(hit || pushed);
+        }
+
+        static readonly Collider[] PushBuffer = new Collider[24];
+        readonly System.Collections.Generic.HashSet<IPushable> pushedThisSwing = new System.Collections.Generic.HashSet<IPushable>();
+
+        /// <summary>Shoves everything pushable in a cone in front back a step.</summary>
+        bool PushInFront(Vector3 dir)
+        {
+            Vector3 eye = transform.position;
+            Vector3 flatDir = new Vector3(dir.x, 0f, dir.z).normalized;
+            int n = Physics.OverlapSphereNonAlloc(eye + dir * (meleeRange * 0.5f), meleeRange * 0.6f, PushBuffer,
+                                                  meleeMask, QueryTriggerInteraction.Ignore);
+            pushedThisSwing.Clear();
+            for (int i = 0; i < n; i++)
+            {
+                var target = PushBuffer[i].GetComponentInParent<IPushable>();
+                if (target == null || pushedThisSwing.Contains(target)) continue;
+                Vector3 to = PushBuffer[i].bounds.center - eye;
+                Vector3 flatTo = new Vector3(to.x, 0f, to.z);
+                if (flatTo.magnitude > meleeRange + 0.3f) continue;
+                if (flatTo.sqrMagnitude > 0.0001f && Vector3.Angle(flatDir, flatTo) > meleePushArc * 0.5f) continue;
+                pushedThisSwing.Add(target);
+                // push away from the player, leaning into the strike direction
+                Vector3 pushDir = (flatTo.normalized + flatDir).normalized;
+                target.Push(pushDir, meleePushStrength);
+            }
+            return pushedThisSwing.Count > 0;
         }
 
         void PlayMelee(AudioClip clip, float pitch, float vol)

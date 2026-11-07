@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using BodycamHorror.Weapons;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -6,9 +7,12 @@ using UnityEngine.Rendering;
 namespace BodycamHorror.Player
 {
     /// <summary>
-    /// Chest-mounted flashlight next to the body camera. Swings a touch behind the view, flickers when
-    /// the body takes a knock, F / D-pad up toggles it. Builds its own beam + soft spill lights.
+    /// Flashlight. With a gun in hand it is a weapon light under the barrel: the beam goes exactly where
+    /// the gun points and follows its recoil, sway and switching (a small light body is put on each gun).
+    /// Bare-handed it sits on the chest next to the body camera and swings a touch behind the view.
+    /// Flickers when the body takes a knock, F / D-pad up toggles it. Builds its own beam + spill lights.
     /// </summary>
+    [DefaultExecutionOrder(70)]   // after PlayerShooting / the arms have posed the gun this frame
     public class BodycamFlashlight : MonoBehaviour
     {
         public BodycamPlayerController player;
@@ -38,7 +42,16 @@ namespace BodycamHorror.Player
         [Tooltip("Flicker length after a knock (s).")]
         public float knockFlickerTime = 0.45f;
 
+        [Header("Weapon light")]
+        [Tooltip("Ride on the gun in hand (Firearm.flashlightOffset); back on the chest with bare hands.")]
+        public bool mountOnWeapon = true;
+        [Tooltip("Found automatically.")]
+        public PlayerShooting shooting;
+        public Color bodyColor = new Color(0.06f, 0.06f, 0.065f);
+
         public bool IsOn { get; private set; }
+        /// <summary>The gun the light is on right now (null = chest).</summary>
+        public Firearm MountedOn { get; private set; }
 
         Light beam, spill, handFill;
         Quaternion smoothed;
@@ -47,10 +60,15 @@ namespace BodycamHorror.Player
         InputAction toggleAction;
         AudioSource audioSource;
         AudioClip clickClip;
+        Vector3 chestPosition;
+        readonly Dictionary<Firearm, Renderer> lenses = new Dictionary<Firearm, Renderer>();
+        Material bodyMat, lensOnMat, lensOffMat;
 
         void Awake()
         {
             if (!player) player = GetComponentInParent<BodycamPlayerController>();
+            if (!shooting && player) shooting = player.GetComponentInChildren<PlayerShooting>(true);
+            chestPosition = transform.localPosition;
             beam = FindOrMakeLight("Beam");
             spill = FindOrMakeLight("Spill");
             handFill = FindOrMakeLight("HandFill");
@@ -125,6 +143,7 @@ namespace BodycamHorror.Player
             beam.enabled = on;
             spill.enabled = on;
             handFill.enabled = on;
+            foreach (var lens in lenses.Values) if (lens) lens.sharedMaterial = on ? lensOnMat : lensOffMat;
             if (!click || !audioSource) return;
             if (!clickClip) clickClip = ProceduralAudio.DoubleClick(0.035f, 2600f, 0.45f);   // lost on a Play Mode script reload
             audioSource.PlayOneShot(clickClip, 0.8f);
@@ -137,6 +156,34 @@ namespace BodycamHorror.Player
         {
             if (toggleAction.WasPressedThisFrame()) SetOn(!IsOn);
 
+            Firearm gun = mountOnWeapon && shooting && shooting.isActiveAndEnabled ? shooting.CurrentWeapon : null;
+            if (gun && gun.muzzle)
+            {
+                // weapon light: rigid on the gun, no trailing
+                if (gun != MountedOn) { EnsureLightBody(gun); MountedOn = gun; }
+                Transform g = gun.transform;
+                transform.SetPositionAndRotation(g.TransformPoint(gun.muzzle.localPosition + gun.flashlightOffset), g.rotation);
+                smoothInit = false;
+                // the soft hand fill stays at the chest: right next to the fore-end it would blow the fingers out
+                if (transform.parent) handFill.transform.position = transform.parent.TransformPoint(chestPosition + new Vector3(0f, 0.05f, -0.05f));
+            }
+            else
+            {
+                if (MountedOn)
+                {
+                    MountedOn = null;
+                    transform.localPosition = chestPosition;
+                    handFill.transform.localPosition = new Vector3(0f, 0.05f, -0.05f);
+                    smoothInit = false;
+                }
+                ChestSwing();
+            }
+
+            UpdateIntensity();
+        }
+
+        void ChestSwing()
+        {
             // Trail the parent's rotation slightly so the beam swings when turning.
             Transform parent = transform.parent;
             Quaternion target = parent ? parent.rotation : Quaternion.identity;
@@ -145,7 +192,10 @@ namespace BodycamHorror.Player
             smoothed = Quaternion.Slerp(smoothed, target, 1f - Mathf.Exp(-dt / Mathf.Max(swingLag, 0.001f)));
             if (Quaternion.Angle(smoothed, target) > maxSwing) smoothed = Quaternion.RotateTowards(target, smoothed, maxSwing);
             transform.rotation = smoothed;
+        }
 
+        void UpdateIntensity()
+        {
             if (!IsOn) return;
             float k = 1f;
             if (flicker > 0f)
@@ -157,6 +207,56 @@ namespace BodycamHorror.Player
             beam.intensity = intensity * k;
             spill.intensity = spillIntensity * k;
             handFill.intensity = handFillIntensity * k;
+        }
+
+        /// <summary>A small light body under the barrel of this gun (built once per gun, hides with it).</summary>
+        void EnsureLightBody(Firearm gun)
+        {
+            if (lenses.ContainsKey(gun) && lenses[gun]) return;
+            var old = gun.transform.Find("WeaponLight");
+            if (old) Destroy(old.gameObject);
+
+            var baseMat = GraphicsSettings.currentRenderPipeline ? GraphicsSettings.currentRenderPipeline.defaultMaterial : null;
+            if (!bodyMat && baseMat)
+            {
+                bodyMat = new Material(baseMat) { name = "WeaponLightBody", color = bodyColor };
+                if (bodyMat.HasProperty("_BaseColor")) bodyMat.SetColor("_BaseColor", bodyColor);
+                if (bodyMat.HasProperty("_Smoothness")) bodyMat.SetFloat("_Smoothness", 0.45f);
+                if (bodyMat.HasProperty("_Metallic")) bodyMat.SetFloat("_Metallic", 0.6f);
+                lensOffMat = new Material(baseMat) { name = "WeaponLightLensOff", color = new Color(0.2f, 0.2f, 0.2f) };
+                if (lensOffMat.HasProperty("_BaseColor")) lensOffMat.SetColor("_BaseColor", new Color(0.2f, 0.2f, 0.2f));
+                if (lensOffMat.HasProperty("_Smoothness")) lensOffMat.SetFloat("_Smoothness", 0.95f);
+                lensOnMat = new Material(lensOffMat) { name = "WeaponLightLensOn" };
+                lensOnMat.EnableKeyword("_EMISSION");
+                if (lensOnMat.HasProperty("_EmissionColor")) lensOnMat.SetColor("_EmissionColor", color * 4f);
+            }
+
+            var root = new GameObject("WeaponLight").transform;
+            root.SetParent(gun.transform, false);
+            root.localPosition = gun.muzzle.localPosition + gun.flashlightOffset;
+            root.gameObject.layer = gun.gameObject.layer;
+            // body (along +Z), a clamp up to the gun, and the lens at the front
+            Part(root, PrimitiveType.Cylinder, Vector3.zero, new Vector3(90f, 0f, 0f), new Vector3(0.026f, 0.03f, 0.026f), bodyMat);
+            Part(root, PrimitiveType.Cylinder, new Vector3(0f, 0f, 0.028f), new Vector3(90f, 0f, 0f), new Vector3(0.031f, 0.006f, 0.031f), bodyMat);
+            Part(root, PrimitiveType.Cube, new Vector3(0f, 0.016f, -0.004f), Vector3.zero, new Vector3(0.012f, 0.012f, 0.032f), bodyMat);
+            var lens = Part(root, PrimitiveType.Cylinder, new Vector3(0f, 0f, 0.0345f), new Vector3(90f, 0f, 0f), new Vector3(0.026f, 0.0015f, 0.026f), IsOn ? lensOnMat : lensOffMat);
+            ViewModelLighting.MarkViewModel(root.gameObject);
+            lenses[gun] = lens;
+        }
+
+        static Renderer Part(Transform parent, PrimitiveType type, Vector3 pos, Vector3 euler, Vector3 scale, Material mat)
+        {
+            var go = GameObject.CreatePrimitive(type);
+            Destroy(go.GetComponent<Collider>());
+            go.layer = parent.gameObject.layer;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = pos;
+            go.transform.localEulerAngles = euler;
+            go.transform.localScale = scale;
+            var r = go.GetComponent<Renderer>();
+            if (mat) r.sharedMaterial = mat;
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            return r;
         }
 
         void OnImpacted(ImpactKind kind, float speed)

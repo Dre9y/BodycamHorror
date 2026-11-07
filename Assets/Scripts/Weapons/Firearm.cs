@@ -78,6 +78,10 @@ namespace BodycamHorror.Weapons
         public float meleeDamage = 25f;
         public float meleeForce = 5f;
 
+        [Header("Accessories")]
+        [Tooltip("Weapon light position, in weapon space relative to the muzzle (under the barrel).")]
+        public Vector3 flashlightOffset = new Vector3(0f, -0.047f, -0.035f);
+
         [Header("Parts (built by Build Placeholder Model)")]
         public Transform muzzle;
         public Transform leftGrip;

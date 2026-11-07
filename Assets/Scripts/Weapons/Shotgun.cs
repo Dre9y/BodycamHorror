@@ -59,6 +59,7 @@ namespace BodycamHorror.Weapons
             cameraTrauma = 0.38f; cameraTremor = 1.1f; cameraKickPitch = 260f; cameraKickRoll = 120f; cameraKickBack = 0.7f;
             meleeWithWeapon = true; meleeDamage = 45f; meleeForce = 12f;
             flashIntensity = 14f; flashDuration = 0.07f; bulletHoleSize = 0.05f; impactFxScale = 0.35f;
+            flashlightOffset = new Vector3(0f, -0.026f, -0.06f);   // under the barrel, ahead of the magazine tube
         }
 
         protected override void Awake()

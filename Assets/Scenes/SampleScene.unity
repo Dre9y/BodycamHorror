@@ -2790,6 +2790,9 @@ MonoBehaviour:
   swingLag: 0.06
   maxSwing: 10
   knockFlickerTime: 0.45
+  mountOnWeapon: 1
+  shooting: {fileID: 0}
+  bodyColor: {r: 0.06, g: 0.06, b: 0.065, a: 1}
 --- !u!1 &486345256
 GameObject:
   m_ObjectHideFlags: 0
@@ -7559,6 +7562,7 @@ MonoBehaviour:
   meleeWithWeapon: 1
   meleeDamage: 45
   meleeForce: 12
+  flashlightOffset: {x: 0, y: -0.026, z: -0.06}
   muzzle: {fileID: 1895004561}
   leftGrip: {fileID: 61662650}
   flashMesh: {fileID: 193881108}
@@ -9292,6 +9296,7 @@ MonoBehaviour:
   meleeWithWeapon: 0
   meleeDamage: 25
   meleeForce: 5
+  flashlightOffset: {x: 0, y: -0.047, z: -0.035}
   muzzle: {fileID: 1656965312}
   leftGrip: {fileID: 608398441}
   flashMesh: {fileID: 34740882}

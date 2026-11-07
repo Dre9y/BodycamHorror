@@ -78,6 +78,10 @@ namespace BodycamHorror.Weapons
         public float meleeDamage = 25f;
         public float meleeForce = 5f;
 
+        [Header("Accessories")]
+        [Tooltip("Weapon light position, in weapon space relative to the muzzle (under the barrel).")]
+        public Vector3 flashlightOffset = new Vector3(0f, -0.047f, -0.035f);
+
         [Header("Parts (built by Build Placeholder Model)")]
         public Transform muzzle;
         public Transform leftGrip;
@@ -277,6 +281,49 @@ namespace BodycamHorror.Weapons
 
         protected Material Polymer => polymerMaterial ? polymerMaterial : Fallback(new Color(0.06f, 0.06f, 0.065f));
         protected Material Metal => metalMaterial ? metalMaterial : Fallback(new Color(0.12f, 0.12f, 0.13f));
+
+        // ------------------------------------------------------------------ imported models
+
+        /// <summary>
+        /// Puts an imported model under <paramref name="model"/>: rotated by <paramref name="euler"/>,
+        /// scaled, and moved so <paramref name="gripPoint"/> (in the model root's own space) lands on the
+        /// weapon origin (right hand on the grip). Strips colliders/animators, view-model layer, no shadows.
+        /// </summary>
+        protected Transform InstantiateModel(Transform model, GameObject prefab, float scale, Vector3 euler, Vector3 gripPoint)
+        {
+            var mesh = Instantiate(prefab, model, false).transform;
+            mesh.name = prefab.name;
+            mesh.localRotation = Quaternion.Euler(euler);
+            mesh.localScale = Vector3.one * scale;
+            mesh.localPosition = -(mesh.localRotation * gripPoint) * scale;
+
+            foreach (var c in mesh.GetComponentsInChildren<Component>(true))
+                if (c is Collider || c is Animator) DestroyImmediate(c);
+            foreach (var t in mesh.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = gameObject.layer;
+            foreach (var r in mesh.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = ShadowCastingMode.Off;
+            return mesh;
+        }
+
+        /// <summary>A point given in the model root's space, in this weapon's local space.</summary>
+        protected Vector3 ModelPoint(Transform mesh, Vector3 point) => transform.InverseTransformPoint(mesh.TransformPoint(point));
+
+        /// <summary>Moves the named model parts under <paramref name="pivot"/> (keeping where they are) so they can be animated.</summary>
+        protected void MoveParts(Transform mesh, Transform pivot, string[] partNames)
+        {
+            foreach (var partName in partNames)
+            {
+                var part = FindDeep(mesh, partName);
+                if (part) part.SetParent(pivot, true);
+                else Debug.LogWarning($"[{GetType().Name}] Part '{partName}' not found in {mesh.name}.", this);
+            }
+        }
+
+        protected static Transform FindDeep(Transform root, string childName)
+        {
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name == childName) return t;
+            return null;
+        }
 
         protected Transform MakePoint(string pointName, Transform parent, Vector3 localPosition)
         {

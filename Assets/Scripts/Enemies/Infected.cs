@@ -134,7 +134,7 @@ namespace BodycamHorror.Enemies
         float wanderTimer;
 
         // action data
-        float actionDuration, speedMul = 1f;
+        float actionDuration;
         Vector3 climbFrom, climbWall, climbDir;
         float climbTopY, climbUpTime;
         Vector3 getUpFromPos, getUpToPos;

@@ -18,6 +18,21 @@ namespace BodycamHorror.Weapons
         [Tooltip("Back-and-forward stroke time (s).")]
         public float pumpTime = 0.34f;
 
+        [Header("Model (empty = boxy placeholder)")]
+        [Tooltip("Imported shotgun model. Rebuild with Build Placeholder Model after changing.")]
+        public GameObject modelPrefab;
+        public float modelScale = 0.0463f;
+        [Tooltip("Rotation applied to the model so its barrel points along +Z.")]
+        public Vector3 modelEuler = new Vector3(0f, 180f, 0f);
+        [Tooltip("Point in the model root's space that sits at the grip origin (right hand on the pistol grip).")]
+        public Vector3 modelGripPoint = new Vector3(0f, 0f, 6f);
+        [Tooltip("Point in the model root's space at the front of the barrel, on the bore axis.")]
+        public Vector3 modelMuzzlePoint = new Vector3(0f, 1.083f, -10.74f);
+        [Tooltip("Middle of the fore-end in the model root's space: the pump pivot and the left hand sit here.")]
+        public Vector3 modelPumpCenter = new Vector3(0f, 0.55f, -2.83f);
+        [Tooltip("Model parts that slide with the pump.")]
+        public string[] pumpParts = { "Reload_Cylinder.003", "Rback_Cylinder.005", "Rfront_Cylinder.004", "RDe_Cylinder.006" };
+
         public bool IsPumping => pumpStart >= 0f && Time.time - pumpStart < pumpTime;
 
         float pumpStart = -10f;
@@ -44,6 +59,7 @@ namespace BodycamHorror.Weapons
             cameraTrauma = 0.38f; cameraTremor = 1.1f; cameraKickPitch = 260f; cameraKickRoll = 120f; cameraKickBack = 0.7f;
             meleeWithWeapon = true; meleeDamage = 45f; meleeForce = 12f;
             flashIntensity = 14f; flashDuration = 0.07f; bulletHoleSize = 0.05f; impactFxScale = 0.35f;
+            flashlightOffset = new Vector3(0f, -0.026f, -0.06f);   // under the barrel, ahead of the magazine tube
         }
 
         protected override void Awake()
@@ -105,6 +121,7 @@ namespace BodycamHorror.Weapons
 
         protected override void BuildModel(Transform model)
         {
+            if (modelPrefab) { BuildFromPrefab(model); return; }
             Material poly = Polymer, metal = Metal;
             // origin = right hand on the pistol grip; barrel along +Z
             Box(model, "Grip", new Vector3(0f, -0.035f, -0.005f), new Vector3(0.034f, 0.095f, 0.045f), poly, 16f);
@@ -123,6 +140,21 @@ namespace BodycamHorror.Weapons
             pumpRestSet = true;
 
             muzzle = MakePoint("Muzzle", transform, new Vector3(0f, 0.05f, 0.555f));
+            BuildMuzzleFlash(1.7f, 10f);
+        }
+
+        /// <summary>Imported model: the fore-end parts go under an unscaled Pump pivot (pumpTravel stays
+        /// in metres) and the left-hand grip point rides on it.</summary>
+        void BuildFromPrefab(Transform model)
+        {
+            var mesh = InstantiateModel(model, modelPrefab, modelScale, modelEuler, modelGripPoint);
+            pump = MakePoint("Pump", model, ModelPoint(mesh, modelPumpCenter));
+            MoveParts(mesh, pump, pumpParts);
+            leftGrip = MakePoint("LeftGrip", pump, new Vector3(-0.034f, -0.022f, 0f));
+            pumpRest = pump.localPosition;
+            pumpRestSet = true;
+
+            muzzle = MakePoint("Muzzle", transform, ModelPoint(mesh, modelMuzzlePoint));
             BuildMuzzleFlash(1.7f, 10f);
         }
     }

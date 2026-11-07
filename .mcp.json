@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "unity-editor": {
+      "type": "stdio",
+      "command": "E:\\Unity\\cli\\bin\\unity.exe",
+      "args": ["mcp", "--project-path", "E:\\Unity\\Projects\\BodycamHorror"]
+    }
+  }
+}

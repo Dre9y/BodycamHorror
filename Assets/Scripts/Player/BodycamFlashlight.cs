@@ -125,7 +125,9 @@ namespace BodycamHorror.Player
             beam.enabled = on;
             spill.enabled = on;
             handFill.enabled = on;
-            if (click && audioSource) audioSource.PlayOneShot(clickClip, 0.8f);
+            if (!click || !audioSource) return;
+            if (!clickClip) clickClip = ProceduralAudio.DoubleClick(0.035f, 2600f, 0.45f);   // lost on a Play Mode script reload
+            audioSource.PlayOneShot(clickClip, 0.8f);
         }
 
         /// <summary>Makes the light stutter for a moment (bad contact after a knock).</summary>
@@ -159,7 +161,7 @@ namespace BodycamHorror.Player
 
         void OnImpacted(ImpactKind kind, float speed)
         {
-            if (kind != ImpactKind.Brace) Flicker(knockFlickerTime);
+            if (kind == ImpactKind.Wall || kind == ImpactKind.Stumble) Flicker(knockFlickerTime);
         }
 
         void OnLandingResolved(LandingKind kind, float drop)

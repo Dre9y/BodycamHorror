@@ -104,6 +104,7 @@ namespace BodycamHorror.Player
         {
             ImpactKind.Stumble => perStumble,
             ImpactKind.Wall => perWallBump,
+            ImpactKind.Scrape => perWallBump * 0.1f,
             _ => perWallBump * 0.25f,
         });
     }

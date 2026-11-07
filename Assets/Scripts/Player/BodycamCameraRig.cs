@@ -321,7 +321,17 @@ namespace BodycamHorror.Player
             float k = Mathf.InverseLerp(3f, 9f, speed);
             float m = impactStrength;
             float side = Random.value < 0.5f ? -1f : 1f;
-            if (kind == ImpactKind.Brace)
+            if (kind == ImpactKind.Scrape)
+            {
+                // shoulder brushes the wall: nudged away from it, a short rough shudder
+                float wallSide = Mathf.Sign(player.transform.InverseTransformPoint(player.LastImpactPoint).x);
+                float s = Mathf.InverseLerp(1f, 6f, speed) * m;
+                posVelocity.x -= wallSide * (0.3f + 0.5f * s);
+                rotVelocity.z += wallSide * (20f + 40f * s);
+                rotVelocity.y -= wallSide * (8f + 15f * s);
+                AddTremor(0.25f + 0.35f * s);
+            }
+            else if (kind == ImpactKind.Brace)
             {
                 // hands took it: a firm thud, no stagger
                 posVelocity.z -= (0.6f + 0.8f * k) * m;

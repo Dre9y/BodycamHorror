@@ -74,10 +74,10 @@ namespace BodycamHorror.Weapons
 
         [Header("Look inertia (hands swing ahead of sharp moves)")]
         [Tooltip("Degrees the gun leads the view per deg/s of look speed. Negative makes it trail instead.")]
-        public float lookLead = 0.025f;
+        public float lookLead = 0.035f;
         [Tooltip("Extra swing from sudden changes of look speed (flicks and hard stops).")]
-        public float lookJerkLead = 0.18f;
-        public float maxLookLead = 12f;
+        public float lookJerkLead = 0.26f;
+        public float maxLookLead = 16f;
         public float leadStiffness = 280f;
         public float leadDamping = 19f;
         [Tooltip("How far (m) the gun travels sideways per radian of lead.")]
@@ -459,6 +459,7 @@ namespace BodycamHorror.Weapons
             // the hands get thrown about by trips and wall hits
             float k = Mathf.InverseLerp(3f, 9f, speed) * 0.6f + 0.4f;
             if (kind == ImpactKind.Brace) k *= 0.3f;
+            else if (kind == ImpactKind.Scrape) k *= 0.2f;
             recoilRotVel += new Vector3(Random.Range(-1f, 1f) * 260f, Random.Range(-1f, 1f) * 200f, Random.Range(-1f, 1f) * 260f) * k;
             recoilPosVel += new Vector3(Random.Range(-0.6f, 0.6f), Random.Range(-0.8f, 0.4f), kind == ImpactKind.Wall ? -1.2f : 0.6f) * k;
         }

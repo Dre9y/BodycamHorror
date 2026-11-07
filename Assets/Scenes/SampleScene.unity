@@ -3704,18 +3704,20 @@ MonoBehaviour:
   stumbleMaxObstacleHeight: 0.65
   bumpStunTime: 0.6
   stumbleTime: 0.8
+  headOnMaxAngle: 40
+  scrapeMinSpeed: 1.5
+  scrapeSpeedLoss: 0.08
   braceWindow: 0.4
   braceMinSpeed: 2.5
-  braceContactTime: 0.18
-  braceMaxHold: 0.6
+  braceContactTime: 0.08
   braceKeepSpeed: 0.8
   braceReverseKeepSpeed: 0.6
   bracePushOff: 0.3
   pushOffGrace: 0.35
-  landingMinDrop: 1.2
-  hardLandingDrop: 2
+  landingMinDrop: 1.8
+  hardLandingDrop: 3
   rollDrop: 2.7
-  severeDrop: 5.5
+  severeDrop: 8
   handLandingTime: 0.34
   handLandingKeepSpeed: 0.85
   rollTime: 0.75
@@ -7490,9 +7492,9 @@ MonoBehaviour:
   cameraKickPitch: 110
   cameraKickRoll: 60
   cameraKickBack: 0.25
-  lookLead: 0.025
-  lookJerkLead: 0.18
-  maxLookLead: 12
+  lookLead: 0.035
+  lookJerkLead: 0.26
+  maxLookLead: 16
   leadStiffness: 280
   leadDamping: 19
   leadArm: 0.3

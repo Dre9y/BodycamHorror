@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 namespace BodycamHorror.Player
 {
     public enum MoveState { Grounded, Airborne, Sliding, Mantling, Vaulting, Stumbling, Bumped, BraceWall, HandLanding, Rolling, HardLanding }
-    public enum ImpactKind { Wall, Stumble, Brace }
+    public enum ImpactKind { Wall, Stumble, Brace, Scrape }
     public enum LandingKind { Normal, Hands, Roll, Hard }
 
     /// <summary>
@@ -92,18 +92,24 @@ namespace BodycamHorror.Player
         public float stumbleMaxObstacleHeight = 0.65f;
         public float bumpStunTime = 0.6f;
         public float stumbleTime = 0.8f;
+        [Tooltip("Hitting a wall closer to straight-on than this (deg) is a head-on impact (bump or brace); "
+                 + "a shallower contact only scrapes along it.")]
+        public float headOnMaxAngle = 40f;
+        [Tooltip("Slowest sideways contact that counts as a scrape (otherwise you just slide along).")]
+        public float scrapeMinSpeed = 1.5f;
+        [Tooltip("Share of speed lost when a scrape starts (continuous rubbing does not stack it).")]
+        [Range(0f, 0.5f)] public float scrapeSpeedLoss = 0.08f;
 
         [Header("Brace against walls (Q / RB)")]
-        [Tooltip("Pressing Brace up to this long (s) before hitting a tall wall counts as prepared.")]
+        [Tooltip("Pressing Brace up to this long (s) before hitting a tall wall head-on counts as prepared.")]
         public float braceWindow = 0.4f;
         [Tooltip("Slowest run into a wall that still triggers a brace.")]
         public float braceMinSpeed = 2.5f;
-        [Tooltip("Hands on the wall at least this long (s); holding Brace keeps you there up to braceMaxHold.")]
-        public float braceContactTime = 0.18f;
-        public float braceMaxHold = 0.6f;
-        [Tooltip("Share of the incoming speed kept when pushing off along / away from the wall.")]
+        [Tooltip("How long (s) the hands touch the wall before the push-off. No need to hold the key.")]
+        public float braceContactTime = 0.08f;
+        [Tooltip("Share of the incoming speed kept when the push-off turns up to 90 deg...")]
         [Range(0f, 1f)] public float braceKeepSpeed = 0.8f;
-        [Tooltip("Share kept when pushing straight back the way you came.")]
+        [Tooltip("...and when it sends you straight back the way you came.")]
         [Range(0f, 1f)] public float braceReverseKeepSpeed = 0.6f;
         [Tooltip("How much the push-off angles away from the wall.")]
         public float bracePushOff = 0.3f;
@@ -112,13 +118,13 @@ namespace BodycamHorror.Player
 
         [Header("Landing (drop measured from the top of the fall; tuck = Ctrl while falling)")]
         [Tooltip("Drops below this (m) are ordinary landings.")]
-        public float landingMinDrop = 1.2f;
+        public float landingMinDrop = 1.8f;
         [Tooltip("Untucked drops above this (m) are hard landings.")]
-        public float hardLandingDrop = 2.0f;
+        public float hardLandingDrop = 3.0f;
         [Tooltip("Tucked drops above this (m) roll instead of landing on the hands (~1.5x body height).")]
         public float rollDrop = 2.7f;
         [Tooltip("Drop (m) at which a hard landing is at its worst.")]
-        public float severeDrop = 5.5f;
+        public float severeDrop = 8f;
         public float handLandingTime = 0.34f;
         [Range(0f, 1f)] public float handLandingKeepSpeed = 0.85f;
         public float rollTime = 0.75f;
@@ -184,7 +190,7 @@ namespace BodycamHorror.Player
         float speedCapStart = 1f, recoveryTimer, recoveryDuration;
         Vector3 braceNormal, braceIncomingDir;
         float braceIncomingSpeed;
-        bool braceHeld;
+        float lastScrapeContactTime = -10f;
 
         Vector3 hVel;
         float vVel;
@@ -307,7 +313,6 @@ namespace BodycamHorror.Player
             crouchPressed = crouchAction.WasPressedThisFrame();
             jumpHeld = jumpAction.IsPressed();
             if (jumpAction.WasPressedThisFrame()) lastJumpPressTime = Time.time;
-            braceHeld = braceAction.IsPressed();
             if (braceAction.WasPressedThisFrame()) lastBracePressTime = Time.time;
         }
 
@@ -365,7 +370,10 @@ namespace BodycamHorror.Player
             IsSprinting = sprinting && grounded && hVel.magnitude > walkSpeed + 0.5f;
             float target = (crouching ? crouchSpeed : sprinting ? sprintSpeed : walkSpeed) * inputMag;
             if (grounded) target *= moveSpeedScale * SpeedCap;
-            Steer(wishDir, target, dt, grounded ? 1f : airControl, grounded);
+            // Braced for a wall: the body holds its line and speed, so the camera is free to pick
+            // where the push-off goes without the turn braking you before the hit.
+            bool committed = IsBraceReady && hVel.magnitude > walkSpeed;
+            if (!committed) Steer(wishDir, target, dt, grounded ? 1f : airControl, grounded);
 
             // jump / vault / mantle
             bool jumpBuffered = Time.time - lastJumpPressTime <= jumpBufferTime;
@@ -593,35 +601,19 @@ namespace BodycamHorror.Player
 
         void UpdateWallBrace(float dt)
         {
-            float hold = braceHeld ? braceMaxHold : braceContactTime;
-            ActionProgress = Mathf.Clamp01(stateTimer / hold);
+            ActionProgress = Mathf.Clamp01(stateTimer / Mathf.Max(braceContactTime, 0.01f));
             hVel = Vector3.MoveTowards(hVel, Vector3.zero, 8f * dt);
             bool grounded = MoveCharacter(dt);
-            if (stateTimer < braceContactTime || (braceHeld && stateTimer < braceMaxHold)) return;
+            if (stateTimer < braceContactTime) return;
 
-            // Push off: towards the input (run along the wall if it points into it), or carry the
-            // sideways part of the run; straight into the wall springs you back the way you came.
+            // Push off where the camera looks; if it looks into the wall, mirror it off the wall,
+            // so you always leave away from it. Looking straight at the wall sends you back.
             Vector3 n = braceNormal;
-            Vector3 wish = Flat(transform.right * moveInput.x + transform.forward * moveInput.y);
-            Vector3 dir;
-            float keep = braceKeepSpeed;
-            if (wish.sqrMagnitude > 0.01f)
-            {
-                dir = wish.normalized;
-                if (Vector3.Dot(dir, n) < 0.1f)
-                {
-                    Vector3 along = Vector3.ProjectOnPlane(dir, n);
-                    if (along.sqrMagnitude < 0.06f) { dir = n; keep = braceReverseKeepSpeed; }
-                    else dir = along.normalized;
-                }
-            }
-            else
-            {
-                Vector3 along = Flat(Vector3.ProjectOnPlane(braceIncomingDir, n));
-                if (along.sqrMagnitude < 0.06f) { dir = n; keep = braceReverseKeepSpeed; }
-                else dir = along.normalized;
-            }
+            Vector3 view = Flat(transform.forward).normalized;
+            Vector3 dir = Vector3.Dot(view, n) >= 0f ? view : Flat(Vector3.Reflect(view, n)).normalized;
             dir = (dir + n * bracePushOff).normalized;
+            float turn = Vector3.Angle(Flat(braceIncomingDir), dir);
+            float keep = Mathf.Lerp(braceKeepSpeed, braceReverseKeepSpeed, Mathf.InverseLerp(90f, 180f, turn));
             hVel = dir * Mathf.Max(braceIncomingSpeed * keep, walkSpeed);
             graceTimer = pushOffGrace;
             impactCooldown = 0.4f;
@@ -796,7 +788,11 @@ namespace BodycamHorror.Player
             float into = -Vector3.Dot(hVel, flatN);
             if (into <= 0f) return;
 
-            if (impactCooldown <= 0f && (State == MoveState.Grounded || State == MoveState.Airborne || State == MoveState.Sliding))
+            bool freeMove = State == MoveState.Grounded || State == MoveState.Airborne || State == MoveState.Sliding;
+            // Straight-on vs. glancing: cosine of the angle between the run and the wall normal.
+            bool headOn = into / Mathf.Max(hVel.magnitude, 0.001f) >= Mathf.Cos(headOnMaxAngle * Mathf.Deg2Rad);
+
+            if (freeMove && headOn && impactCooldown <= 0f)
             {
                 LastImpactCollider = hit.collider;
                 LastImpactPoint = hit.point;
@@ -810,6 +806,20 @@ namespace BodycamHorror.Player
             }
 
             hVel += flatN * into;   // drop the into-wall part, keep sliding along it
+
+            if (freeMove && !headOn)
+            {
+                // Brushed along the wall: a little speed lost when the scrape starts, no stagger.
+                bool newContact = Time.time - lastScrapeContactTime > 0.25f;
+                lastScrapeContactTime = Time.time;
+                if (newContact && into >= scrapeMinSpeed)
+                {
+                    hVel *= 1f - scrapeSpeedLoss;
+                    LastImpactCollider = hit.collider;
+                    LastImpactPoint = hit.point;
+                    Impacted?.Invoke(ImpactKind.Scrape, into);
+                }
+            }
         }
 
         float MeasureObstacleTop(Vector3 point, Vector3 flatN)

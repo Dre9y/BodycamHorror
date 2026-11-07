@@ -78,15 +78,38 @@ namespace BodycamHorror.Weapons
             if (flashMesh) flashMesh.gameObject.SetActive(false);
             if (flashLight) flashLight.intensity = 0f;
 
-            audioSource = gameObject.AddComponent<AudioSource>();
-            audioSource.playOnAwake = false;
-            audioSource.spatialBlend = 0f;
+            EnsureAudio();
+        }
 
-            shotClip = ProceduralAudio.Gunshot();
-            dryClip = ProceduralAudio.Click(0.025f, 3200f, 0.5f);
-            magOutClip = ProceduralAudio.Click(0.05f, 1400f, 0.6f);
-            magInClip = ProceduralAudio.DoubleClick(0.07f, 1800f, 0.8f);
-            rackClip = ProceduralAudio.DoubleClick(0.12f, 2400f, 0.9f);
+        /// <summary>Generated clips are not serialized, so a script reload during Play Mode drops
+        /// them; rebuild on demand.</summary>
+        void EnsureAudio()
+        {
+            if (!audioSource)
+            {
+                audioSource = GetComponent<AudioSource>();
+                if (!audioSource) audioSource = gameObject.AddComponent<AudioSource>();
+                audioSource.playOnAwake = false;
+                audioSource.spatialBlend = 0f;
+            }
+            if (!shotClip) shotClip = ProceduralAudio.Gunshot();
+            if (!dryClip) dryClip = ProceduralAudio.Click(0.025f, 3200f, 0.5f);
+            if (!magOutClip) magOutClip = ProceduralAudio.Click(0.05f, 1400f, 0.6f);
+            if (!magInClip) magInClip = ProceduralAudio.DoubleClick(0.07f, 1800f, 0.8f);
+            if (!rackClip) rackClip = ProceduralAudio.DoubleClick(0.12f, 2400f, 0.9f);
+        }
+
+        enum Sfx { Shot, Dry, MagOut, MagIn, Rack }
+
+        void Play(Sfx sfx, float pitch = 1f)
+        {
+            EnsureAudio();   // first, so the clip fields below are valid
+            AudioClip clip = sfx switch
+            {
+                Sfx.Shot => shotClip, Sfx.Dry => dryClip, Sfx.MagOut => magOutClip, Sfx.MagIn => magInClip, _ => rackClip,
+            };
+            audioSource.pitch = pitch;
+            audioSource.PlayOneShot(clip, volume);
         }
 
         void OnDestroy()
@@ -159,8 +182,7 @@ namespace BodycamHorror.Weapons
                 flashMesh.localScale = Vector3.one * Random.Range(0.8f, 1.25f);
             }
             slideOffset = 1f;
-            audioSource.pitch = Random.Range(0.94f, 1.06f);
-            audioSource.PlayOneShot(shotClip, volume);
+            Play(Sfx.Shot, Random.Range(0.94f, 1.06f));
 
             Fired?.Invoke(hit, info);
             return true;
@@ -168,14 +190,13 @@ namespace BodycamHorror.Weapons
 
         public void DryFire()
         {
-            audioSource.pitch = 1f;
-            audioSource.PlayOneShot(dryClip, volume);
+            Play(Sfx.Dry);
             nextFireTime = Time.time + 0.2f;
         }
 
-        public void PlayMagOut() { audioSource.pitch = 1f; audioSource.PlayOneShot(magOutClip, volume); }
-        public void PlayMagIn() { audioSource.pitch = 1f; audioSource.PlayOneShot(magInClip, volume); }
-        public void PlayRack() { audioSource.pitch = 1f; audioSource.PlayOneShot(rackClip, volume); }
+        public void PlayMagOut() => Play(Sfx.MagOut);
+        public void PlayMagIn() => Play(Sfx.MagIn);
+        public void PlayRack() => Play(Sfx.Rack);
 
         void ApplyHit(RaycastHit hit, Vector3 dir, GameObject source)
         {

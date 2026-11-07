@@ -16,7 +16,7 @@ namespace BodycamHorror.Enemies
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
     public class Infected : MonoBehaviour, IDamageable, IPushable
     {
-        public enum State { Idle, Chase, Attack, Climb, Stumble, Fallen, GettingUp, Dead }
+        public enum State { Idle, Chase, Attack, Climb, Stumble, Fallen, GettingUp, Dead, Scream }
 
         [Header("Health")]
         public float maxHealth = 100f;
@@ -81,8 +81,12 @@ namespace BodycamHorror.Enemies
 
         [Header("Attack")]
         public float attackRange = 1.45f;
-        public float attackWindup = 0.4f;
-        public float attackRecover = 0.55f;
+        [Tooltip("Time to the blow landing (matches the attack clip played x1.8).")]
+        public float attackWindup = 0.6f;
+        public float attackRecover = 0.8f;
+        [Tooltip("Animated models: chance to stop and scream when they first spot you (if not already close).")]
+        [Range(0f, 1f)] public float screamChance = 0.35f;
+        public float screamTime = 1.6f;
         public float attackDamage = 15f;
         public float attackCooldown = 0.9f;
 
@@ -237,8 +241,14 @@ namespace BodycamHorror.Enemies
                     if (stateTimer >= actionDuration) SetState(alerted ? State.Chase : State.Idle);
                     break;
                 case State.Fallen:
-                    if (stateTimer >= actionDuration && rb.linearVelocity.sqrMagnitude < 0.5f) StartGetUp();
+                {
+                    float settle = Ragdolled ? body.RagdollSpeed : rb.linearVelocity.magnitude;
+                    if (stateTimer >= actionDuration && settle < 0.7f) StartGetUp();
                     else if (stateTimer >= actionDuration + 3f) StartGetUp();   // never stay down forever
+                    break;
+                }
+                case State.Scream:
+                    if (stateTimer >= screamTime) SetState(State.Chase);
                     break;
             }
 
@@ -273,7 +283,16 @@ namespace BodycamHorror.Enemies
             if (state == State.Dead) return;
             bool wasAlerted = alerted;
             alerted = true;
-            if (state == State.Idle) SetState(State.Chase);
+            if (state == State.Idle)
+            {
+                bool far = !player || Vector3.Distance(rb.position, player.position) > 7f;
+                if (!wasAlerted && body && body.IsAnimated && far && Random.value < screamChance)
+                {
+                    SetState(State.Scream);   // stop and scream at the prey first
+                    body.TriggerScream();
+                }
+                else SetState(State.Chase);
+            }
             if (!wasAlerted && shriek && Random.value < 0.75f) Say("shriek", 1f, Random.Range(0.9f, 1.15f));
             if (!spread || wasAlerted) return;
             foreach (var other in All)
@@ -300,6 +319,9 @@ namespace BodycamHorror.Enemies
                 case State.Stumble: StumbleMove(dt); break;
                 case State.Climb: ClimbMove(dt); break;
                 case State.GettingUp: GetUpMove(); break;
+                case State.Scream:
+                    if (player) Move(Flat(player.position - rb.position).normalized, 0f, dt);   // stand and face the prey
+                    break;
             }
             if (!rb.isKinematic && (rb.constraints & RigidbodyConstraints.FreezeRotationX) != 0)
                 rb.angularVelocity = Vector3.zero;   // only our own turning steers the yaw
@@ -516,8 +538,9 @@ namespace BodycamHorror.Enemies
         /// <summary>Shoved by the player's melee: knocked back a step, off balance, swing broken.</summary>
         public void Push(Vector3 direction, float strength)
         {
-            if (state == State.Dead || (rb.isKinematic && state != State.Climb)) return;
             Vector3 dir = Flat(direction).sqrMagnitude > 0.0001f ? Flat(direction).normalized : -transform.forward;
+            if (Ragdolled) { body.RagdollImpulse(dir * strength, rb.position + Vector3.up * 0.5f); return; }   // kick a downed body about
+            if (state == State.Dead || (rb.isKinematic && state != State.Climb)) return;
             if (state == State.Climb) { rb.isKinematic = false; Fall(dir, 0.6f); return; }   // pushed off the ledge
             Alert(false, true);
             rb.AddForce(dir * strength + Vector3.up * 0.4f, ForceMode.VelocityChange);
@@ -553,21 +576,58 @@ namespace BodycamHorror.Enemies
             Move(dir, runSpeed * 0.45f, dt);
         }
 
+        bool Ragdolled => body && body.RagdollActive;
+        bool getUpFromRagdoll;
+
         void Fall(Vector3 dir, float strength)
         {
             if (state == State.Dead) return;
+            dir = Flat(dir).sqrMagnitude > 0.001f ? Flat(dir).normalized : transform.forward;
+            if (Ragdolled)
+            {
+                // already down: knock the body about some more and keep it down a little longer
+                body.RagdollImpulse(dir * (1.5f * strength), rb.position + Vector3.up * 0.4f);
+                actionDuration = Mathf.Max(actionDuration, stateTimer + 1f);
+                return;
+            }
             SetState(State.Fallen);
             actionDuration = Random.Range(fallenTime.x, fallenTime.y);
+            if (body && body.HasRagdoll)
+            {
+                GoRagdoll(dir * (1.5f * strength) + Vector3.up * 0.6f, rb.position + Vector3.up * 1.1f,
+                          Vector3.Cross(Vector3.up, dir), 4f * strength);
+                return;
+            }
             rb.isKinematic = false;
             rb.constraints = RigidbodyConstraints.None;
             capsule.sharedMaterial = grippy;
-            dir = Flat(dir).sqrMagnitude > 0.001f ? Flat(dir).normalized : transform.forward;
             rb.AddForce(dir * (1.5f * strength) + Vector3.up * 0.8f, ForceMode.VelocityChange);
             rb.AddTorque(Vector3.Cross(Vector3.up, dir) * (7f * strength), ForceMode.VelocityChange);   // topple along dir
         }
 
+        /// <summary>Hands the body to the ragdoll; the root waits, kinematic and without its capsule.</summary>
+        void GoRagdoll(Vector3 impulse, Vector3 point, Vector3 toppleAxis, float topple)
+        {
+            Vector3 v = rb.isKinematic ? Vector3.zero : rb.linearVelocity;
+            rb.isKinematic = true;
+            capsule.enabled = false;
+            body.BeginRagdoll(v, impulse, point, toppleAxis, topple);
+        }
+
         void StartGetUp()
         {
+            if (Ragdolled)
+            {
+                SetState(State.GettingUp);
+                getUpFromRagdoll = true;
+                body.BeginGetUp(getUpTime, environmentMask, out Vector3 ground, out Quaternion facing);
+                transform.SetPositionAndRotation(ground, facing);
+                rb.position = ground;
+                rb.rotation = facing;
+                Say("grunt", 0.7f, Random.Range(0.9f, 1.1f));
+                return;
+            }
+            getUpFromRagdoll = false;
             SetState(State.GettingUp);
             rb.isKinematic = true;
             getUpFromPos = rb.position;
@@ -584,6 +644,18 @@ namespace BodycamHorror.Enemies
         {
             float p = Mathf.Clamp01(stateTimer / getUpTime);
             ActionProgress = p;
+            if (getUpFromRagdoll)
+            {
+                // the body blends itself up from the lying pose; the root just waits for it
+                if (p < 1f) return;
+                getUpFromRagdoll = false;
+                capsule.enabled = true;
+                capsule.sharedMaterial = slippery;
+                rb.isKinematic = false;
+                rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+                SetState(alerted ? State.Chase : State.Idle);
+                return;
+            }
             float e = p * p * (3f - 2f * p);
             rb.MovePosition(Vector3.Lerp(getUpFromPos, getUpToPos, e));
             rb.MoveRotation(Quaternion.Slerp(getUpFromRot, getUpToRot, e));
@@ -641,6 +713,7 @@ namespace BodycamHorror.Enemies
             SetState(State.Attack);
             actionDuration = attackWindup + attackRecover;
             attackHitDone = false;
+            if (body) body.TriggerAttack();
             Say("grunt", 1f, Random.Range(0.95f, 1.2f));
         }
 
@@ -698,13 +771,19 @@ namespace BodycamHorror.Enemies
         public void TakeDamage(in DamageInfo info)
         {
             if (state == State.Dead) return;
-            bool head = !info.melee && body && body.HeadHitbox && info.collider == body.HeadHitbox;
+            bool head = !info.melee && body && body.IsHeadCollider(info.collider);
             float dmg = info.amount * (head ? headshotMultiplier : 1f);
             health -= dmg;
             Alert(false, true);
 
             Vector3 push = Flat(info.direction).sqrMagnitude > 0.001f ? Flat(info.direction).normalized : -transform.forward;
             if (health <= 0f) { Die(info, push); return; }
+            if (Ragdolled)
+            {
+                // shot while down: the body jerks with the hit
+                body.RagdollImpulse(info.direction.normalized * Mathf.Clamp(dmg * 0.04f, 0.5f, 3f), info.point);
+                return;
+            }
 
             if (dmg >= knockdownDamage) Fall(push, 1.3f);
             else if (dmg >= staggerDamage)
@@ -721,15 +800,22 @@ namespace BodycamHorror.Enemies
 
         void Die(in DamageInfo info, Vector3 push)
         {
+            bool wasRagdolled = Ragdolled;
             SetState(State.Dead);
             alerted = false;
             All.Remove(this);
-            rb.isKinematic = false;
-            rb.constraints = RigidbodyConstraints.None;
-            capsule.sharedMaterial = grippy;
             Vector3 at = info.point != Vector3.zero ? info.point : rb.position + Vector3.up;
-            rb.AddForceAtPosition(push * 3f + Vector3.up * 0.6f, at, ForceMode.VelocityChange);
-            rb.AddTorque(Random.insideUnitSphere * 2f, ForceMode.VelocityChange);
+            if (wasRagdolled) body.RagdollImpulse(push * 3f + Vector3.up * 0.5f, at);
+            else if (body && body.HasRagdoll)
+                GoRagdoll(push * 3f + Vector3.up * 0.6f, at, Vector3.Cross(Vector3.up, push), 2.5f);
+            else
+            {
+                rb.isKinematic = false;
+                rb.constraints = RigidbodyConstraints.None;
+                capsule.sharedMaterial = grippy;
+                rb.AddForceAtPosition(push * 3f + Vector3.up * 0.6f, at, ForceMode.VelocityChange);
+                rb.AddTorque(Random.insideUnitSphere * 2f, ForceMode.VelocityChange);
+            }
             voice.Stop();
             Say("growl", 0.8f, Random.Range(0.6f, 0.75f));   // last gurgle
             Died?.Invoke(this);

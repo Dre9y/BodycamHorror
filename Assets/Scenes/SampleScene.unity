@@ -12100,9 +12100,14 @@ MonoBehaviour:
   groundMask:
     serializedVersion: 2
     m_Bits: 4294967291
-  modelPrefab: {fileID: 919132149155446097, guid: 5c5f9fda31c02664aa3b2c9a132490f6, type: 3}
-  modelMaterial: {fileID: 2100000, guid: b3f569b207315064cbdbf621c8cd9c51, type: 2}
-  modelScale: 1
+  modelPrefab: {fileID: 919132149155446097, guid: f5d19f285edddf34d988ebed112a2cba, type: 3}
+  modelMaterial: {fileID: 2100000, guid: fdf727d97f50d094b94face1d077b65f, type: 2}
+  modelScale: 0.7
+  animatorController: {fileID: 9100000, guid: 195fa79a2cb19e94c990d964a4bd0ba1, type: 2}
+  idleVariants:
+  - {fileID: -203655887218126122, guid: 6e1d01c6de2fe4240bcf8dcaf5fc7afb, type: 3}
+  - {fileID: -203655887218126122, guid: 7bb262607e2406146811a2aa9d2ebbd7, type: 3}
+  - {fileID: -203655887218126122, guid: eeda7de4296fb064caadc2be8826ff4b, type: 3}
 --- !u!4 &1987985679
 Transform:
   m_ObjectHideFlags: 0

@@ -32,7 +32,20 @@ namespace BodycamHorror.Enemies
         // box body
         Transform bHips, bSpine, bNeck, bArmL, bArmR, bLegL, bLegR;
 
-        // rigged body
+        // animated body (Humanoid model + Animator) with a ragdoll
+        Animator animator;
+        bool animated;
+        InfectedRagdoll ragdoll;
+        Transform[] poseBones;
+        Quaternion[] blendFrom;
+        Vector3 blendHipsFrom;
+        float blendT, blendTime;
+        bool blending;
+        Transform aHips, aSpine, aChest, aNeck, aHead;
+        Transform aArmL, aForeL, aHandL, aArmR, aForeR, aHandR, aThighL, aShinL, aFootL, aThighR, aShinR, aFootR;
+        float overlayLean;
+
+        // rigged body (procedurally posed)
         bool rigged;
         Transform rHips, rSpine, rSpine1, rSpine2, rNeck, rHead, rHeadTop;
         Transform rArmL, rForeL, rHandL, rArmR, rForeR, rHandR, rThighL, rShinL, rFootL, rThighR, rShinR, rFootR;
@@ -49,8 +62,13 @@ namespace BodycamHorror.Enemies
             BuildBoxes();
         }
 
-        /// <summary>Swaps the box placeholder for an instance of a rigged model (Mixamo bone names).</summary>
-        public void UseModel(GameObject prefab, Material material, float scale = 1f)
+        /// <summary>
+        /// Swaps the box placeholder for an instance of a rigged model. With a Humanoid avatar and an
+        /// animator controller it is animated (plus a ragdoll); otherwise a Mixamo-named skeleton is
+        /// posed procedurally.
+        /// </summary>
+        public void UseModel(GameObject prefab, Material material, float scale = 1f,
+                             RuntimeAnimatorController controller = null, AnimationClip[] idleVariants = null)
         {
             if (!prefab) return;
             ClearModel();
@@ -59,15 +77,22 @@ namespace BodycamHorror.Enemies
             var inst = Instantiate(prefab, model, false);
             inst.name = prefab.name;
             inst.transform.localScale = Vector3.one * (scale * sizeScale);
-            foreach (var a in inst.GetComponentsInChildren<Animator>(true)) Destroy(a);
-            foreach (var a in inst.GetComponentsInChildren<Animation>(true)) Destroy(a);
             foreach (var c in inst.GetComponentsInChildren<Collider>(true)) Destroy(c);
             foreach (var r in inst.GetComponentsInChildren<Renderer>(true))
             {
                 if (material) r.sharedMaterial = material;
                 r.shadowCastingMode = ShadowCastingMode.On;
-                if (r is SkinnedMeshRenderer smr) smr.updateWhenOffscreen = true;   // bones are moved by hand
+                if (r is SkinnedMeshRenderer smr) smr.updateWhenOffscreen = true;   // ragdoll / hand-posed bones
             }
+
+            var anim = inst.GetComponentInChildren<Animator>();
+            if (controller && anim && anim.avatar && anim.avatar.isHuman)
+            {
+                SetUpAnimated(inst, anim, controller, idleVariants, scale);
+                return;
+            }
+            foreach (var a in inst.GetComponentsInChildren<Animator>(true)) Destroy(a);
+            foreach (var a in inst.GetComponentsInChildren<Animation>(true)) Destroy(a);
 
             rHips = Bone(inst.transform, "Hips");
             rSpine = Bone(inst.transform, "Spine"); rSpine1 = Bone(inst.transform, "Spine1"); rSpine2 = Bone(inst.transform, "Spine2");
@@ -93,12 +118,102 @@ namespace BodycamHorror.Enemies
             HeadHitbox.radius = 0.14f * scale * sizeScale;
         }
 
+        void SetUpAnimated(GameObject inst, Animator anim, RuntimeAnimatorController controller, AnimationClip[] idleVariants, float scale)
+        {
+            animator = anim;
+            animated = true;
+            var ov = new AnimatorOverrideController(controller);
+            if (idleVariants != null && idleVariants.Length > 0)
+            {
+                // a different idle for each one so a pack does not sway in sync
+                var pick = idleVariants[Random.Range(0, idleVariants.Length)];
+                foreach (var c in controller.animationClips)
+                    if (c && c.name.Contains("idle") && pick) { ov[c] = pick; break; }
+            }
+            animator.runtimeAnimatorController = ov;
+            animator.applyRootMotion = false;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            animator.Play("Locomotion", 0, Random.value);
+
+            Transform B(HumanBodyBones b) => animator.GetBoneTransform(b);
+            aHips = B(HumanBodyBones.Hips); aSpine = B(HumanBodyBones.Spine); aChest = B(HumanBodyBones.Chest);
+            aNeck = B(HumanBodyBones.Neck); aHead = B(HumanBodyBones.Head);
+            aArmL = B(HumanBodyBones.LeftUpperArm); aForeL = B(HumanBodyBones.LeftLowerArm); aHandL = B(HumanBodyBones.LeftHand);
+            aArmR = B(HumanBodyBones.RightUpperArm); aForeR = B(HumanBodyBones.RightLowerArm); aHandR = B(HumanBodyBones.RightHand);
+            aThighL = B(HumanBodyBones.LeftUpperLeg); aShinL = B(HumanBodyBones.LeftLowerLeg); aFootL = B(HumanBodyBones.LeftFoot);
+            aThighR = B(HumanBodyBones.RightUpperLeg); aShinR = B(HumanBodyBones.RightLowerLeg); aFootR = B(HumanBodyBones.RightFoot);
+            poseBones = aHips.GetComponentsInChildren<Transform>();   // parent-first order
+            blendFrom = new Quaternion[poseBones.Length];
+
+            ragdoll = gameObject.AddComponent<InfectedRagdoll>();
+            if (!ragdoll.Build(animator, brain.mass, GetComponent<Collider>(), HeadHitbox))
+            {
+                Destroy(ragdoll);
+                ragdoll = null;
+            }
+            HeadHitbox.radius = 0.14f * scale * sizeScale / 0.7f;
+        }
+
         void ClearModel()
         {
             var old = transform.Find("Model");
             if (old) { old.SetParent(null); Destroy(old.gameObject); }
             model = null;
             rigged = false;
+            animated = false;
+            animator = null;
+        }
+
+        // ------------------------------------------------------------------ animated body API (used by Infected)
+
+        public bool IsAnimated => animated;
+        public bool HasRagdoll => ragdoll && ragdoll.IsBuilt;
+        public bool RagdollActive => ragdoll && ragdoll.IsActive;
+        public float RagdollSpeed => ragdoll ? ragdoll.HipsVelocity.magnitude : 0f;
+        public bool IsGettingUp => blending;
+
+        public bool IsHeadCollider(Collider c) => c && (c == HeadHitbox || (ragdoll && c == ragdoll.HeadCollider));
+
+        public void TriggerAttack() { if (animated) animator.SetTrigger("Attack"); }
+        public void TriggerScream() { if (animated) animator.SetTrigger("Scream"); }
+
+        /// <summary>Goes limp, carrying <paramref name="velocity"/>, shoved at <paramref name="point"/> and toppled about <paramref name="toppleAxis"/>.</summary>
+        public void BeginRagdoll(Vector3 velocity, Vector3 impulse, Vector3 point, Vector3 toppleAxis, float topple)
+        {
+            if (!HasRagdoll) return;
+            blending = false;
+            if (HeadHitbox) HeadHitbox.enabled = false;   // the ragdoll's own head collider takes the hits now
+            ragdoll.Activate(velocity);
+            ragdoll.Impulse(impulse, point);
+            ragdoll.Topple(toppleAxis, topple);
+        }
+
+        public void RagdollImpulse(Vector3 impulse, Vector3 point) { if (RagdollActive) ragdoll.Impulse(impulse, point); }
+
+        /// <summary>
+        /// Leaves the ragdoll: works out where the body lies and which way it should face standing up,
+        /// then blends from the lying pose into the animation over <paramref name="duration"/>.
+        /// The caller moves the root to <paramref name="groundPosition"/> / <paramref name="facing"/>.
+        /// </summary>
+        public void BeginGetUp(float duration, LayerMask groundMask, out Vector3 groundPosition, out Quaternion facing)
+        {
+            Vector3 hipsPos = aHips.position;
+            Vector3 f = aHead.position - hipsPos;
+            f.y = 0f;
+            facing = Quaternion.LookRotation(f.sqrMagnitude > 0.01f ? f.normalized : transform.forward, Vector3.up);
+            for (int i = 0; i < poseBones.Length; i++) blendFrom[i] = poseBones[i].rotation;
+            blendHipsFrom = hipsPos;
+            ragdoll.Deactivate();
+            if (HeadHitbox) HeadHitbox.enabled = true;
+            groundPosition = new Vector3(hipsPos.x, transform.position.y, hipsPos.z);
+            if (Physics.Raycast(hipsPos + Vector3.up * 0.5f, Vector3.down, out RaycastHit g, 3f, groundMask, QueryTriggerInteraction.Ignore))
+                groundPosition.y = g.point.y;
+            animator.enabled = true;
+            animator.SetFloat("Speed", 0f);
+            animator.Play("Locomotion", 0, Random.value);
+            blendT = 0f;
+            blendTime = Mathf.Max(duration, 0.05f);
+            blending = true;
         }
 
         void BuildBoxes()
@@ -147,6 +262,7 @@ namespace BodycamHorror.Enemies
         {
             float dt = Time.deltaTime;
             if (dt <= 0f || !model) return;
+            if (animated) { AnimatedLateUpdate(dt); return; }
             Infected.State state = brain.CurrentState;
             float speed = brain.HorizontalSpeed;
             float run01 = Mathf.InverseLerp(1.5f, 6f, speed);
@@ -254,6 +370,79 @@ namespace BodycamHorror.Enemies
 
             if (rigged) ApplyRig();
             else ApplyBoxes();
+        }
+
+        /// <summary>Animator has posed the body; layer the moves the clips do not cover, blend out of
+        /// the ragdoll, keep the head hitbox on the head.</summary>
+        void AnimatedLateUpdate(float dt)
+        {
+            if (RagdollActive) { FollowHead(); return; }
+
+            Infected.State state = brain.CurrentState;
+            float speed = brain.HorizontalSpeed;
+            animator.SetFloat("Speed", speed, 0.12f, dt);
+            animator.SetFloat("LocoSpeed", speed > 3f ? Mathf.Clamp(speed / 4.2f, 0.8f, 1.8f) : 1f);
+
+            Quaternion root = transform.rotation;
+            Vector3 right = root * Vector3.right;
+            float p = brain.ActionProgress;
+
+            // stumbling: pitch the upper body forward, arms thrown out
+            float stumble = state == Infected.State.Stumble ? Mathf.Sin(Mathf.Clamp01(p) * Mathf.PI) : 0f;
+            overlayLean = Mathf.Lerp(overlayLean, stumble * 40f, 1f - Mathf.Exp(-14f * dt));
+            if (overlayLean > 0.5f)
+            {
+                Rotate(aSpine, Quaternion.AngleAxis(overlayLean * 0.5f, right));
+                if (aChest) Rotate(aChest, Quaternion.AngleAxis(overlayLean * 0.5f, right));
+                float a = overlayLean / 40f;
+                Vector3 outL = Quaternion.AngleAxis(-50f, root * Vector3.forward) * (root * Vector3.down);
+                Vector3 outR = Quaternion.AngleAxis(50f, root * Vector3.forward) * (root * Vector3.down);
+                AimLimb(aArmL, aForeL, aHandL, Vector3.Slerp(aForeL.position - aArmL.position, outL, a), -15f, right);
+                AimLimb(aArmR, aForeR, aHandR, Vector3.Slerp(aForeR.position - aArmR.position, outR, a), -15f, right);
+            }
+
+            // climbing: no clip for it, so reach up for the edge and haul with bent legs
+            if (state == Infected.State.Climb)
+            {
+                float c = Mathf.Sin(Time.time * 7f + seed);
+                Quaternion torso = root * Quaternion.Euler(20f, 0f, 0f);
+                AimLimb(aArmL, aForeL, aHandL, torso * Quaternion.Euler(-165f + c * 15f, 0f, -8f) * Vector3.down, -45f, right);
+                AimLimb(aArmR, aForeR, aHandR, torso * Quaternion.Euler(-165f - c * 15f, 0f, 8f) * Vector3.down, -45f, right);
+                AimLimb(aThighL, aShinL, aFootL, root * Quaternion.Euler(-45f + c * 30f, 0f, 0f) * Vector3.down, 75f, right);
+                AimLimb(aThighR, aShinR, aFootR, root * Quaternion.Euler(-45f - c * 30f, 0f, 0f) * Vector3.down, 75f, right);
+            }
+
+            // nervous head twitches on top of the clip
+            twitchTimer -= dt;
+            if (twitchTimer <= 0f)
+            {
+                twitchTimer = Random.Range(0.4f, 2.2f);
+                twitchTarget = Random.value < 0.6f ? Quaternion.identity
+                    : Quaternion.Euler(Random.Range(-12f, 12f), Random.Range(-30f, 30f), Random.Range(-25f, 25f));
+            }
+            twitch = Quaternion.Slerp(twitch, twitchTarget, 1f - Mathf.Exp(-25f * dt));
+            if (aNeck) Rotate(aNeck, root * twitch * Quaternion.Inverse(root));
+
+            // getting up: fade from the pose the body landed in into the animation
+            if (blending)
+            {
+                blendT += dt;
+                float t = Mathf.Clamp01(blendT / blendTime);
+                float w = 1f - t * t * (3f - 2f * t);
+                Vector3 animHips = aHips.position;
+                for (int i = 0; i < poseBones.Length; i++)
+                    poseBones[i].rotation = Quaternion.Slerp(poseBones[i].rotation, blendFrom[i], w);
+                aHips.position = Vector3.Lerp(animHips, blendHipsFrom, w);
+                if (t >= 1f) blending = false;
+            }
+            FollowHead();
+        }
+
+        void FollowHead()
+        {
+            if (!HeadHitbox || !aHead) return;
+            Vector3 up = aNeck ? (aHead.position - aNeck.position).normalized : transform.up;
+            HeadHitbox.transform.position = aHead.position + up * HeadHitbox.radius * 0.6f;
         }
 
         void ApplyBoxes()

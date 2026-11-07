@@ -14,8 +14,11 @@ namespace BodycamHorror.AI
         public float minRadius, maxRadius;
         /// <summary>Best distance to the threat; candidates are scored by how close they are to it.</summary>
         public float desiredThreatDistance;
-        /// <summary>0..1: how much to prefer spots out of the threat's field of view (flanking).</summary>
-        public float flankWeight;
+        /// <summary>Preferred angle (deg) between the threat's look direction and the spot:
+        /// 0 = right in front, ~75 = edge of the view (periphery), 180 = behind.</summary>
+        public float viewAngle;
+        /// <summary>0..1: how much the view angle matters.</summary>
+        public float viewAngleWeight;
         /// <summary>0..1: how much to punish exposed path segments on the way there.</summary>
         public float exposureWeight;
         /// <summary>Weight of the path length from the monster.</summary>
@@ -24,6 +27,9 @@ namespace BodycamHorror.AI
         public float hideHeight;
         /// <summary>Don't pick spots closer than this to the threat.</summary>
         public float minThreatDistance;
+        /// <summary>Only spots with a peek position that can see the threat (watch spots). 0 = off,
+        /// otherwise the head height used for the peek test.</summary>
+        public float requirePeekHeight;
     }
 
     public struct CoverSpot
@@ -82,10 +88,11 @@ namespace BodycamHorror.AI
 
             // the expensive part (paths + exposure) only for the best few
             float bestScore = float.NegativeInfinity;
-            int checks = Mathf.Min(6, candidates.Count);
+            int checks = Mathf.Min(req.requirePeekHeight > 0f ? 10 : 6, candidates.Count);
             for (int i = 0; i < checks; i++)
             {
                 CoverSpot c = candidates[i];
+                if (req.requirePeekHeight > 0f && !FindPeek(c.position, req.threatEye, req.requirePeekHeight, out _, out _)) continue;
                 if (!NavMesh.CalculatePath(req.self, c.position, NavMesh.AllAreas, path) ||
                     path.status != NavMeshPathStatus.PathComplete) continue;
                 int n = path.GetCornersNonAlloc(corners);
@@ -134,12 +141,12 @@ namespace BodycamHorror.AI
             float score = 10f;
             score -= Mathf.Abs(threatDist - req.desiredThreatDistance) * 0.8f;
             if (hugging) score += 4f;
-            // flank: spots the threat isn't looking towards
+            // where in the threat's view the spot sits (front / periphery / behind)
             Vector3 fwd = req.threatForward; fwd.y = 0f;
-            if (fwd.sqrMagnitude > 0.001f)
+            if (fwd.sqrMagnitude > 0.001f && req.viewAngleWeight > 0f)
             {
-                float facing = Vector3.Dot(fwd.normalized, -dir);   // 1 = right in front of the player
-                score -= facing * 5f * req.flankWeight;
+                float angle = Vector3.Angle(fwd, -dir);   // 0 = right in front of the player
+                score -= Mathf.Abs(angle - req.viewAngle) / 30f * 2f * req.viewAngleWeight;
             }
 
             candidates.Add(new CoverSpot { position = spot, coverNormal = dir, score = score, hugging = hugging });

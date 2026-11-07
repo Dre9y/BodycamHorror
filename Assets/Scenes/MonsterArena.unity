@@ -1583,28 +1583,42 @@ MonoBehaviour:
   maxHealth: 200
   headshotMultiplier: 2.5
   staggerDamage: 60
-  retreatHealth: 0.35
+  fleeHealth: 0.35
   regenDelay: 6
-  regenRate: 5
+  regenRate: 2.5
   respawnDelay: 10
   wanderSpeed: 1.6
   stalkSpeed: 3.2
   coverSpeed: 6.5
+  fleeSpeed: 7.5
   chargeSpeed: 8.8
   peekSpeed: 1.5
   turnSpeed: 540
   standEyeHeight: 1.6
   crouchEyeHeight: 0.95
   hideHeight: 1.05
-  stalkDistance: {x: 14, y: 5}
-  aggressionGain: 0.035
-  opportunityThreshold: 0.75
-  chargeMaxPath: 17
-  ambushDistance: 4
-  reactionTime: {x: 0.12, y: 0.3}
+  observeDistance: {x: 9, y: 18}
+  preferredObserveDistance: 13
+  peripheryAngle: 75
+  lostSightRelocate: 4
+  relocateEvery: {x: 9, y: 16}
   hideTime: {x: 0.8, y: 2.4}
   peekTime: {x: 0.7, y: 2}
-  attackCooldown: 3.5
+  shyLookAngle: 18
+  reactionTime: {x: 0.12, y: 0.3}
+  threatThreshold: 0.6
+  aimThreat: 0.35
+  shotNearThreat: 0.3
+  hitThreat: 0.5
+  personalSpace: 7
+  closeThreat: 0.6
+  chaseThreat: 0.25
+  criticalDistance: 3.2
+  calmDelay: 2
+  threatDecay: 0.1
+  responseCooldown: 1.2
+  chargeMaxPath: 17
+  chargeGiveUpDistance: 11
   zigzagWidth: 1.8
   damage: 28
   lungeRange: 2.6
@@ -1613,6 +1627,7 @@ MonoBehaviour:
   lungeDistance: 2.4
   hitRadius: 1.5
   recoverTime: 0.5
+  threatAfterStrike: 0.35
   showDebugLabel: 1
   logStateChanges: 0
 --- !u!114 &121031641

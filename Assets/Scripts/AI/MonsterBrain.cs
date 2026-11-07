@@ -7,14 +7,20 @@ using Random = UnityEngine.Random;
 
 namespace BodycamHorror.AI
 {
-    public enum MonsterState { Wander, Investigate, Search, Stalk, Hide, Peek, Charge, Attack, Retreat, Stagger, Dead }
+    public enum MonsterState { Wander, Investigate, Search, Stalk, Hide, Peek, Charge, Attack, Retreat, Flee, Stagger, Dead }
+
+    /// <summary>What the monster chose to do when the player got hostile.</summary>
+    public enum MonsterResponse { None, Fight, Hide, Flee }
 
     /// <summary>
-    /// Ambush hunter. Doesn't run at the gun: it stalks from cover to cover out of the player's view,
-    /// peeks around corners, ducks back when aimed at, and charges when the player is busy (reloading,
-    /// climbing, stumbling), looking away or walks right up to its hiding spot. Hit-and-run: after a
-    /// strike it pulls back to cover. Badly hurt it retreats and licks its wounds before coming back.
-    /// Only one monster attacks at a time; the others keep the pressure on and flank.
+    /// Watcher, not a berserker. Once it finds the player it keeps them under observation from the
+    /// edge of their view: picks watch spots behind cover at a comfortable distance, peeks around
+    /// corners, ducks back when stared at and moves on to keep the player in sight as they move.
+    /// It never attacks on a timer. A threat meter measures how hostile the player is to it (aiming at
+    /// it, shooting near it, hitting it, closing in, chasing it); when the meter fills, or the player
+    /// gets right on top of it, it decides between fighting, hiding and fleeing depending on how
+    /// close the player is, whether it is cornered, hurt, aimed at, or the player is busy reloading.
+    /// Only one monster attacks at a time.
     /// </summary>
     [RequireComponent(typeof(NavMeshAgent), typeof(MonsterSenses))]
     public class MonsterBrain : MonoBehaviour, IDamageable
@@ -24,10 +30,10 @@ namespace BodycamHorror.AI
         public float headshotMultiplier = 2.5f;
         [Tooltip("This much damage within half a second staggers it.")]
         public float staggerDamage = 60f;
-        [Tooltip("Below this share of health it retreats to recover.")]
-        [Range(0f, 1f)] public float retreatHealth = 0.35f;
+        [Tooltip("Below this share of health it runs away to recover.")]
+        [Range(0f, 1f)] public float fleeHealth = 0.35f;
         public float regenDelay = 6f;
-        public float regenRate = 5f;
+        public float regenRate = 2.5f;
         [Tooltip("Respawn after death (s). 0 = stay dead.")]
         public float respawnDelay = 10f;
 
@@ -35,6 +41,7 @@ namespace BodycamHorror.AI
         public float wanderSpeed = 1.6f;
         public float stalkSpeed = 3.2f;
         public float coverSpeed = 6.5f;
+        public float fleeSpeed = 7.5f;
         public float chargeSpeed = 8.8f;
         public float peekSpeed = 1.5f;
         public float turnSpeed = 540f;
@@ -45,25 +52,52 @@ namespace BodycamHorror.AI
         [Tooltip("Height that must be hidden when crouched behind cover.")]
         public float hideHeight = 1.05f;
 
-        [Header("Tactics")]
-        [Tooltip("Stalking distance at zero and at full aggression.")]
-        public Vector2 stalkDistance = new Vector2(14f, 5f);
-        [Tooltip("Aggression gained per second while hunting unhurt.")]
-        public float aggressionGain = 0.035f;
-        [Tooltip("Charge when the opportunity score passes this.")]
-        public float opportunityThreshold = 0.75f;
-        [Tooltip("Longest path (m) it will charge along.")]
-        public float chargeMaxPath = 17f;
-        [Tooltip("Player this close to its hiding spot gets pounced on.")]
-        public float ambushDistance = 4f;
+        [Header("Observation")]
+        [Tooltip("Comfortable watching distance: closer makes it back off, further makes it follow.")]
+        public Vector2 observeDistance = new Vector2(9f, 18f);
+        public float preferredObserveDistance = 13f;
+        [Tooltip("Preferred angle off the player's look direction for watch spots (deg). ~75 = edge of view.")]
+        public float peripheryAngle = 75f;
+        [Tooltip("Out of sight this long (s) while watching: move to a spot that sees the player again.")]
+        public float lostSightRelocate = 4f;
+        [Tooltip("Moves to a fresh watch spot every so often even if nothing happens (s).")]
+        public Vector2 relocateEvery = new Vector2(9f, 16f);
+        public Vector2 hideTime = new Vector2(1f, 2.5f);
+        public Vector2 peekTime = new Vector2(1.5f, 3.5f);
+        [Tooltip("Player looking within this angle at it while it peeks: it ducks back (deg).")]
+        public float shyLookAngle = 18f;
         public Vector2 reactionTime = new Vector2(0.12f, 0.3f);
-        public Vector2 hideTime = new Vector2(0.8f, 2.4f);
-        public Vector2 peekTime = new Vector2(0.7f, 2f);
-        public float attackCooldown = 3.5f;
+
+        [Header("Threat (how hostile the player is)")]
+        [Tooltip("Threat at which it stops watching and responds (fight / hide / flee).")]
+        [Range(0.1f, 1f)] public float threatThreshold = 0.6f;
+        [Tooltip("Per second while the player aims at it (doubles at full aim-down-sights).")]
+        public float aimThreat = 0.35f;
+        [Tooltip("Per shot passing close by.")]
+        public float shotNearThreat = 0.3f;
+        [Tooltip("Per hit taken.")]
+        public float hitThreat = 0.5f;
+        [Tooltip("Inside this distance the player is in its personal space and the threat climbs.")]
+        public float personalSpace = 7f;
+        [Tooltip("Per second right at the monster (scales down to 0 at the personal space edge).")]
+        public float closeThreat = 0.6f;
+        [Tooltip("Per second when the player walks/runs straight at it (scaled by closing speed / 4 m/s).")]
+        public float chaseThreat = 0.25f;
+        [Tooltip("Player this close forces an immediate response, whatever the meter says.")]
+        public float criticalDistance = 3.2f;
+        [Tooltip("Calm time (s) before the threat starts to fall.")]
+        public float calmDelay = 2f;
+        public float threatDecay = 0.1f;
+        [Tooltip("Minimum time between two responses (s).")]
+        public float responseCooldown = 1.2f;
+
+        [Header("Charge / Attack")]
+        [Tooltip("Longest path (m) it will charge along.")]
+        public float chargeMaxPath = 14f;
+        [Tooltip("Gives up a charge when the player backs off this far and the threat has cooled.")]
+        public float chargeGiveUpDistance = 11f;
         [Tooltip("Side-step distance when aimed at during a charge.")]
         public float zigzagWidth = 1.8f;
-
-        [Header("Attack")]
         public float damage = 28f;
         public float lungeRange = 2.6f;
         public float windupTime = 0.32f;
@@ -71,13 +105,15 @@ namespace BodycamHorror.AI
         public float lungeDistance = 2.4f;
         public float hitRadius = 1.5f;
         public float recoverTime = 0.5f;
+        [Tooltip("Share of the threat left after it strikes (it made its point).")]
+        [Range(0f, 1f)] public float threatAfterStrike = 0.35f;
 
         [Header("Debug")]
         public bool showDebugLabel = true;
-        [Tooltip("Log every state change to the console.")]
+        [Tooltip("Log every state change and response to the console.")]
         public bool logStateChanges;
 
-        // ------------------------------------------------------------------ read by MonsterBody
+        // ------------------------------------------------------------------ read by MonsterBody / UI
 
         public MonsterState State { get; private set; } = MonsterState.Wander;
         public float StateTime { get; private set; }
@@ -94,6 +130,9 @@ namespace BodycamHorror.AI
         public float Health => health;
         public float Health01 => health / maxHealth;
         public bool IsDead => State == MonsterState.Dead;
+        /// <summary>0..1: how hostile it thinks the player is right now.</summary>
+        public float Threat => threat;
+        public MonsterResponse LastResponse { get; private set; }
         public Vector3 Velocity => agent ? agent.velocity : Vector3.zero;
         public Vector3 EyePosition => transform.position + Vector3.up * Mathf.Lerp(standEyeHeight, crouchEyeHeight, Crouch);
         public Vector3 ChestPosition => transform.position + Vector3.up * Mathf.Lerp(1.15f, 0.7f, Crouch);
@@ -101,11 +140,11 @@ namespace BodycamHorror.AI
         public event Action<DamageInfo, bool> Hurt;     // info, headshot
         public event Action Died;
         public event Action<AudioClip> Vocalized;
+        public event Action<MonsterResponse> Responded;
 
         // ------------------------------------------------------------------ internals
 
         static MonsterBrain attacker;                    // attack token
-        static readonly List<Vector3> claimedCovers = new List<Vector3>();
         static readonly List<MonsterBrain> all = new List<MonsterBrain>();
 
         NavMeshAgent agent;
@@ -114,11 +153,12 @@ namespace BodycamHorror.AI
         AudioSource voice;
         NavMeshPath scratchPath;
 
-        float health, aggression, recentDamage, lastDamageTime = -100f, nextAttackTime;
-        float stateTimer, crouchTarget, leanTarget, jawTarget, reaction, nextVoiceTime, repathTimer;
+        float health, recentDamage, lastDamageTime = -100f;
+        float threat, lastHostileTime = -100f, lastSuppressSeen = -100f, nextResponseTime, nextRelocateTime;
+        float stateTimer, crouchTarget, leanTarget, jawTarget, reaction, nextVoiceTime, repathTimer, shyTime;
         int hitsThisCharge, zigzagSign = 1;
         float zigzagTimer;
-        bool arrivedAtSpot, attackHit, stalkTargetSet;
+        bool arrivedAtSpot, attackHit, moveTargetSet, alarmed;
         CoverSpot cover;
         bool hasCover;
         Vector3 peekPoint, searchOrigin, spawnPosition;
@@ -196,10 +236,9 @@ namespace BodycamHorror.AI
             senses.Tick(dt, EyePosition, ChestPosition);
             HasLookTarget = false;
 
-            if (senses.HasTarget && !Hurtish && State != MonsterState.Retreat)
-                aggression = Mathf.Clamp01(aggression + aggressionGain * dt);
+            UpdateThreat(dt);
             if (Time.time - lastDamageTime > regenDelay && health < maxHealth)
-                health = Mathf.Min(maxHealth, health + regenRate * dt * (State == MonsterState.Hide ? 2f : 1f));
+                health = Mathf.Min(maxHealth, health + regenRate * dt * (State == MonsterState.Hide ? 1.5f : 1f));
 
             if (State != MonsterState.Stagger && State != MonsterState.Attack) React();
 
@@ -210,11 +249,11 @@ namespace BodycamHorror.AI
                 case MonsterState.Search: UpdateSearch(); break;
                 case MonsterState.Stalk: UpdateStalk(dt); break;
                 case MonsterState.Hide: UpdateHide(); break;
-                case MonsterState.Peek: UpdatePeek(); break;
+                case MonsterState.Peek: UpdatePeek(dt); break;
                 case MonsterState.Charge: UpdateCharge(dt); break;
                 case MonsterState.Attack: UpdateAttack(dt); break;
-                case MonsterState.Retreat: UpdateRetreat(); break;
-                case MonsterState.Stagger: if (stateTimer <= 0f) AfterStagger(); break;
+                case MonsterState.Retreat: case MonsterState.Flee: UpdateRetreat(); break;
+                case MonsterState.Stagger: if (stateTimer <= 0f) Respond(true); break;
             }
 
             Crouch = Mathf.MoveTowards(Crouch, crouchTarget, dt * 3.5f);
@@ -223,61 +262,155 @@ namespace BodycamHorror.AI
             Face(dt);
         }
 
-        bool Hurtish => Time.time - lastDamageTime < 2f;
         float DistToPlayer => senses.Player ? Vector3.Distance(transform.position, senses.PlayerFeet) : 999f;
 
         /// <summary>Where we think the player's eyes are.</summary>
         Vector3 ThreatEye => Time.time - senses.LastSeenTime < 3f ? senses.PlayerEye : senses.LastKnownPosition + Vector3.up * 1.6f;
 
-        /// <summary>Reactions that cut across states: being aimed at, shot at, finding the player.</summary>
+        // ------------------------------------------------------------------ threat meter
+
+        void UpdateThreat(float dt)
+        {
+            bool hostile = false;
+            if (senses.Player && senses.HasTarget)
+            {
+                // aimed at: worse the more the player is aiming down the sights
+                if (senses.UnderAim)
+                {
+                    threat += aimThreat * (1f + senses.PlayerAimWeight) * dt;
+                    hostile = true;
+                }
+                // shots passing close (hits are counted in TakeDamage)
+                if (senses.LastSuppressedTime > lastSuppressSeen)
+                {
+                    lastSuppressSeen = senses.LastSuppressedTime;
+                    if (Time.time - lastDamageTime > 0.05f) threat += shotNearThreat;
+                    hostile = true;
+                }
+                // personal space and being chased
+                float dist = DistToPlayer;
+                if (dist < personalSpace)
+                {
+                    threat += (1f - dist / personalSpace) * closeThreat * dt;
+                    hostile = true;
+                }
+                Vector3 away = transform.position - senses.PlayerFeet; away.y = 0f;
+                float closing = Vector3.Dot(senses.Player.HorizontalVelocity, away.normalized);
+                if (closing > 1.5f && dist < observeDistance.y && (senses.CanSeePlayer || senses.PlayerSeesUs))
+                {
+                    threat += chaseThreat * (closing / 4f) * dt;
+                    hostile = true;
+                }
+            }
+            if (hostile) lastHostileTime = Time.time;
+            else if (Time.time - lastHostileTime > calmDelay) threat -= threatDecay * dt;
+            threat = Mathf.Clamp01(threat);
+        }
+
+        /// <summary>Reactions that cut across states.</summary>
         void React()
         {
             if (!senses.HasTarget) return;
+            float dist = DistToPlayer;
 
             switch (State)
             {
                 case MonsterState.Wander: case MonsterState.Investigate: case MonsterState.Search:
                     // just found the player
-                    Vocalize(MonsterSounds.Growl, 0.7f);
-                    if (DistToPlayer < ambushDistance && TryCharge()) return;
-                    GoHide(false);
+                    Vocalize(MonsterSounds.Growl, 0.6f);
+                    if (dist < criticalDistance) Respond(true);
+                    else GoObserve();
                     return;
             }
 
-            bool aimed = senses.UnderAimTime > reaction;
-            bool suppressed = Time.time - senses.LastSuppressedTime < 0.35f;
-            bool danger = aimed || suppressed;
-
-            if (Health01 < retreatHealth && State != MonsterState.Retreat && State != MonsterState.Charge)
+            // badly hurt: run when the player is still pressing (not once it's safely tucked away)
+            bool pressed = Time.time - lastHostileTime < 1f || dist < personalSpace;
+            if (Health01 < fleeHealth && pressed && State != MonsterState.Flee && State != MonsterState.Charge &&
+                (State != MonsterState.Hide || senses.PlayerSeesUs || dist < personalSpace))
             {
-                GoRetreat();
-                return;
+                Log("low health");
+                if (TryFlee()) return;
             }
 
+            bool canRespond = Time.time >= nextResponseTime;
+            bool critical = dist < criticalDistance;
+            // respond to hostility that is still going on, not to a meter that is merely cooling down
+            bool hostileNow = threat >= threatThreshold && Time.time - lastHostileTime < 0.5f;
             switch (State)
             {
-                case MonsterState.Stalk:
-                case MonsterState.Peek:
-                    if (danger)
-                    {
-                        if (State == MonsterState.Peek && hasCover) Burn(cover.position, 6f);
-                        if (DistToPlayer < ambushDistance && TryCharge()) return;
-                        GoHide(State == MonsterState.Peek);
-                    }
+                case MonsterState.Stalk: case MonsterState.Hide: case MonsterState.Peek:
+                    if (canRespond && (hostileNow || critical)) Respond(critical);
                     break;
-                case MonsterState.Hide:
-                    // the player has a line on our hiding spot: cover is blown
-                    if (arrivedAtSpot && senses.PlayerSeesUs && StateTime > 0.3f &&(danger || senses.UnderAimTime > 0f || DistToPlayer < 9f))
-                    {
-                        if (DistToPlayer < ambushDistance + 2f && TryCharge()) return;
-                        if (hasCover) Burn(cover.position, 8f);
-                        GoHide(false);
-                    }
-                    break;
-                case MonsterState.Charge:
-                    if (Health01 < retreatHealth && hitsThisCharge >= 2 && DistToPlayer > 5f) GoRetreat();
+                case MonsterState.Retreat: case MonsterState.Flee:
+                    // caught while running: no way out but through
+                    if (canRespond && critical && StateTime > 0.4f) Respond(true);
                     break;
             }
+        }
+
+        /// <summary>
+        /// The player is hostile or too close: fight, hide or flee. Scores each option from the
+        /// situation and tries them best-first; if nothing works it's cornered and fights.
+        /// </summary>
+        void Respond(bool forced)
+        {
+            nextResponseTime = Time.time + responseCooldown;
+            float dist = DistToPlayer;
+            bool aimed = senses.UnderAim;
+            bool vulnerable = senses.PlayerVulnerable;
+            bool hurtRecently = Time.time - lastDamageTime < 2f;
+
+            float fight = 0f, hide = 0.5f, flee = 0f;
+            // fight: when the player is right on top of it, busy, or not pointing the gun at it
+            if (dist < criticalDistance) fight += 1.1f;
+            else if (dist < personalSpace * 0.8f) fight += 0.45f;
+            if (vulnerable) fight += 0.7f;
+            if (!aimed) fight += 0.25f;
+            fight += (Health01 - 0.5f) * 0.8f;
+            if (hurtRecently && dist > personalSpace) fight -= 0.5f;
+            // hide: being aimed at or shot at from a distance
+            if (aimed) hide += 0.35f;
+            hide += dist > personalSpace ? 0.3f : -0.35f;
+            // flee: hurt, or the player keeps coming
+            flee += (1f - Health01) * 1.2f;
+            if (threat > 0.9f) flee += 0.3f;
+            if (hurtRecently) flee += 0.25f;
+            Vector3 away = transform.position - senses.PlayerFeet; away.y = 0f;
+            if (senses.Player && Vector3.Dot(senses.Player.HorizontalVelocity, away.normalized) > 2f) flee += 0.3f;
+            // a little unpredictability
+            fight += Random.Range(-0.15f, 0.15f);
+            hide += Random.Range(-0.15f, 0.15f);
+            flee += Random.Range(-0.15f, 0.15f);
+
+            var order = new List<(float score, MonsterResponse r)>
+            {
+                (fight, MonsterResponse.Fight), (hide, MonsterResponse.Hide), (flee, MonsterResponse.Flee),
+            };
+            order.Sort((a, b) => b.score.CompareTo(a.score));
+
+            foreach (var (score, r) in order)
+            {
+                bool ok = r switch
+                {
+                    MonsterResponse.Fight => TryCharge(dist < criticalDistance + 1f),
+                    MonsterResponse.Hide => TryHide(true),
+                    _ => TryFlee(),
+                };
+                if (!ok) continue;
+                SetResponse(r, $"fight {fight:0.00} hide {hide:0.00} flee {flee:0.00}{(forced ? " forced" : "")}");
+                return;
+            }
+            // cornered: nowhere to go
+            if (TryCharge(true)) { SetResponse(MonsterResponse.Fight, "cornered"); return; }
+            GoStalk();
+        }
+
+        void SetResponse(MonsterResponse r, string why)
+        {
+            LastResponse = r;
+            alarmed = r != MonsterResponse.Fight;
+            Responded?.Invoke(r);
+            Log($"RESPOND {r}: {why}");
         }
 
         // ------------------------------------------------------------------ calm states
@@ -352,33 +485,110 @@ namespace BodycamHorror.AI
             Look(transform.position + Quaternion.Euler(0f, a, 0f) * transform.forward * 5f + Vector3.up * standEyeHeight);
         }
 
-        // ------------------------------------------------------------------ hunting
+        // ------------------------------------------------------------------ watching
 
-        void GoHide(bool quick)
+        /// <summary>Starts (or restarts) keeping the player under observation.</summary>
+        void GoObserve()
         {
-            Vector3 eye = ThreatEye;
+            alarmed = false;
+            nextRelocateTime = Time.time + Random.Range(relocateEvery.x, relocateEvery.y);
+            GoStalk();
+        }
+
+        void GoStalk()
+        {
+            SetState(MonsterState.Stalk);
+            repathTimer = 0f;
+        }
+
+        /// <summary>A watch spot: hidden, at a comfortable distance, at the edge of the player's view.</summary>
+        bool FindWatchSpot(float maxRadius)
+        {
+            Vector3 player = senses.LastKnownPosition;
+            float dist = DistToPlayer;
             var req = new CoverRequest
             {
                 self = transform.position,
-                threatEye = eye,
+                threatEye = ThreatEye,
+                threatForward = senses.PlayerForward,
+                // sample around a point at the preferred distance from the player, on our side
+                searchCenter = player + (transform.position - player).normalized * preferredObserveDistance,
+                minRadius = 1.5f, maxRadius = maxRadius,
+                desiredThreatDistance = preferredObserveDistance,
+                viewAngle = peripheryAngle, viewAngleWeight = 0.8f,
+                exposureWeight = 2f, travelWeight = 0.25f,
+                hideHeight = hideHeight, minThreatDistance = observeDistance.x,
+                requirePeekHeight = standEyeHeight * 0.9f,
+            };
+            if (dist > observeDistance.y * 1.5f) req.searchCenter = Vector3.Lerp(transform.position, player, 0.5f);
+            return FindCover(req);
+        }
+
+        /// <summary>Moving to the next watch spot (following the player, backing off or circling).</summary>
+        void UpdateStalk(float dt)
+        {
+            crouchTarget = 0.85f; leanTarget = 0f; jawTarget = 0.05f;
+            agent.speed = senses.PlayerSeesUs ? coverSpeed : stalkSpeed;
+            if (!senses.HasTarget) { StartSearch(senses.LastKnownPosition); return; }
+            Look(ThreatEye);
+
+            repathTimer -= dt;
+            if (moveTargetSet && StateTime > 0.3f && Arrived() && hasCover && (transform.position - cover.position).sqrMagnitude < 1f)
+            {
+                EnterHide(Random.Range(hideTime.x, hideTime.y));
+                return;
+            }
+            if (repathTimer > 0f && !Arrived()) return;
+            repathTimer = 3f;
+
+            if (FindWatchSpot(Mathf.Clamp(DistToPlayer * 0.6f, 6f, 12f)) && (cover.position - transform.position).sqrMagnitude > 1.5f)
+            {
+                agent.SetDestination(cover.position);
+                moveTargetSet = true;
+                return;
+            }
+            hasCover = false;
+            moveTargetSet = false;
+            // nothing to hide behind around there: keep a distance in the open, unseen if we can
+            float dist = DistToPlayer;
+            Vector3 player = senses.LastKnownPosition;
+            Vector3 fromPlayer = (transform.position - player); fromPlayer.y = 0f;
+            Vector3 want = player + fromPlayer.normalized * preferredObserveDistance;
+            if (dist > observeDistance.y) want = senses.Predict(0.8f) + fromPlayer.normalized * preferredObserveDistance;
+            if (NavMesh.SamplePosition(want, out NavMeshHit h, 3f, NavMesh.AllAreas)) agent.SetDestination(h.position);
+            if (Arrived() && StateTime > 1f) EnterHide(Random.Range(hideTime.x, hideTime.y));
+        }
+
+        void EnterHide(float time)
+        {
+            SetState(MonsterState.Hide);
+            arrivedAtSpot = true;
+            stateTimer = time;
+        }
+
+        /// <summary>Hides behind the nearest cover (quick = only close spots). Used to break line of sight.</summary>
+        bool TryHide(bool quick)
+        {
+            var req = new CoverRequest
+            {
+                self = transform.position,
+                threatEye = ThreatEye,
                 threatForward = senses.PlayerForward,
                 searchCenter = transform.position,
                 minRadius = 1.5f, maxRadius = quick ? 7f : 10f,
-                desiredThreatDistance = Mathf.Max(DistToPlayer, Mathf.Lerp(stalkDistance.x, stalkDistance.y, aggression)),
-                flankWeight = 0.3f, exposureWeight = 1.2f, travelWeight = 0.9f,
-                hideHeight = hideHeight, minThreatDistance = 3f,
+                desiredThreatDistance = Mathf.Max(DistToPlayer + 2f, preferredObserveDistance),
+                viewAngle = 120f, viewAngleWeight = 0.3f,
+                exposureWeight = 1.2f, travelWeight = 0.9f,
+                hideHeight = hideHeight, minThreatDistance = Mathf.Min(criticalDistance + 1f, DistToPlayer),
             };
-            if (FindCover(req))
-            {
-                SetState(MonsterState.Hide);
-                agent.speed = coverSpeed;
-                agent.SetDestination(cover.position);
-                arrivedAtSpot = false;
-                stateTimer = Random.Range(hideTime.x, hideTime.y);
-                if (quick) Vocalize(MonsterSounds.Hurt, 0.25f);
-            }
-            else if (senses.PlayerSeesUs && DistToPlayer < 10f && TryCharge()) { }
-            else SetState(MonsterState.Stalk);
+            if (!FindCover(req)) return false;
+            SetState(MonsterState.Hide);
+            agent.speed = coverSpeed;
+            agent.SetDestination(cover.position);
+            arrivedAtSpot = false;
+            stateTimer = Random.Range(hideTime.x, hideTime.y) + 1.5f;
+            Vocalize(MonsterSounds.Hurt, 0.25f);
+            return true;
         }
 
         void UpdateHide()
@@ -391,29 +601,51 @@ namespace BodycamHorror.AI
                 return;
             }
             if (!arrivedAtSpot) { arrivedAtSpot = true; stateTimer = Mathf.Max(stateTimer, Random.Range(hideTime.x, hideTime.y)); }
-
             if (!senses.HasTarget) { StartSearch(senses.LastKnownPosition); return; }
 
-            // pounce on a player who walks up to our corner
-            if (DistToPlayer < ambushDistance && TryCharge()) return;
-            if (Opportunity() > opportunityThreshold + 0.15f && TryCharge()) return;
-
-            bool recovering = Health01 < 0.6f && Time.time - lastDamageTime < 25f;
-            if (stateTimer <= 0f && !recovering)
+            float dist = DistToPlayer;
+            // cover blown: the player has a line on us. Not hostile yet, so just slip away to another spot.
+            if (senses.PlayerSeesUs && StateTime > 0.4f && threat < threatThreshold)
             {
-                if (CoverFinder.FindPeek(transform.position, ThreatEye, standEyeHeight * 0.9f, out peekPoint, out peekSide))
-                {
-                    SetState(MonsterState.Peek);
-                    agent.speed = peekSpeed;
-                    agent.SetDestination(peekPoint);
-                    stateTimer = Random.Range(peekTime.x, peekTime.y);
-                    arrivedAtSpot = false;
-                }
-                else SetState(MonsterState.Stalk);
+                if (hasCover) Burn(cover.position, 8f);
+                Log("cover blown");
+                GoStalk();
+                return;
             }
+
+            if (stateTimer > 0f) return;
+            // still shaken: stay down until the threat cools
+            if (alarmed && threat > threatThreshold * 0.6f) { stateTimer = 0.5f; return; }
+            // licking its wounds: stays down until it has some health back
+            if (Health01 < fleeHealth + 0.15f) { stateTimer = 0.5f; return; }
+            alarmed = false;
+
+            // keep the comfortable distance: follow when the player walks off, back away when they come closer
+            // (lost sight is handled by peeking: the peek tells whether this spot still sees the player)
+            if (dist > observeDistance.y || dist < observeDistance.x || Time.time > nextRelocateTime)
+            {
+                nextRelocateTime = Time.time + Random.Range(relocateEvery.x, relocateEvery.y);
+                GoStalk();
+                return;
+            }
+            StartPeek();
         }
 
-        void UpdatePeek()
+        void StartPeek()
+        {
+            if (CoverFinder.FindPeek(transform.position, ThreatEye, standEyeHeight * 0.9f, out peekPoint, out peekSide))
+            {
+                SetState(MonsterState.Peek);
+                agent.speed = peekSpeed;
+                agent.SetDestination(peekPoint);
+                stateTimer = Random.Range(peekTime.x, peekTime.y);
+                arrivedAtSpot = false;
+                shyTime = 0f;
+            }
+            else GoStalk();
+        }
+
+        void UpdatePeek(float dt)
         {
             crouchTarget = peekSide == 0 ? 0.25f : 0.55f;
             jawTarget = 0.05f;
@@ -428,96 +660,79 @@ namespace BodycamHorror.AI
             else leanTarget = 0f;
 
             if (!Arrived()) { stateTimer = Mathf.Max(stateTimer, 0.4f); return; }
-            if (!arrivedAtSpot) { arrivedAtSpot = true; Vocalize(MonsterSounds.Chitter, 0.3f); }
+            if (!arrivedAtSpot)
+            {
+                arrivedAtSpot = true;
+                stateTimer = Random.Range(peekTime.x, peekTime.y);   // the watch starts once it's at the corner
+                Vocalize(MonsterSounds.Chitter, 0.3f);
+            }
 
-            if (senses.CanSeePlayer && Opportunity() > opportunityThreshold && TryCharge()) return;
+            // stared at: shy, ducks back (not a threat by itself, aiming is)
+            bool stared = senses.PlayerSeesUs && senses.PlayerLookAngleTo(ChestPosition) < shyLookAngle;
+            shyTime = stared ? shyTime + dt : 0f;
+            if (shyTime > reaction)
+            {
+                leanTarget = 0f;
+                Log("stared at, ducking");
+                BackToCover(Random.Range(hideTime.x, hideTime.y));
+                return;
+            }
 
             if (stateTimer <= 0f)
             {
                 leanTarget = 0f;
-                if (!senses.CanSeePlayer || senses.PlayerLookAngleTo(ChestPosition) > 50f) GoStalk();
-                else GoHide(false);
+                // can't see the player from here any more: move to a spot that can
+                if (!senses.CanSeePlayer && Time.time - senses.LastSeenTime > lostSightRelocate) GoStalk();
+                else BackToCover(Random.Range(hideTime.x, hideTime.y));
             }
         }
 
-        void GoStalk()
+        /// <summary>Shuffles back from the peek spot to the cover spot and hides there.</summary>
+        void BackToCover(float time)
         {
-            SetState(MonsterState.Stalk);
-            repathTimer = 0f;
-        }
-
-        void UpdateStalk(float dt)
-        {
-            crouchTarget = 0.85f; leanTarget = 0f; jawTarget = 0.05f;
-            agent.speed = senses.PlayerSeesUs ? coverSpeed : stalkSpeed;
-            if (!senses.HasTarget) { StartSearch(senses.LastKnownPosition); return; }
-            Look(ThreatEye);
-
-            if (Opportunity() > opportunityThreshold && TryCharge()) return;
-
-            repathTimer -= dt;
-            if (repathTimer > 0f && !Arrived()) return;
-            if (stalkTargetSet && StateTime > 0.3f && Arrived() && hasCover && (transform.position - cover.position).sqrMagnitude < 1f)
+            SetState(MonsterState.Hide);
+            if (hasCover)
             {
-                // reached the next cover: settle in
-                SetState(MonsterState.Hide);
-                arrivedAtSpot = true;
-                stateTimer = Random.Range(hideTime.x, hideTime.y);
-                return;
+                agent.speed = coverSpeed * 0.7f;
+                agent.SetDestination(cover.position);
+                arrivedAtSpot = false;
             }
-            repathTimer = 3f;
+            else arrivedAtSpot = true;
+            stateTimer = time;
+        }
 
-            // next cover: closer, preferably to the player's side or back
-            float want = Mathf.Lerp(stalkDistance.x, stalkDistance.y, aggression);
-            Vector3 player = senses.LastKnownPosition;
+        // ------------------------------------------------------------------ responses
+
+        bool TryFlee()
+        {
             var req = new CoverRequest
             {
                 self = transform.position,
                 threatEye = ThreatEye,
                 threatForward = senses.PlayerForward,
-                searchCenter = Vector3.Lerp(transform.position, player, 0.5f),
-                minRadius = 2f, maxRadius = Mathf.Max(6f, Vector3.Distance(transform.position, player) * 0.7f),
-                desiredThreatDistance = Mathf.Min(want, DistToPlayer - 1.5f),
-                flankWeight = 0.8f, exposureWeight = 2f, travelWeight = 0.35f,
-                hideHeight = hideHeight, minThreatDistance = 3f,
+                searchCenter = transform.position,
+                minRadius = 6f, maxRadius = 22f,
+                desiredThreatDistance = 24f,
+                viewAngle = 180f, viewAngleWeight = 0.3f,
+                exposureWeight = 1.2f, travelWeight = 0.1f,
+                hideHeight = hideHeight, minThreatDistance = Mathf.Max(DistToPlayer + 4f, 10f),
             };
-            if (FindCover(req) && Vector3.Distance(cover.position, player) < DistToPlayer + 1f &&
-                (cover.position - transform.position).sqrMagnitude > 1.5f)
-            {
-                agent.SetDestination(cover.position);
-                stalkTargetSet = true;
-                return;
-            }
-            // nothing to hide behind: creep straight in while unseen, otherwise back off
-            hasCover = false;
-            if (!senses.PlayerSeesUs) agent.SetDestination(senses.Predict(0.8f));
-            else if (DistToPlayer < 9f && TryCharge()) { }
-            else GoHide(false);
+            if (!FindCover(req)) return false;
+            SetState(MonsterState.Flee);
+            agent.speed = fleeSpeed;
+            agent.SetDestination(cover.position);
+            Vocalize(MonsterSounds.Hurt, 0.6f);
+            return true;
         }
 
-        float Opportunity()
+        /// <summary>Charge the player. close = point blank, allowed even when another monster is attacking.</summary>
+        bool TryCharge(bool close)
         {
-            if (!senses.HasTarget || Time.time < nextAttackTime) return 0f;
-            float o = 0f;
-            float look = senses.PlayerLookAngleTo(ChestPosition);
-            if (look > 100f) o += 0.6f; else if (look > 55f) o += 0.35f;
-            if (senses.PlayerVulnerable) o += 0.65f;
-            if (!senses.PlayerFlashlightOn) o += 0.15f;
-            o += Mathf.Clamp01(1f - DistToPlayer / 15f) * 0.3f;
-            o += aggression * 0.3f;
-            o -= senses.PlayerAimWeight * 0.2f;
-            if (Health01 < 0.5f) o -= 0.25f;
-            if (Hurtish) o -= 0.3f;
-            return o;
-        }
-
-        bool TryCharge()
-        {
-            if (!senses.Player || Time.time < nextAttackTime - (DistToPlayer < ambushDistance ? attackCooldown : 0f)) return false;
+            if (!senses.Player) return false;
             if (!agent.CalculatePath(senses.PlayerFeet, scratchPath) || scratchPath.status != NavMeshPathStatus.PathComplete) return false;
             if (PathLength(scratchPath) > chargeMaxPath) return false;
             // one attacker at a time, unless the player is right on top of us
-            if (attacker && attacker != this && !attacker.IsDead && attacker.isActiveAndEnabled && DistToPlayer > ambushDistance) return false;
+            if (attacker && attacker != this && !attacker.IsDead && attacker.isActiveAndEnabled && !close) return false;
             attacker = this;
             SetState(MonsterState.Charge);
             agent.speed = chargeSpeed;
@@ -536,7 +751,11 @@ namespace BodycamHorror.AI
             float dist = DistToPlayer;
             Look(senses.PlayerEye);
 
-            if (!senses.HasTarget || StateTime > 6f) { ReleaseToken(); GoHide(false); return; }
+            if (!senses.HasTarget || StateTime > 6f) { ReleaseToken(); GoObserve(); return; }
+            // the player backed off and calmed down: no need to finish it
+            if (dist > chargeGiveUpDistance && threat < threatThreshold * 0.5f) { ReleaseToken(); Log("player backed off"); GoObserve(); return; }
+            // getting shot to pieces on the way in
+            if (hitsThisCharge >= 2 && Health01 < fleeHealth + 0.15f && dist > 5f && TryFlee()) return;
 
             if (dist < lungeRange && Sight.Clear(ChestPosition, senses.PlayerEye))
             {
@@ -563,9 +782,9 @@ namespace BodycamHorror.AI
                 }
                 if (!agent.SetDestination(dest) || (agent.hasPath && agent.pathStatus == NavMeshPathStatus.PathPartial && dist > lungeRange))
                 {
-                    // player climbed out of reach: wait for them below
+                    // player climbed out of reach: hide and keep watching from below
                     ReleaseToken();
-                    GoHide(false);
+                    if (!TryHide(false)) GoObserve();
                 }
             }
         }
@@ -574,7 +793,6 @@ namespace BodycamHorror.AI
         {
             crouchTarget = 0f; leanTarget = 0f;
             agent.speed = 0f;
-            Vector3 toPlayer = senses.PlayerFeet - transform.position; toPlayer.y = 0f;
 
             float t = StateTime;
             if (t < windupTime)
@@ -611,29 +829,30 @@ namespace BodycamHorror.AI
                 if (t > windupTime + lungeTime + recoverTime)
                 {
                     AttackProgress = 0f;
-                    nextAttackTime = Time.time + attackCooldown * (attackHit ? 1f : 0.5f);
-                    aggression = Mathf.Max(0f, aggression - (attackHit ? 0.45f : 0.2f));
                     ReleaseToken();
-                    // hit and run; a miss at point blank tries again
-                    if (!attackHit && DistToPlayer < lungeRange && Health01 > 0.5f) { nextAttackTime = Time.time + 0.6f; GoHide(true); }
-                    else GoRetreat(attackHit ? 1f : 0.6f);
+                    if (attackHit) threat *= threatAfterStrike;
+                    nextResponseTime = Time.time + responseCooldown;
+                    // still in its face and missed: go again, otherwise back off to cover and keep watching
+                    if (!attackHit && DistToPlayer < lungeRange && Health01 > 0.5f && TryCharge(true)) return;
+                    GoRetreat();
                 }
             }
         }
 
-        void GoRetreat(float distanceScale = 1f)
+        /// <summary>Hit and run: back to a cover a bit further away, then resume watching.</summary>
+        void GoRetreat()
         {
-            bool fleeing = Health01 < retreatHealth;
             var req = new CoverRequest
             {
                 self = transform.position,
                 threatEye = ThreatEye,
                 threatForward = senses.PlayerForward,
                 searchCenter = transform.position,
-                minRadius = 4f * distanceScale, maxRadius = (fleeing ? 20f : 13f) * distanceScale,
-                desiredThreatDistance = (fleeing ? 22f : 13f) * distanceScale,
-                flankWeight = 0f, exposureWeight = 1.5f, travelWeight = 0.15f,
-                hideHeight = hideHeight, minThreatDistance = 6f * distanceScale,
+                minRadius = 4f, maxRadius = 13f,
+                desiredThreatDistance = preferredObserveDistance,
+                viewAngle = 120f, viewAngleWeight = 0.3f,
+                exposureWeight = 1.5f, travelWeight = 0.15f,
+                hideHeight = hideHeight, minThreatDistance = 6f,
             };
             if (FindCover(req))
             {
@@ -641,40 +860,34 @@ namespace BodycamHorror.AI
                 agent.speed = coverSpeed;
                 agent.SetDestination(cover.position);
             }
-            else GoHide(true);
+            else if (!TryHide(true)) GoObserve();
         }
 
         void UpdateRetreat()
         {
-            crouchTarget = 0.6f; leanTarget = 0f; jawTarget = 0.2f;
-            agent.speed = coverSpeed;
+            bool flee = State == MonsterState.Flee;
+            crouchTarget = flee ? 0.4f : 0.6f; leanTarget = 0f; jawTarget = 0.2f;
+            agent.speed = flee ? fleeSpeed : coverSpeed;
             if (Arrived() && StateTime > 0.3f)
             {
-                SetState(MonsterState.Hide);
-                arrivedAtSpot = true;
-                stateTimer = Random.Range(hideTime.x, hideTime.y) + (Health01 < retreatHealth ? 6f : 1.5f);
+                alarmed = true;
+                EnterHide(Random.Range(hideTime.x, hideTime.y) + (flee ? 6f : 1.5f));
             }
-            else if (StateTime > 8f) GoHide(false);
-        }
-
-        void AfterStagger()
-        {
-            if (DistToPlayer < 3.5f && TryCharge()) return;
-            if (Health01 < retreatHealth) GoRetreat();
-            else GoHide(true);
+            else if (StateTime > 9f) { if (!TryHide(false)) GoObserve(); }
         }
 
         // ------------------------------------------------------------------ damage
 
         public void TakeDamage(in DamageInfo info)
         {
-            if (IsDead) return;
+            if (IsDead || info.amount <= 0f) return;
             bool headshot = body && body.IsHead(info.collider);
             float amount = info.amount * (headshot ? headshotMultiplier : 1f);
             health -= amount;
             recentDamage += amount;
             lastDamageTime = Time.time;
-            aggression = Mathf.Max(0f, aggression - 0.15f);
+            lastHostileTime = Time.time;
+            threat = Mathf.Clamp01(threat + hitThreat);
             if (State == MonsterState.Charge) hitsThisCharge++;
             senses.OnDamaged();
             Hurt?.Invoke(info, headshot);
@@ -706,7 +919,8 @@ namespace BodycamHorror.AI
         void Respawn()
         {
             health = maxHealth;
-            aggression = 0f;
+            threat = 0f;
+            alarmed = false;
             transform.SetPositionAndRotation(spawnPosition, spawnRotation);
             SetState(MonsterState.Wander);
             PlaceOnNavMesh(spawnPosition);
@@ -719,14 +933,19 @@ namespace BodycamHorror.AI
         {
             if (State == MonsterState.Charge && s != MonsterState.Attack) ReleaseToken();
             if (logStateChanges)
-                Debug.Log($"[Monster {name}] {State} -> {s}  t={Time.time:0.0} dist={DistToPlayer:0.0} hp={health:0} aggr={aggression:0.00} " +
+                Debug.Log($"[Monster {name}] {State} -> {s}  t={Time.time:0.0} dist={DistToPlayer:0.0} hp={health:0} threat={threat:0.00} " +
                           $"seen={senses.CanSeePlayer} seesUs={senses.PlayerSeesUs} aimed={senses.UnderAim}", this);
             State = s;
             StateTime = 0f;
-            stalkTargetSet = false;
+            moveTargetSet = false;
             if (s == MonsterState.Stalk) repathTimer = 0f;
             reaction = Random.Range(reactionTime.x, reactionTime.y);
             if (s != MonsterState.Attack) AttackProgress = 0f;
+        }
+
+        void Log(string msg)
+        {
+            if (logStateChanges) Debug.Log($"[Monster {name}] {msg}  t={Time.time:0.0} dist={DistToPlayer:0.0} threat={threat:0.00}", this);
         }
 
         void ReleaseToken() { if (attacker == this) attacker = null; }
@@ -800,10 +1019,33 @@ namespace BodycamHorror.AI
                 Gizmos.DrawLine(cover.position + Vector3.up * 0.5f, cover.position + Vector3.up * 0.5f + cover.coverNormal);
             }
             if (State == MonsterState.Peek) { Gizmos.color = Color.yellow; Gizmos.DrawWireSphere(peekPoint + Vector3.up * 1.5f, 0.25f); }
-            if (senses && senses.HasTarget) { Gizmos.color = Color.red; Gizmos.DrawWireCube(senses.LastKnownPosition + Vector3.up, new Vector3(0.5f, 2f, 0.5f)); }
+            if (senses && senses.HasTarget)
+            {
+                Gizmos.color = Color.red;
+                Gizmos.DrawWireCube(senses.LastKnownPosition + Vector3.up, new Vector3(0.5f, 2f, 0.5f));
+                // comfort ring around the player
+                Gizmos.color = new Color(1f, 0.6f, 0.1f, 0.5f);
+                DrawRing(senses.LastKnownPosition, personalSpace);
+                Gizmos.color = new Color(0.3f, 0.8f, 1f, 0.4f);
+                DrawRing(senses.LastKnownPosition, preferredObserveDistance);
+            }
             Gizmos.color = new Color(1f, 0.3f, 0.3f, 0.6f);
             foreach (var b in burned) Gizmos.DrawWireCube(b.position + Vector3.up * 0.5f, Vector3.one * 0.6f);
         }
+
+        static void DrawRing(Vector3 c, float r)
+        {
+            Vector3 prev = c + new Vector3(r, 0.1f, 0f);
+            for (int i = 1; i <= 32; i++)
+            {
+                float a = i / 32f * Mathf.PI * 2f;
+                Vector3 p = c + new Vector3(Mathf.Cos(a) * r, 0.1f, Mathf.Sin(a) * r);
+                Gizmos.DrawLine(prev, p);
+                prev = p;
+            }
+        }
+
+        static Texture2D whiteTex;
 
         void OnGUI()
         {
@@ -812,12 +1054,24 @@ namespace BodycamHorror.AI
             if (!cam) return;
             Vector3 sp = cam.WorldToScreenPoint(transform.position + Vector3.up * 2.3f);
             if (sp.z < 0f || sp.z > 40f) return;
-            string text = $"{State}  hp {health:0}  aw {senses.Awareness:0.00}  ag {aggression:0.00}" +
-                          (senses.UnderAim ? "  AIMED" : "") + (attacker == this ? "  [TOKEN]" : "");
-            var r = new Rect(sp.x - 150f, Screen.height - sp.y - 10f, 300f, 20f);
-            GUI.color = Color.black; GUI.Label(new Rect(r.x + 1, r.y + 1, r.width, r.height), text);
+            string text = $"{State}  hp {health:0}  aw {senses.Awareness:0.00}" +
+                          (senses.UnderAim ? "  AIMED" : "") + (attacker == this ? "  [TOKEN]" : "") +
+                          (LastResponse != MonsterResponse.None ? $"  last: {LastResponse}" : "");
+            float x = sp.x - 150f, y = Screen.height - sp.y - 10f;
+            GUI.color = Color.black; GUI.Label(new Rect(x + 1, y + 1, 300f, 20f), text);
             GUI.color = State == MonsterState.Charge || State == MonsterState.Attack ? Color.red : Color.white;
-            GUI.Label(r, text);
+            GUI.Label(new Rect(x, y, 300f, 20f), text);
+
+            // threat bar with the response threshold marked
+            if (!whiteTex) { whiteTex = new Texture2D(1, 1); whiteTex.SetPixel(0, 0, Color.white); whiteTex.Apply(); }
+            var bar = new Rect(x, y + 20f, 140f, 7f);
+            GUI.color = new Color(0f, 0f, 0f, 0.6f); GUI.DrawTexture(bar, whiteTex);
+            GUI.color = Color.Lerp(new Color(1f, 0.85f, 0.2f), new Color(1f, 0.15f, 0.1f), threat / Mathf.Max(threatThreshold, 0.01f));
+            GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * threat, bar.height), whiteTex);
+            GUI.color = Color.white;
+            GUI.DrawTexture(new Rect(bar.x + bar.width * threatThreshold - 1f, bar.y - 2f, 2f, bar.height + 4f), whiteTex);
+            GUI.Label(new Rect(bar.xMax + 6f, bar.y - 7f, 120f, 20f), $"threat {threat:0.00}");
+            GUI.color = Color.white;
         }
     }
 }

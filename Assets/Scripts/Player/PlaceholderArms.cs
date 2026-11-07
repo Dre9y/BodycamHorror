@@ -1,12 +1,16 @@
+using BodycamHorror.Weapons;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace BodycamHorror.Player
 {
     /// <summary>
-    /// Simple box arms parented to the camera. They swing with the footstep phase and take poses for
-    /// mantling, vaulting, sliding, bracing against walls and stumbling. Placeholder until real hands.
+    /// Simple box arms. Unarmed they swing with the footstep phase and take poses for mantling,
+    /// vaulting, sliding, bracing against walls and stumbling. With a <see cref="PlayerShooting"/>
+    /// pistol they grip it with both hands. Parent them to CameraPivot (not the camera) so the camera
+    /// can trail behind the hands. Placeholder until real hands.
     /// </summary>
+    [DefaultExecutionOrder(50)]   // after PlayerShooting has posed the gun
     public class PlaceholderArms : MonoBehaviour
     {
         public BodycamPlayerController player;
@@ -15,15 +19,24 @@ namespace BodycamHorror.Player
         public Color handColor = new Color(0.45f, 0.34f, 0.29f);
         public float poseSharpness = 14f;
 
+        [Tooltip("Optional. When set (and it has a pistol), the hands hold the gun.")]
+        public PlayerShooting shooting;
+
         Transform left, right;
+        Vector3 freeLPos = RestL;
+        Quaternion freeLRot = Quaternion.identity;
 
         static readonly Vector3 RestL = new Vector3(-0.24f, -0.30f, 0.42f);
         static readonly Vector3 RestR = new Vector3(0.24f, -0.30f, 0.42f);
+        // Rough shoulder positions relative to the eye pivot.
+        static readonly Vector3 ShoulderL = new Vector3(-0.21f, -0.36f, -0.04f);
+        static readonly Vector3 ShoulderR = new Vector3(0.21f, -0.36f, -0.04f);
 
         void Awake()
         {
             if (!player) player = GetComponentInParent<BodycamPlayerController>();
-            if (!rig) rig = GetComponentInParent<BodycamCameraRig>();
+            if (!rig) rig = player ? player.GetComponentInChildren<BodycamCameraRig>() : GetComponentInParent<BodycamCameraRig>();
+            if (!shooting && player) shooting = player.GetComponentInChildren<PlayerShooting>();
             left = transform.Find("LeftArm") ?? BuildArm("LeftArm");
             right = transform.Find("RightArm") ?? BuildArm("RightArm");
             left.localPosition = RestL;
@@ -37,7 +50,7 @@ namespace BodycamHorror.Player
             root.gameObject.layer = gameObject.layer;
 
             var baseMat = GraphicsSettings.currentRenderPipeline ? GraphicsSettings.currentRenderPipeline.defaultMaterial : null;
-            MakeBox(root, "Sleeve", new Vector3(0f, 0f, -0.27f), new Vector3(0.10f, 0.10f, 0.50f), baseMat, sleeveColor);
+            MakeBox(root, "Sleeve", new Vector3(0f, 0f, -0.27f), new Vector3(0.085f, 0.085f, 0.50f), baseMat, sleeveColor);
             MakeBox(root, "Hand", new Vector3(0f, -0.005f, 0.04f), new Vector3(0.085f, 0.045f, 0.13f), baseMat, handColor);
             return root;
         }
@@ -121,10 +134,50 @@ namespace BodycamHorror.Player
             }
 
             float k = 1f - Mathf.Exp(-poseSharpness * dt);
-            left.localPosition = Vector3.Lerp(left.localPosition, pl, k);
-            right.localPosition = Vector3.Lerp(right.localPosition, pr, k);
-            left.localRotation = Quaternion.Slerp(left.localRotation, Quaternion.Euler(rl), k);
-            right.localRotation = Quaternion.Slerp(right.localRotation, Quaternion.Euler(rr), k);
+            bool armed = shooting && shooting.isActiveAndEnabled && shooting.pistol;
+            if (!armed)
+            {
+                left.localPosition = Vector3.Lerp(left.localPosition, pl, k);
+                right.localPosition = Vector3.Lerp(right.localPosition, pr, k);
+                left.localRotation = Quaternion.Slerp(left.localRotation, Quaternion.Euler(rl), k);
+                right.localRotation = Quaternion.Slerp(right.localRotation, Quaternion.Euler(rr), k);
+                freeLPos = left.localPosition; freeLRot = left.localRotation;
+                return;
+            }
+
+            // Holding the pistol: the right hand never lets go of the grip; the left hand supports it
+            // and lets go for parkour moves, slides and reloads.
+            bool parkour = player.State == MoveState.Mantling || player.State == MoveState.Vaulting
+                        || player.State == MoveState.Stumbling || player.State == MoveState.Bumped;
+            if (player.State == MoveState.Sliding)
+            {
+                pl = new Vector3(-0.38f, -0.55f, 0.08f); rl = new Vector3(40f, 10f, 0f);   // free hand skims the floor
+            }
+            else if (shooting.IsReloading && !parkour)
+            {
+                pl = new Vector3(-0.12f, -0.47f, 0.2f); rl = new Vector3(55f, 25f, 0f);     // fresh mag from the belt
+            }
+            freeLPos = Vector3.Lerp(freeLPos, pl, k);
+            freeLRot = Quaternion.Slerp(freeLRot, Quaternion.Euler(rl), k);
+
+            Transform gun = shooting.pistol.transform;
+            Vector3 gunUp = transform.InverseTransformDirection(gun.up);
+            Vector3 gripR = transform.InverseTransformPoint(gun.position);
+            Vector3 gripL = transform.InverseTransformPoint(shooting.pistol.LeftGripPosition);
+
+            right.localPosition = gripR;
+            right.localRotation = ArmRotation(gripR, ShoulderR, gunUp);
+
+            float w = shooting.TwoHandWeight;
+            left.localPosition = Vector3.Lerp(freeLPos, gripL, w);
+            left.localRotation = Quaternion.Slerp(freeLRot, ArmRotation(gripL, ShoulderL, gunUp), w);
+        }
+
+        /// <summary>Points the sleeve from the hand back to the shoulder so the forearm never pokes into the lens.</summary>
+        static Quaternion ArmRotation(Vector3 hand, Vector3 shoulder, Vector3 up)
+        {
+            Vector3 d = hand - shoulder;
+            return d.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(d, up) : Quaternion.identity;
         }
     }
 }

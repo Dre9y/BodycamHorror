@@ -96,6 +96,11 @@ namespace BodycamHorror.Player
         public LayerMask environmentMask = ~(1 << 2);
         public float respawnBelowY = -30f;
 
+        /// <summary>Set by other systems (e.g. a raised weapon) to stop sprinting.</summary>
+        [NonSerialized] public bool sprintBlocked;
+        /// <summary>Multiplies the target ground speed (e.g. slower while aiming).</summary>
+        [NonSerialized] public float moveSpeedScale = 1f;
+
         public event Action<float> Landed;                 // impact speed (m/s)
         public event Action<ImpactKind, float> Impacted;   // kind, speed into the obstacle
         public event Action<MoveState, MoveState> StateChanged;
@@ -106,6 +111,8 @@ namespace BodycamHorror.Player
         public float Speed => hVel.magnitude;
         public float SprintBlend => Mathf.InverseLerp(walkSpeed, sprintSpeed, hVel.magnitude);
         public bool IsBraking { get; private set; }
+        /// <summary>Grounded, sprint held and actually moving faster than a walk.</summary>
+        public bool IsSprinting { get; private set; }
         public bool IsCrouching => crouching;
         public Vector2 LookVelocity { get; private set; }  // deg/s: x = yaw, y = pitch (down positive)
         public float StateTime => stateTimer;
@@ -200,6 +207,7 @@ namespace BodycamHorror.Player
             stateTimer += dt;
             impactCooldown -= dt;
             IsBraking = false;
+            IsSprinting = false;
 
             switch (State)
             {
@@ -276,8 +284,10 @@ namespace BodycamHorror.Player
                 else if (crouching && CanStandUp()) crouching = false;
             }
 
-            bool sprinting = sprintHeld && moveInput.y > 0.3f && !crouching;
+            bool sprinting = sprintHeld && !sprintBlocked && moveInput.y > 0.3f && !crouching;
+            IsSprinting = sprinting && grounded && hVel.magnitude > walkSpeed + 0.5f;
             float target = (crouching ? crouchSpeed : sprinting ? sprintSpeed : walkSpeed) * inputMag;
+            if (grounded) target *= moveSpeedScale;
             Steer(wishDir, target, dt, grounded ? 1f : airControl, grounded);
 
             // jump / vault / mantle

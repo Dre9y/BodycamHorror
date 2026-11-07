@@ -1,3 +1,4 @@
+using BodycamHorror.Weapons;
 using UnityEngine;
 
 namespace BodycamHorror.Player
@@ -28,11 +29,22 @@ namespace BodycamHorror.Player
         public float bobPitch = 0.6f;
         public float sprintBobMultiplier = 1.8f;
 
-        [Header("Look lag (heavy body-cam)")]
-        public float lagYaw = 0.012f;
-        public float lagPitch = 0.01f;
+        [Header("Follow the hands")]
+        [Tooltip("Optional. When set, the camera follows the gun's recoil and sway.")]
+        public PlayerShooting weapon;
+        [Tooltip("The hands lead and the camera catches up after roughly this long (s). Applies to mouse look too.")]
+        public float handFollowLag = 0.03f;
+        [Tooltip("How much of the gun's own motion (recoil, breathing) the camera takes on.")]
+        [Range(0f, 1f)] public float handFollowAmount = 0.85f;
+        [Tooltip("The camera never trails the hands by more than this (deg).")]
+        public float maxFollowAngle = 6f;
+
+        [Header("Look roll (heavy body-cam)")]
         public float lagRoll = 0.006f;
         public float maxLag = 6f;
+
+        [Header("Aim")]
+        public float aimFov = 76f;
 
         [Header("Lean")]
         public float strafeRoll = 1.2f;
@@ -63,12 +75,25 @@ namespace BodycamHorror.Player
 
         Vector3 posValue, posVelocity, rotValue, rotVelocity;
         float trauma, stumbleSide = 1f, seed;
+        Quaternion followRot;
+        bool followInit;
 
         void Awake()
         {
             seed = Random.value * 100f;
             if (!cam) cam = GetComponentInChildren<Camera>();
             if (!player) player = GetComponentInParent<BodycamPlayerController>();
+            if (!weapon && player) weapon = player.GetComponentInChildren<PlayerShooting>();
+        }
+
+        /// <summary>Adds camera shake (0..1, decays over time).</summary>
+        public void AddTrauma(float amount) => trauma = Mathf.Clamp01(Mathf.Max(trauma, 0f) + amount);
+
+        /// <summary>Kicks the camera springs: positional (m/s) and rotational (deg/s) velocity.</summary>
+        public void AddKick(Vector3 positionVelocity, Vector3 rotationVelocity)
+        {
+            posVelocity += positionVelocity;
+            rotVelocity += rotationVelocity;
         }
 
         void OnEnable()
@@ -120,10 +145,8 @@ namespace BodycamHorror.Player
             targetRot.x += Noise(seed, Time.time * 0.3f) * breathAngle;
             targetRot.y += Noise(seed + 7f, Time.time * 0.25f) * breathAngle;
 
-            // Heavy camera trails behind the look and rolls into turns
+            // Heavy camera rolls into turns (the trailing itself comes from following the hands below)
             Vector2 lv = player.LookVelocity;
-            targetRot.y += Mathf.Clamp(-lv.x * lagYaw, -maxLag, maxLag);
-            targetRot.x += Mathf.Clamp(-lv.y * lagPitch, -maxLag, maxLag);
             targetRot.z += Mathf.Clamp(-lv.x * lagRoll, -maxLag, maxLag);
 
             // Lean
@@ -174,12 +197,27 @@ namespace BodycamHorror.Player
             Vector3 shakeRot = new Vector3(Noise(seed + 1f, t), Noise(seed + 2f, t), Noise(seed + 3f, t)) * (shakeAngle * shake);
             Vector3 shakePos = new Vector3(Noise(seed + 4f, t), Noise(seed + 5f, t), 0f) * (shakePosition * shake);
 
+            // Follow the hands: the pivot (mouse look) and the gun lead, the camera catches up in world
+            // space a moment later, so on screen the gun swings ahead and the view settles onto it.
+            Transform pivot = transform.parent;
+            Quaternion pivotRot = pivot ? pivot.rotation : Quaternion.identity;
+            Vector3 handOffset = weapon && weapon.isActiveAndEnabled
+                ? weapon.AimOffset * (handFollowAmount * weapon.CameraFollowWeight) : Vector3.zero;
+            Quaternion followTarget = pivotRot * Quaternion.Euler(handOffset);
+            if (!followInit) { followRot = followTarget; followInit = true; }
+            float followDt = Mathf.Min(Time.deltaTime, 0.1f);
+            followRot = Quaternion.Slerp(followRot, followTarget, 1f - Mathf.Exp(-followDt / Mathf.Max(handFollowLag, 0.001f)));
+            if (Quaternion.Angle(followRot, followTarget) > maxFollowAngle)
+                followRot = Quaternion.RotateTowards(followTarget, followRot, maxFollowAngle);
+            Quaternion followLocal = Quaternion.Inverse(pivotRot) * followRot;
+
             transform.localPosition = posValue + shakePos;
-            transform.localRotation = Quaternion.Euler(rotValue + shakeRot);
+            transform.localRotation = followLocal * Quaternion.Euler(rotValue + shakeRot);
 
             if (cam)
             {
                 float targetFov = state == MoveState.Sliding ? slideFov : Mathf.Lerp(baseFov, sprintFov, sprint01);
+                if (weapon && weapon.isActiveAndEnabled) targetFov = Mathf.Lerp(targetFov, aimFov, weapon.AimWeight);
                 cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, targetFov, 1f - Mathf.Exp(-fovSharpness * dt));
             }
         }

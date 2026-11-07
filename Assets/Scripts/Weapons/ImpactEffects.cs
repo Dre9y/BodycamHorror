@@ -90,6 +90,26 @@ namespace BodycamHorror.Weapons
             }
         }
 
+        /// <summary>Blood spray out of a flesh hit, mostly along the bullet's travel and back out of the wound.</summary>
+        public void Blood(Vector3 point, Vector3 normal, Vector3 dir, Material material, Color color, float amount = 1f)
+        {
+            if (!material) return;
+            if (!fx) fx = CreateSystem(material);
+            var p = new ParticleSystem.EmitParams();
+            int count = Mathf.Max(2, Mathf.RoundToInt(10 * amount));
+            for (int i = 0; i < count; i++)
+            {
+                bool exit = i % 3 != 0;   // most of it goes on through
+                Vector3 baseDir = exit ? dir : normal;
+                p.position = point;
+                p.velocity = (baseDir + Random.insideUnitSphere * 0.45f).normalized * Random.Range(1.2f, exit ? 4.5f : 2.5f);
+                p.startSize = Random.Range(0.03f, exit ? 0.09f : 0.06f);
+                p.startLifetime = Random.Range(0.25f, 0.6f);
+                p.startColor = color * Random.Range(0.75f, 1.1f);
+                fx.Emit(p, 1);
+            }
+        }
+
         void LateUpdate()
         {
             for (int i = 0; i < holes.Length; i++)

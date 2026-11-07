@@ -212,6 +212,12 @@ namespace BodycamHorror.Weapons
                 hit.rigidbody.AddForceAtPosition(dir * (impactForce * falloff * pellets), hit.point, ForceMode.Impulse);
 
             var fx = ImpactEffects.Get();
+            var flesh = hit.collider.GetComponentInParent<FleshSurface>();
+            if (flesh)
+            {
+                fx.Blood(hit.point, hit.normal, dir, impactMaterial, flesh.bloodColor, flesh.sprayAmount * Mathf.Max(impactFxScale, 0.5f));
+                return;
+            }
             bool moving = hit.rigidbody || damageable != null;
             fx.BulletHole(hit, moving ? hit.collider.transform : null, bulletHoleMaterial, bulletHoleSize);
             fx.Burst(hit.point, hit.normal, dir, impactMaterial, impactFxScale);

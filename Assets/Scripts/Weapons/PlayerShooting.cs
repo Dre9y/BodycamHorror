@@ -633,7 +633,9 @@ namespace BodycamHorror.Weapons
                 });
                 if (info.rigidbody && !info.rigidbody.isKinematic)
                     info.rigidbody.AddForceAtPosition(dir * force, info.point, ForceMode.Impulse);
-                ImpactEffects.Get().Burst(info.point, info.normal, dir, impactMaterial, 0.5f, false);
+                var flesh = info.collider.GetComponentInParent<FleshSurface>();
+                if (flesh) ImpactEffects.Get().Blood(info.point, info.normal, dir, impactMaterial, flesh.bloodColor, 0.4f);
+                else ImpactEffects.Get().Burst(info.point, info.normal, dir, impactMaterial, 0.5f, false);
                 PlayMelee(thudClip ? thudClip : (thudClip = ProceduralAudio.Thud()), Random.Range(0.85f, 1.1f), 1f);
 
                 // the blow stops dead: jolt back through the arms and the camera

@@ -95,6 +95,55 @@ namespace BodycamHorror.Weapons
             return Finish("Thud", d, 0.9f, 1.4f);
         }
 
+        /// <summary>Wet, rattling growl of an infected (seed varies the voice).</summary>
+        public static AudioClip InfectedGrowl(int seed)
+        {
+            var r = new System.Random(seed);
+            float f0 = 70f + (float)r.NextDouble() * 45f;
+            return Voice("InfectedGrowl", 1.3f + (float)r.NextDouble() * 0.6f, seed,
+                         p => f0 * (1f + 0.15f * Mathf.Sin(p * 9f)), 0.75f, 6f + (float)r.NextDouble() * 4f, 0.8f);
+        }
+
+        /// <summary>Shriek when an infected spots you.</summary>
+        public static AudioClip InfectedShriek(int seed)
+        {
+            var r = new System.Random(seed * 7 + 1);
+            float peak = 520f + (float)r.NextDouble() * 260f;
+            return Voice("InfectedShriek", 0.9f + (float)r.NextDouble() * 0.3f, seed + 11,
+                         p => Mathf.Lerp(260f, peak, Mathf.Sin(Mathf.Min(p * 1.6f, 1f) * Mathf.PI * 0.5f)) * (1f - 0.25f * p),
+                         0.55f, 18f, 0.95f);
+        }
+
+        /// <summary>Short effort grunt (attack swing, getting up).</summary>
+        public static AudioClip InfectedGrunt(int seed) =>
+            Voice("InfectedGrunt", 0.35f, seed + 23, p => Mathf.Lerp(150f, 85f, p), 0.6f, 0f, 0.85f);
+
+        /// <summary>Rough voiced sound: a sawtooth at the f0 curve, roughened with noise, tremolo and a soft fade.</summary>
+        static AudioClip Voice(string name, float length, int seed, System.Func<float, float> f0, float rasp, float tremoloHz, float peak)
+        {
+            int n = (int)(Rate * length);
+            var d = new float[n];
+            var rng = new System.Random(seed);
+            float phase = 0f, lp = 0f, lp2 = 0f, jitter = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float p = t / length;
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                jitter += (noise - jitter) * 0.002f;                       // slow pitch wobble
+                phase += f0(p) * (1f + jitter * 0.6f) / Rate;
+                phase -= Mathf.Floor(phase);
+                float saw = phase * 2f - 1f;
+                float voiced = saw * (1f - rasp) + saw * noise * rasp;     // throat rattle
+                lp += (voiced - lp) * 0.25f;                               // muffle the buzz
+                lp2 += (lp - lp2) * 0.35f;
+                float env = Mathf.Clamp01(p / 0.08f) * Mathf.Clamp01((1f - p) / 0.25f);
+                float trem = tremoloHz > 0f ? 0.75f + 0.25f * Mathf.Sin(2f * Mathf.PI * tremoloHz * t) : 1f;
+                d[i] = lp2 * env * trem;
+            }
+            return Finish(name, d, peak, 2.2f);
+        }
+
         public static AudioClip Click(float length, float freq, float amp) => Make("Click", length, 0f, freq, amp);
 
         public static AudioClip DoubleClick(float gap, float freq, float amp) => Make("DoubleClick", gap + 0.06f, gap, freq, amp);

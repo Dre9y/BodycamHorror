@@ -6,7 +6,7 @@ namespace BodycamHorror.AI
     public static class MonsterSounds
     {
         const int Rate = 44100;
-        static AudioClip screech, growl, chitter, hurt, step, death;
+        static AudioClip screech, growl, chitter, hurt, death;
 
         public static AudioClip Screech => screech ? screech : screech = Make("MonsterScreech", 0.9f, 77, (t, n, s) =>
         {
@@ -45,8 +45,92 @@ namespace BodycamHorror.AI
             return (Saw(f * t) * 0.7f + s * 0.5f) * Mathf.Clamp01(t / 0.02f) * Mathf.Exp(-t * 1.8f);
         });
 
-        public static AudioClip Step => step ? step : step = Make("MonsterStep", 0.12f, 3, (t, n, s) =>
-            (n * 0.6f + Mathf.Sin(2f * Mathf.PI * 90f * t)) * Mathf.Exp(-t * 45f));
+        // ------------------------------------------------------------------ footsteps
+
+        const int StepVariants = 6;
+        static AudioClip[] steps;
+
+        /// <summary>A random footstep variant (bare padded foot with claws on concrete).</summary>
+        public static AudioClip RandomStep()
+        {
+            if (steps == null || steps.Length != StepVariants) steps = new AudioClip[StepVariants];
+            int i = Random.Range(0, StepVariants);
+            if (!steps[i]) steps[i] = MakeStep(i);
+            return steps[i];
+        }
+
+        /// <summary>
+        /// Heel-then-toe contact: a soft low thump of the padded heel, a damp fleshy slap, a couple of
+        /// claw ticks on the toe roll and a short gritty scuff on concrete. Each variant shifts timings,
+        /// pitch and balance so repeated steps don't machine-gun.
+        /// </summary>
+        static AudioClip MakeStep(int variant)
+        {
+            var rng = new System.Random(1000 + variant * 7919);
+            float R(float a, float b) => a + (float)rng.NextDouble() * (b - a);
+
+            const float length = 0.32f;
+            int count = (int)(Rate * length);
+            var d = new float[count];
+
+            float toeDelay = R(0.025f, 0.055f);        // heel -> toe roll
+            float thumpFreq = R(55f, 80f);
+            float slapCenter = R(700f, 1300f);
+            float clawFreq = R(3800f, 5600f);
+            float claw2 = toeDelay + R(0.008f, 0.02f);
+            float scuffAmt = R(0.15f, 0.4f);
+            float heelAmt = R(0.8f, 1f), toeAmt = R(0.45f, 0.7f);
+
+            // state-variable band-pass for the slap, one-poles for the grit
+            float bpLow = 0f, bpBand = 0f, gritLp = 0f, gritSlow = 0f, prevN = 0f;
+            float fSlap = 2f * Mathf.Sin(Mathf.PI * slapCenter / Rate), q = 0.9f;
+
+            for (int i = 0; i < count; i++)
+            {
+                float t = i / (float)Rate;
+                float n = (float)(rng.NextDouble() * 2.0 - 1.0);
+
+                // band-passed noise = damp fleshy contact
+                bpLow += fSlap * bpBand;
+                float high = n - bpLow - q * bpBand;
+                bpBand += fSlap * high;
+                float slap = bpBand * (Env(t, 0.0015f, 70f) * heelAmt + Env(t - toeDelay, 0.001f, 90f) * toeAmt);
+
+                // weight landing: pitch-dropping sine, felt more than heard
+                float tf = Mathf.Max(t, 0f);
+                float thumpPhase = 2f * Mathf.PI * (thumpFreq * tf - 18f * tf * tf);
+                float thump = Mathf.Sin(thumpPhase) * Env(t, 0.003f, 28f) * 1.1f
+                            + Mathf.Sin(thumpPhase * 1.5f) * Env(t - toeDelay, 0.002f, 40f) * 0.35f;
+
+                // claw ticks: very short high resonant clicks on the toe roll
+                float hp = n - prevN; prevN = n;
+                float claws = (Mathf.Sin(2f * Mathf.PI * clawFreq * Mathf.Max(t - toeDelay, 0f)) * 0.5f + hp * 0.5f) * Env(t - toeDelay, 0.0003f, 380f) * 0.35f
+                            + (Mathf.Sin(2f * Mathf.PI * clawFreq * 1.17f * Mathf.Max(t - claw2, 0f)) * 0.5f + hp * 0.5f) * Env(t - claw2, 0.0003f, 420f) * 0.22f;
+
+                // gritty scuff as the foot drags a little on concrete
+                // band-limited grit: fast low-pass minus slow low-pass
+                gritLp += (n - gritLp) * 0.35f;
+                gritSlow += (gritLp - gritSlow) * 0.04f;
+                float gritHp = gritLp - gritSlow;
+                float scuffEnv = Env(t - toeDelay * 0.6f, 0.012f, 22f);
+                float scuff = gritHp * scuffEnv * scuffAmt * (0.6f + 0.4f * Mathf.Sin(t * 260f + variant));
+
+                d[i] = slap * 2.2f + thump + claws + scuff;
+            }
+
+            // soft clip, normalise low: steps sit well under the voice in the mix
+            float max = 0.0001f;
+            for (int i = 0; i < count; i++) { d[i] = (float)System.Math.Tanh(d[i] * 1.2f); max = Mathf.Max(max, Mathf.Abs(d[i])); }
+            for (int i = 0; i < count; i++) d[i] *= 0.7f / max;
+
+            var clip = AudioClip.Create("MonsterStep" + variant, count, 1, Rate, false);
+            clip.SetData(d, 0);
+            return clip;
+        }
+
+        /// <summary>Attack/decay envelope starting at t = 0 (zero before).</summary>
+        static float Env(float t, float attack, float decay) =>
+            t < 0f ? 0f : Mathf.Clamp01(t / attack) * Mathf.Exp(-t * decay);
 
         static float Saw(float phase) => 2f * (phase - Mathf.Floor(phase + 0.5f));
 

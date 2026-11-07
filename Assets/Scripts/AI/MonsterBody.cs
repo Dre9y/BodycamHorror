@@ -59,7 +59,20 @@ namespace BodycamHorror.AI
             headWorld = head ? head.rotation : transform.rotation;
         }
 
-        void Start() => audioSource = GetComponent<AudioSource>();
+        void Start()
+        {
+            // feet get their own source near the ground, so step pitch can vary without touching the voice
+            var feet = new GameObject("FeetAudio").transform;
+            feet.SetParent(transform, false);
+            feet.localPosition = new Vector3(0f, 0.1f, 0f);
+            audioSource = feet.gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 1f;
+            audioSource.minDistance = 1.2f;
+            audioSource.maxDistance = 22f;
+            audioSource.rolloffMode = AudioRolloffMode.Logarithmic;
+            audioSource.dopplerLevel = 0f;
+        }
 
         void OnEnable() { if (brain) brain.Hurt += OnHurt; }
         void OnDisable() { if (brain) brain.Hurt -= OnHurt; }
@@ -136,7 +149,14 @@ namespace BodycamHorror.AI
             if (Mathf.Sign(s) != lastStepSign && gait > 0.3f && !dead)
             {
                 lastStepSign = Mathf.Sign(s);
-                if (audioSource) audioSource.PlayOneShot(MonsterSounds.Step, Mathf.Lerp(0.15f, 0.5f, Mathf.Clamp01(speed / 8f)) * (1f - crouch * 0.6f));
+                if (audioSource)
+                {
+                    // quiet padded steps when creeping, heavier slaps at a run
+                    float run = Mathf.Clamp01(speed / 8f);
+                    float vol = Mathf.Lerp(0.06f, 0.28f, run * run) * (1f - crouch * 0.5f) * Random.Range(0.8f, 1.1f);
+                    audioSource.pitch = Random.Range(0.9f, 1.08f) * Mathf.Lerp(1f, 0.93f, run);
+                    audioSource.PlayOneShot(MonsterSounds.RandomStep(), vol);
+                }
             }
 
             // --- whole body: height, lean, death collapse

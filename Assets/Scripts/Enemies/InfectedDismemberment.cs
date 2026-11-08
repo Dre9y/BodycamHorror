@@ -187,7 +187,9 @@ namespace BodycamHorror.Enemies
             }
         }
 
-        static long EdgeKey(int a, int b) => ((long)a << 32) | (uint)b;
+        // Multiplied by an odd constant (still one-to-one): .NET hashes a long as high XOR low, and for plain
+        // (a << 32 | b) neighbouring vertex numbers would all land in the same few buckets.
+        static long EdgeKey(int a, int b) => unchecked((((long)a << 32) | (uint)b) * -7046029254386353131L);
 
         /// <summary>Edges of the part coming off that are shared with the part staying, grouped into closed cuts.</summary>
         List<List<(int a, int b)>> FindCutLoops(List<int> keep, List<int> off)

@@ -184,6 +184,17 @@ namespace BodycamHorror.Player
 
         void OnFired(bool hit) => lastShotTime = Time.time;
 
+        int hiddenRequests;
+
+        /// <summary>Other arms are on screen: these stay posed but are not drawn. Requests are counted,
+        /// because one rig can switch on before the previous one has switched off.</summary>
+        public void RequestHidden(bool hidden)
+        {
+            hiddenRequests = Mathf.Max(0, hiddenRequests + (hidden ? 1 : -1));
+            if (!rigRoot) return;
+            foreach (var r in rigRoot.GetComponentsInChildren<Renderer>(true)) r.enabled = hiddenRequests == 0;
+        }
+
         // ------------------------------------------------------------------ setup
 
         Arm BuildArm(string p)

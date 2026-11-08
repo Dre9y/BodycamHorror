@@ -416,6 +416,7 @@ namespace BodycamHorror.Enemies
             float speed = brain.HorizontalSpeed;
             animator.SetFloat("Speed", speed, 0.12f, dt);
             animator.SetFloat("LocoSpeed", speed > 3f ? Mathf.Clamp(speed / 4.2f, 0.8f, 1.8f) : 1f);
+            animator.SetBool("Biting", crawling && state == Infected.State.Attack);
 
             Quaternion root = transform.rotation;
             Vector3 right = root * Vector3.right;

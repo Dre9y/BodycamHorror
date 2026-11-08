@@ -37,8 +37,8 @@ namespace BodycamHorror.Player
         [Range(0.3f, 1f)] public float strafeSprintScale = 0.85f;
         [Range(0.3f, 1f)] public float backSprintScale = 0.75f;
 
-        [Header("Back dive and lying down (Z / D-pad down)")]
-        public float diveSpeed = 6f;
+        [Header("Back dive and lying down (jump while sprinting backward)")]
+        public float diveSpeed = 7.5f;
         public float diveHeight = 0.55f;
         public float diveCooldown = 0.4f;
         [Tooltip("Body height while lying down (at least twice the controller radius).")]
@@ -210,8 +210,7 @@ namespace BodycamHorror.Player
         public Vector3 LastImpactPoint { get; private set; }
 
         CharacterController cc;
-        InputAction moveAction, lookAction, lookStickAction, jumpAction, sprintAction, crouchAction, braceAction, diveAction;
-        bool divePressed;
+        InputAction moveAction, lookAction, lookStickAction, jumpAction, sprintAction, crouchAction, braceAction;
         float nextDiveTime, proneYaw, proneAirTime;
         float lastBracePressTime = -10f, airApexY, graceTimer;
         float speedCapStart = 1f, recoveryTimer, recoveryDuration;
@@ -271,15 +270,12 @@ namespace BodycamHorror.Player
 
             braceAction = new InputAction("Brace", InputActionType.Button, "<Keyboard>/q");
             braceAction.AddBinding("<Gamepad>/rightShoulder");
-
-            diveAction = new InputAction("Dive", InputActionType.Button, "<Keyboard>/z");
-            diveAction.AddBinding("<Gamepad>/dpad/down");
         }
 
         void OnEnable()
         {
             moveAction.Enable(); lookAction.Enable(); lookStickAction.Enable();
-            jumpAction.Enable(); sprintAction.Enable(); crouchAction.Enable(); braceAction.Enable(); diveAction.Enable();
+            jumpAction.Enable(); sprintAction.Enable(); crouchAction.Enable(); braceAction.Enable();
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -287,7 +283,7 @@ namespace BodycamHorror.Player
         void OnDisable()
         {
             moveAction.Disable(); lookAction.Disable(); lookStickAction.Disable();
-            jumpAction.Disable(); sprintAction.Disable(); crouchAction.Disable(); braceAction.Disable(); diveAction.Disable();
+            jumpAction.Disable(); sprintAction.Disable(); crouchAction.Disable(); braceAction.Disable();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
@@ -295,7 +291,7 @@ namespace BodycamHorror.Player
         void OnDestroy()
         {
             moveAction?.Dispose(); lookAction?.Dispose(); lookStickAction?.Dispose();
-            jumpAction?.Dispose(); sprintAction?.Dispose(); crouchAction?.Dispose(); braceAction?.Dispose(); diveAction?.Dispose();
+            jumpAction?.Dispose(); sprintAction?.Dispose(); crouchAction?.Dispose(); braceAction?.Dispose();
         }
 
         void Update()
@@ -348,7 +344,6 @@ namespace BodycamHorror.Player
             jumpHeld = jumpAction.IsPressed();
             if (jumpAction.WasPressedThisFrame()) lastJumpPressTime = Time.time;
             if (braceAction.WasPressedThisFrame()) lastBracePressTime = Time.time;
-            divePressed = diveAction.WasPressedThisFrame();
         }
 
         void HandleCursor()
@@ -414,7 +409,6 @@ namespace BodycamHorror.Player
 
             if (grounded)
             {
-                if (divePressed && Time.time >= nextDiveTime) { StartDive(); return; }
                 if (crouchPressed && hVel.magnitude >= slideMinSpeed) { StartSlide(); return; }
                 if (crouchHeld) crouching = true;
                 else if (crouching && CanStandUp()) crouching = false;
@@ -438,6 +432,14 @@ namespace BodycamHorror.Player
             bool canJump = !jumpConsumed && Time.time - lastGroundedTime <= coyoteTime;
             if (jumpBuffered)
             {
+                // jumping while sprinting backward is a dive (sprint held is enough: firing may be blocking the run)
+                bool backward = moveInput.sqrMagnitude > 0.04f && moveInput.y / moveInput.magnitude < -0.5f;
+                if (canJump && sprintHeld && backward && !crouching && Time.time >= nextDiveTime)
+                {
+                    lastJumpPressTime = -10f;
+                    StartDive();
+                    return;
+                }
                 if (TryStartVaultOrMantle(canJump)) { lastJumpPressTime = -10f; return; }
                 if (canJump)
                 {
@@ -682,7 +684,7 @@ namespace BodycamHorror.Player
             proneAirTime = grounded ? 0f : proneAirTime + dt;
             if (proneAirTime > 0.2f) { SetState(MoveState.Airborne); return; }   // crawled off an edge
 
-            bool getUp = divePressed || Time.time - lastJumpPressTime <= jumpBufferTime;
+            bool getUp = Time.time - lastJumpPressTime <= jumpBufferTime;
             if (!getUp || stateTimer < 0.15f || !CanStandUp()) return;
             lastJumpPressTime = -10f;
             SetState(MoveState.ProneStandUp);

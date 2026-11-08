@@ -24,19 +24,65 @@ namespace BodycamHorror.Weapons
         [Tooltip("Model parts that move with the slide.")]
         public string[] slideParts = { "slid_low", "front scoop_low", "behind scoop_low", "led_low", "nail_low", "hh_low", "needle_low" };
 
+        [Header("Animated hands (empty = procedural arms and the model above)")]
+        [Tooltip("Rig with arms, gun and clips. Replaces the shared arms while this gun is out.")]
+        public AnimatedHands handsPrefab;
+
         float slideOffset;
         Vector3 slideRest;
+        AnimatedHands hands;
 
         protected override void Awake()
         {
             base.Awake();
-            if (slide) slideRest = slide.localPosition;
+            if (handsPrefab) SetUpHands();
+            else if (slide) slideRest = slide.localPosition;
+        }
+
+        /// <summary>Swaps the static model for the animated rig; handling and timings come from its clips.</summary>
+        void SetUpHands()
+        {
+            var player = GetComponentInParent<Player.BodycamPlayerController>();
+            var shooting = GetComponentInParent<PlayerShooting>();
+            var model = transform.Find("Model");
+            if (model) model.gameObject.SetActive(false);
+
+            hands = Instantiate(handsPrefab, transform.parent, false);
+            hands.name = handsPrefab.name;
+            hands.Bind(this, player, shooting);
+
+            ClipsDriveRun = ClipsDriveSwitch = ClipsDriveReload = true;
+            readyPosition = hands.GunPosition;
+            readyCant = hands.IdleCant;
+            sightHeight = hands.sightHeight;
+            aimPosition = new Vector3(0f, -hands.sightHeight, hands.aimDistance);
+            if (muzzle) muzzle.SetLocalPositionAndRotation(hands.muzzleLocal, Quaternion.identity);
+            reloadTime = hands.ReloadLength;
+            emptyReloadExtra = 0f;
+            DrawTime = hands.DrawLength;
+            HolsterTime = hands.HolsterLength;
+            ReloadMagOutAt = hands.magOutAt;
+            ReloadMagInAt = hands.magInAt;
+            ReloadRackAt = hands.slideCloseAt;
+        }
+
+        public override Transform VisualRoot => hands ? hands.GunAnchor : transform;
+
+        void OnEnable()
+        {
+            if (hands) hands.gameObject.SetActive(true);
+        }
+
+        protected override void OnDisable()
+        {
+            base.OnDisable();
+            if (hands) hands.gameObject.SetActive(false);
         }
 
         protected override void Update()
         {
             base.Update();
-            if (!slide) return;
+            if (hands || !slide) return;
             // Slide snaps back on the shot and returns; stays locked back on an empty mag.
             float target = Ammo <= 0 ? 1f : 0f;
             slideOffset = Mathf.MoveTowards(slideOffset, target, Time.deltaTime / 0.06f);

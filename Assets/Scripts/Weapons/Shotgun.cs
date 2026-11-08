@@ -33,11 +33,17 @@ namespace BodycamHorror.Weapons
         [Tooltip("Model parts that slide with the pump.")]
         public string[] pumpParts = { "Reload_Cylinder.003", "Rback_Cylinder.005", "Rfront_Cylinder.004", "RDe_Cylinder.006" };
 
+        [Header("Animated hands (empty = procedural arms and the model above)")]
+        [Tooltip("Rig with the gun, the arms and the clips.")]
+        public ShotgunHands handsPrefab;
+
         public bool IsPumping => pumpStart >= 0f && Time.time - pumpStart < pumpTime;
+        public override Transform VisualRoot => hands ? hands.GunAnchor : transform;
 
         float pumpStart = -10f;
         Vector3 pumpRest;
         bool pumpRestSet, pumpSoundPlayed;
+        ShotgunHands hands;
 
         void Reset() => ApplyShotgunDefaults();
 
@@ -66,11 +72,73 @@ namespace BodycamHorror.Weapons
         {
             base.Awake();
             if (pump && !pumpRestSet) { pumpRest = pump.localPosition; pumpRestSet = true; }
+            if (handsPrefab) SetUpHands();
+        }
+
+        /// <summary>Swaps the static model for the animated rig; handling and timings come from its clips.
+        /// The old pump pivot stays (hidden): it still times the pump sound.</summary>
+        void SetUpHands()
+        {
+            var player = GetComponentInParent<Player.BodycamPlayerController>();
+            var shooting = GetComponentInParent<PlayerShooting>();
+            var model = transform.Find("Model");
+            if (model) model.gameObject.SetActive(false);
+
+            hands = Instantiate(handsPrefab, transform.parent, false);
+            hands.name = handsPrefab.name;
+            hands.Bind(this, player, shooting);
+
+            ClipsDriveReload = true;
+            readyPosition = hands.ReadyPosition;
+            readyCant = hands.IdleCant;
+            sightHeight = hands.sightHeight;
+            aimPosition = hands.AimPosition;
+            if (muzzle) muzzle.SetLocalPositionAndRotation(hands.muzzleLocal, Quaternion.identity);
+
+            shellInsertTime = hands.ShellTime;
+            ReloadEnterTime = hands.EnterTime;
+            ReloadExitTime = hands.ExitTime;
+            emptyReloadExtra = hands.ExitExtraTime;
+            ShellInsertShare = hands.shellInsertShare;
+            fireInterval = hands.shotRecovery;
+            pumpDelay = hands.pumpDelay;
+            pumpTime = hands.pumpTime;
+        }
+
+        void OnEnable()
+        {
+            if (hands) hands.gameObject.SetActive(true);
+        }
+
+        // the butt is long: tipped far down like a pistol it would swing up into the lens
+        public override bool TryGetLoweredPose(out Vector3 position, out Vector3 euler)
+        {
+            position = hands ? hands.sprintPosition : Vector3.zero;
+            euler = hands ? hands.sprintEuler : Vector3.zero;
+            return hands;
+        }
+
+        public override bool TryGetCarryPose(Player.MoveState state, float progress, Vector3 readyPosition, Quaternion readyRotation,
+                                             out Vector3 position, out Quaternion rotation)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            if (!hands) return false;
+            hands.GetCarryPose(state, progress, readyPosition, readyRotation, out position, out rotation);
+            return true;
+        }
+
+        public override bool TryGetHolsterPose(out Vector3 position, out Vector3 euler)
+        {
+            position = hands ? hands.holsterPosition : Vector3.zero;
+            euler = hands ? hands.holsterEuler : Vector3.zero;
+            return hands;
         }
 
         protected override void OnDisable()
         {
             base.OnDisable();
+            if (hands) hands.gameObject.SetActive(false);
             // never leave the fore-end half-way back when holstered mid-pump
             if (pump && pumpRestSet) pump.localPosition = pumpRest;
             if (pumpStart >= 0f && Time.time - pumpStart < pumpTime) pumpStart = -10f;
@@ -102,6 +170,7 @@ namespace BodycamHorror.Weapons
 
         public override void GetHandlingOffset(out Vector3 position, out Vector3 euler)
         {
+            if (hands) { position = Vector3.zero; euler = Vector3.zero; return; }   // the clips rock it themselves
             float t = (Time.time - pumpStart) / pumpTime;
             float a = t >= 0f && t <= 1f ? Mathf.Sin(t * Mathf.PI) : 0f;
             // the gun rocks a little as the left hand works the pump

@@ -10146,6 +10146,18 @@ MonoBehaviour:
   walkSpeed: 3.2
   sprintSpeed: 7.5
   crouchSpeed: 1.8
+  strafeSprintScale: 0.85
+  backSprintScale: 0.75
+  diveSpeed: 7.5
+  diveHeight: 0.55
+  diveCooldown: 0.4
+  proneHeight: 0.72
+  proneCrawlBackSpeed: 1.7
+  proneCrawlForwardSpeed: 1
+  proneCrawlSideSpeed: 1.1
+  proneAcceleration: 14
+  proneYawLimit: 85
+  proneStandUpTime: 0.4
   walkAcceleration: 10
   sprintAcceleration: 4.5
   brakeDeceleration: 16
@@ -11740,6 +11752,7 @@ MonoBehaviour:
   - Rback_Cylinder.005
   - Rfront_Cylinder.004
   - RDe_Cylinder.006
+  handsPrefab: {fileID: 7012163686835400086, guid: b68e1a6bc411fbe4a9ed954b2e03925f, type: 3}
 --- !u!4 &1115230852
 Transform:
   m_ObjectHideFlags: 0
@@ -13978,6 +13991,7 @@ MonoBehaviour:
   - nail_low
   - hh_low
   - needle_low
+  handsPrefab: {fileID: 6751940370385538204, guid: 3604bf068d86e0d4c8d6debd15de46e3, type: 3}
 --- !u!4 &1312344688
 Transform:
   m_ObjectHideFlags: 0
@@ -18913,6 +18927,7 @@ MonoBehaviour:
   raiseHoldTime: 0.8
   fireBufferTime: 0.3
   aimMoveSpeedScale: 0.7
+  bareHandsPrefab: {fileID: 5243507674129341235, guid: 8a3477bde269f4d439acd994866ddf2c, type: 3}
   switchLowerTime: 0.2
   switchRaiseTime: 0.28
   tuckProbeRadius: 0.07
@@ -18934,6 +18949,10 @@ MonoBehaviour:
   bashTime: 0.46
   meleeHitAt: 0.38
   impactMaterial: {fileID: 2100000, guid: 9113691d6f6ce3c4ba644e8d3cdcc86f, type: 2}
+  meleeCharges: 2
+  meleeRechargeTime: 3
+  meleePushStrength: 3.2
+  meleePushArc: 100
   lookLead: 0.035
   lookJerkLead: 0.26
   maxLookLead: 16

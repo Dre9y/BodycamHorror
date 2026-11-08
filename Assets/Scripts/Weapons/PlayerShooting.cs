@@ -53,6 +53,10 @@ namespace BodycamHorror.Weapons
         public float fireBufferTime = 0.3f;
         [Range(0.2f, 1f)] public float aimMoveSpeedScale = 0.7f;
 
+        [Header("Bare hands")]
+        [Tooltip("The first-person arms for the melee slot. Empty = the old procedural arms.")]
+        public BareHands bareHandsPrefab;
+
         [Header("Switching")]
         public float switchLowerTime = 0.2f;
         public float switchRaiseTime = 0.28f;
@@ -135,6 +139,17 @@ namespace BodycamHorror.Weapons
         public float AimWeight => aimW;
         public float TwoHandWeight => twoHandW;
         public bool IsReloading => reloadPhase != ReloadPhase.None;
+        public bool ReloadFromEmpty => reloadFromEmpty;
+        /// <summary>0 not reloading, 1 getting into position, 2 loading, 3 finishing.</summary>
+        public int ReloadStage => reloadPhase == ReloadPhase.None ? 0 : reloadPhase == ReloadPhase.Enter ? 1 : reloadPhase == ReloadPhase.Loading ? 2 : 3;
+        /// <summary>Seconds into the current reload stage (for loading, into the current shell).</summary>
+        public float ReloadStageTime => reloadPhase == ReloadPhase.Loading ? shellTimer : reloadTimer;
+        /// <summary>Shells fully loaded since this reload began.</summary>
+        public int ShellsLoaded => shellsLoaded;
+        /// <summary>The gun is being put away right now (the draw of the next one has not started).</summary>
+        public bool IsPuttingAway => switchPhase == SwitchPhase.Lowering;
+        /// <summary>Sprinting with the gun not needed: it should be carried low.</summary>
+        public bool WantsLowered => player && player.IsSprinting && raiseTimer <= 0f;
         public float ReloadProgress => reloadPhase == ReloadPhase.Loading && Current && Current.reloadStyle == Firearm.ReloadStyle.Magazine
             ? Mathf.Clamp01(reloadTimer / reloadDuration) : 0f;
         public bool IsCarrying => carryW > 0.5f;
@@ -180,7 +195,9 @@ namespace BodycamHorror.Weapons
         ReloadPhase reloadPhase;
         float reloadTimer, reloadDuration = 1f, shellTimer;
         bool reloadMagOut, reloadMagIn, reloadRacked, reloadFromEmpty, shellInserted, abortReload;
+        int shellsLoaded;
 
+        BareHands bareHands;
         MeleeKind meleeKind;
         float meleeTimer, meleeDuration;
         bool meleeHitDone;
@@ -208,6 +225,13 @@ namespace BodycamHorror.Weapons
             for (int i = 0; i < weapons.Length; i++) if (weapons[i]) weapons[i].gameObject.SetActive(i == slot);
             shown = Current;
             if (shown) shown.transform.SetLocalPositionAndRotation(shown.readyPosition, AimAt(shown.readyPosition, shown.sightHeight));
+            if (bareHandsPrefab)
+            {
+                bareHands = Instantiate(bareHandsPrefab, transform, false);
+                bareHands.name = bareHandsPrefab.name;
+                bareHands.gameObject.SetActive(!shown);
+                bareHands.Bind(player, this, gameObject.layer);
+            }
 
             fireAction = new InputAction("Fire", InputActionType.Button, "<Mouse>/leftButton");
             fireAction.AddBinding("<Gamepad>/rightTrigger");
@@ -313,18 +337,21 @@ namespace BodycamHorror.Weapons
             if (switchPhase == SwitchPhase.None || switchPhase == SwitchPhase.Raising)
             {
                 // reverse a half-finished draw from where it is
-                switchTimer = switchPhase == SwitchPhase.Raising ? switchW * switchLowerTime : 0f;
+                switchTimer = switchPhase == SwitchPhase.Raising ? switchW * LowerTime : 0f;
                 switchPhase = SwitchPhase.Lowering;
             }
         }
+
+        float LowerTime => shown && shown.ClipsDriveSwitch ? shown.HolsterTime : switchLowerTime;
+        float RaiseTime => shown && shown.ClipsDriveSwitch ? shown.DrawTime : switchRaiseTime;
 
         void UpdateSwitch(float dt)
         {
             if (switchPhase == SwitchPhase.Lowering)
             {
                 switchTimer += dt;
-                switchW = Smooth(Mathf.Clamp01(switchTimer / switchLowerTime));
-                if (switchTimer < switchLowerTime || meleeKind != MeleeKind.None) return;
+                switchW = Smooth(Mathf.Clamp01(switchTimer / LowerTime));
+                if (switchTimer < LowerTime || meleeKind != MeleeKind.None) return;
                 if (shown) shown.gameObject.SetActive(false);
                 slot = pendingSlot;
                 pendingSlot = -1;
@@ -332,7 +359,8 @@ namespace BodycamHorror.Weapons
                 if (shown)
                 {
                     shown.gameObject.SetActive(true);
-                    shown.transform.SetLocalPositionAndRotation(holsterPosition, Quaternion.Euler(holsterEuler));
+                    if (!shown.TryGetHolsterPose(out Vector3 drawPos, out Vector3 drawEuler)) { drawPos = holsterPosition; drawEuler = holsterEuler; }
+                    shown.transform.SetLocalPositionAndRotation(drawPos, Quaternion.Euler(drawEuler));
                 }
                 switchPhase = SwitchPhase.Raising;
                 switchTimer = 0f;
@@ -340,8 +368,8 @@ namespace BodycamHorror.Weapons
             else if (switchPhase == SwitchPhase.Raising)
             {
                 switchTimer += dt;
-                switchW = 1f - Smooth(Mathf.Clamp01(switchTimer / switchRaiseTime));
-                if (switchTimer >= switchRaiseTime) { switchPhase = SwitchPhase.None; switchW = 0f; }
+                switchW = 1f - Smooth(Mathf.Clamp01(switchTimer / RaiseTime));
+                if (switchTimer >= RaiseTime) { switchPhase = SwitchPhase.None; switchW = 0f; }
             }
         }
 
@@ -357,8 +385,10 @@ namespace BodycamHorror.Weapons
             Firearm w = shown;
 
             UpdateSwitch(dt);
+            if (IsReloading && BlocksReload(state)) CancelReload();
             UpdateReload(dt);
             UpdateMelee(dt);
+            if (bareHands && bareHands.gameObject.activeSelf != !shown) bareHands.gameObject.SetActive(!shown);
 
             // wall tuck: something right in front of the chest pushes the gun up and back
             float tuckTarget = 0f;
@@ -414,8 +444,10 @@ namespace BodycamHorror.Weapons
             Vector3 readyPos = Vector3.Lerp(w.readyPosition, w.aimPosition, aimW);
             Quaternion readyRot = AimAt(readyPos, w.sightHeight) * Quaternion.Euler(0f, 0f, w.readyCant * (1f - aimW));
 
-            Vector3 pos = Vector3.Lerp(readyPos, loweredPosition, Smooth(lowW));
-            Quaternion rot = Quaternion.Slerp(readyRot, Quaternion.Euler(loweredEuler), Smooth(lowW));
+            float lowPose = w.ClipsDriveRun ? 0f : Smooth(lowW);   // run clips carry it themselves
+            if (!w.TryGetLoweredPose(out Vector3 lowPos, out Vector3 lowEuler)) { lowPos = loweredPosition; lowEuler = loweredEuler; }
+            Vector3 pos = Vector3.Lerp(readyPos, lowPos, lowPose);
+            Quaternion rot = Quaternion.Slerp(readyRot, Quaternion.Euler(lowEuler), lowPose);
             pos = Vector3.Lerp(pos, tuckPosition, Smooth(tuckW));
             rot = Quaternion.Slerp(rot, Quaternion.Euler(tuckEuler), Smooth(tuckW));
 
@@ -424,7 +456,7 @@ namespace BodycamHorror.Weapons
             rot = Quaternion.Slerp(rot, carryRot, Smooth(carryW));
 
             // --- reload: tilt the gun towards the free hand
-            if (IsReloading)
+            if (IsReloading && !w.ClipsDriveReload)
             {
                 if (w.reloadStyle == Firearm.ReloadStyle.Magazine)
                 {
@@ -461,10 +493,11 @@ namespace BodycamHorror.Weapons
             rot *= Quaternion.Euler(hEuler);
 
             // --- putting away / drawing
-            if (switchW > 0f)
+            if (switchW > 0f && !w.ClipsDriveSwitch)
             {
-                pos = Vector3.Lerp(pos, holsterPosition, switchW);
-                rot = Quaternion.Slerp(rot, Quaternion.Euler(holsterEuler), switchW);
+                if (!w.TryGetHolsterPose(out Vector3 awayPos, out Vector3 awayEuler)) { awayPos = holsterPosition; awayEuler = holsterEuler; }
+                pos = Vector3.Lerp(pos, awayPos, switchW);
+                rot = Quaternion.Slerp(rot, Quaternion.Euler(awayEuler), switchW);
             }
 
             // --- body motion: bob and strafe roll (the camera has its own, so the camera does not follow these)
@@ -553,6 +586,7 @@ namespace BodycamHorror.Weapons
         void UpdateCarryPose(MoveState state, Vector3 readyPos, Quaternion readyRot)
         {
             float p = player.ActionProgress;
+            if (shown && shown.TryGetCarryPose(state, p, readyPos, readyRot, out carryPos, out carryRot)) return;
             switch (state)
             {
                 case MoveState.Mantling:
@@ -599,6 +633,10 @@ namespace BodycamHorror.Weapons
                     break;
             }
         }
+
+        /// <summary>Moves where nobody could keep feeding a gun: the reload stops and cannot start.</summary>
+        static bool BlocksReload(MoveState s) =>
+            IsParkourState(s) || s == MoveState.Sliding || s == MoveState.DiveBack || s == MoveState.ProneStandUp;
 
         static bool IsParkourState(MoveState s) =>
             s == MoveState.Mantling || s == MoveState.Vaulting || s == MoveState.Stumbling || s == MoveState.Bumped
@@ -738,10 +776,12 @@ namespace BodycamHorror.Weapons
         {
             Firearm w = shown;
             if (IsReloading || !w || IsSwitching || meleeKind != MeleeKind.None || w.Ammo >= w.magazineSize) return;
+            if (player && BlocksReload(player.State)) return;
             reloadFromEmpty = w.Ammo == 0;
             reloadTimer = 0f;
             lastFireRequest = -10f;
             abortReload = false;
+            shellsLoaded = 0;
             if (w.reloadStyle == Firearm.ReloadStyle.Magazine)
             {
                 reloadPhase = ReloadPhase.Loading;
@@ -789,7 +829,7 @@ namespace BodycamHorror.Weapons
             return true;
         }
 
-        float MagInAt => reloadFromEmpty ? 0.58f : 0.68f;
+        float MagInAt => shown && shown.ReloadMagInAt > 0f ? shown.ReloadMagInAt : reloadFromEmpty ? 0.58f : 0.68f;
 
         float ShellTilt()
         {
@@ -813,7 +853,7 @@ namespace BodycamHorror.Weapons
             if (w.reloadStyle == Firearm.ReloadStyle.Magazine)
             {
                 float p = ReloadProgress;
-                if (!reloadMagOut && p >= 0.16f) { reloadMagOut = true; w.Play(Firearm.Sfx.MagOut); }
+                if (!reloadMagOut && p >= w.ReloadMagOutAt) { reloadMagOut = true; w.Play(Firearm.Sfx.MagOut); }
                 if (!reloadMagIn && p >= MagInAt)
                 {
                     reloadMagIn = true;
@@ -822,7 +862,7 @@ namespace BodycamHorror.Weapons
                     recoilPosVel += new Vector3(0f, 0.35f, 0.2f);   // slap the mag home
                     recoilRotVel += new Vector3(-40f, 0f, 30f);
                 }
-                if (reloadFromEmpty && !reloadRacked && p >= 0.84f)
+                if (reloadFromEmpty && !reloadRacked && p >= w.ReloadRackAt)
                 {
                     reloadRacked = true;
                     w.Rack();
@@ -834,16 +874,18 @@ namespace BodycamHorror.Weapons
 
             // shell by shell
             float half = Mathf.Max(w.reloadTime * 0.5f, 0.01f);
+            float enter = w.ReloadEnterTime >= 0f ? w.ReloadEnterTime : half;
+            float exit = w.ReloadExitTime >= 0f ? w.ReloadExitTime : half;
             switch (reloadPhase)
             {
                 case ReloadPhase.Enter:
                     if (abortReload) { EnterExit(); break; }
-                    if (reloadTimer >= half) { reloadPhase = ReloadPhase.Loading; shellTimer = 0f; shellInserted = false; }
+                    if (reloadTimer >= enter) { reloadPhase = ReloadPhase.Loading; shellTimer = 0f; shellInserted = false; }
                     break;
                 case ReloadPhase.Loading:
                     shellTimer += dt;
                     if (abortReload && !shellInserted && w.Ammo > 0) { EnterExit(); break; }
-                    if (!shellInserted && shellTimer >= w.shellInsertTime * 0.75f)
+                    if (!shellInserted && shellTimer >= w.shellInsertTime * w.ShellInsertShare)
                     {
                         shellInserted = true;
                         w.Ammo = Mathf.Min(w.Ammo + 1, w.magazineSize);
@@ -853,17 +895,18 @@ namespace BodycamHorror.Weapons
                     }
                     if (shellTimer >= w.shellInsertTime)
                     {
+                        shellsLoaded++;
                         if (w.Ammo >= w.magazineSize || abortReload) EnterExit();
                         else { shellTimer = 0f; shellInserted = false; }
                     }
                     break;
                 case ReloadPhase.Exit:
-                    if (reloadFromEmpty && !reloadRacked && reloadTimer >= half)
+                    if (reloadFromEmpty && !reloadRacked && reloadTimer >= exit)
                     {
                         reloadRacked = true;
                         w.Rack();   // chamber the first shell
                     }
-                    if (reloadTimer >= half + (reloadFromEmpty ? w.emptyReloadExtra : 0f))
+                    if (reloadTimer >= exit + (reloadFromEmpty ? w.emptyReloadExtra : 0f))
                     {
                         CancelReload();
                         if (abortReload) lastFireRequest = Time.time;   // the trigger pull that stopped the reload

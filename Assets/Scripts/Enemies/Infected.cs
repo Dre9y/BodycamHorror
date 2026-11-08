@@ -9,14 +9,20 @@ namespace BodycamHorror.Enemies
     /// <summary>
     /// Basic infected: not clever, dangerous in numbers. Physics body (Rigidbody capsule), so a pack
     /// really jostles: sprinters shove whoever is in front, and the shoved one can stumble or go down.
-    /// Runs straight at the player, slides around tall walls, climbs obstacles slowly, trips over low
-    /// ones at a run (some fall flat), swings at you up close. Headshots hurt more; heavy hits stagger
-    /// or knock down. Damage to the player goes through <see cref="IDamageable"/> on the player.
+    /// Until it sees the player it either stands about or roams the location, depending on its
+    /// <see cref="Temper"/>. Then it runs straight at the player, slides around tall walls, climbs
+    /// obstacles slowly, trips over low ones at a run (some fall flat), swings at you up close.
+    /// Headshots hurt more; heavy hits stagger or knock down. Damage to the player goes through
+    /// <see cref="IDamageable"/> on the player.
     /// </summary>
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
     public class Infected : MonoBehaviour, IDamageable, IPushable
     {
         public enum State { Idle, Chase, Attack, Climb, Stumble, Fallen, GettingUp, Dead, Scream }
+        /// <summary>What it does while it has not noticed the player.</summary>
+        public enum Temper { Idler, Roamer }
+        /// <summary>How an alerted one is going after the player.</summary>
+        public enum HuntPhase { Chase, GoToLastSeen, Search }
 
         [Header("Health")]
         public float maxHealth = 100f;
@@ -28,15 +34,44 @@ namespace BodycamHorror.Enemies
         public float corpseLifetime = 40f;
 
         [Header("Senses")]
+        [Tooltip("How far it can see the player.")]
         public float aggroRange = 28f;
-        [Tooltip("Always notices you this close, line of sight or not.")]
-        public float closeAggroRange = 6f;
-        public float gunshotAlertRange = 45f;
+        [Tooltip("Width of the field of view, degrees.")]
+        public float sightAngle = 130f;
+        [Tooltip("This close it notices you even from behind (walls still block it).")]
+        public float closeAggroRange = 2.5f;
+        [Tooltip("Hears a gunshot this close, walls or not, and comes for where it was fired from.")]
+        public float gunshotAlertRange = 15f;
         [Tooltip("When one spots you, others this close join in.")]
         public float alertSpreadRange = 14f;
 
+        [Header("Losing the player")]
+        [Tooltip("Out of sight for this long and it stops following the player's actual position.")]
+        public float loseSightGrace = 1f;
+        [Tooltip("Share of its run speed on the way to where it last saw the player.")]
+        [Range(0f, 1f)] public float lastSeenSpeedScale = 0.75f;
+        [Tooltip("Seconds it looks around the last seen spot before losing interest.")]
+        public Vector2 searchTime = new Vector2(10f, 15f);
+        [Tooltip("How far from the last seen spot it looks.")]
+        public float searchRadius = 5f;
+        public float searchSpeed = 1f;
+        [Tooltip("Seconds it stops to look around between search spots.")]
+        public Vector2 searchPause = new Vector2(0.6f, 1.6f);
+
+        [Header("While unaware")]
+        [Tooltip("Idler stands on the spot, Roamer walks around the location.")]
+        public Temper temper = Temper.Idler;
+        [Tooltip("Seconds between looking in a new direction while standing.")]
+        public Vector2 idleLookInterval = new Vector2(3f, 9f);
+        public float idleTurnSpeed = 35f;
+        public float wanderSpeed = 1.3f;
+        public float roamTurnSpeed = 140f;
+        [Tooltip("How far it walks in one go.")]
+        public Vector2 roamLegLength = new Vector2(8f, 20f);
+        [Tooltip("Seconds it stands and looks around between walks.")]
+        public Vector2 roamPause = new Vector2(1.5f, 4f);
+
         [Header("Movement")]
-        public float wanderSpeed = 0.8f;
         public Vector2 runSpeedRange = new Vector2(5.2f, 7f);
         public float acceleration = 10f;
         public float turnSpeed = 420f;
@@ -108,6 +143,8 @@ namespace BodycamHorror.Enemies
         [Tooltip("Speed once a leg is gone and it has to drag itself along.")]
         public float crawlSpeed = 1.5f;
         public float crawlAttackRange = 1.15f;
+        [Tooltip("A bite from the floor misses a player this far above it.")]
+        public float crawlAttackHeight = 0.8f;
 
         [Header("Voice")]
         [Tooltip("Growls, shrieks and grunts (placeholder synth). Off for now.")]
@@ -120,8 +157,9 @@ namespace BodycamHorror.Enemies
         public State CurrentState => state;
         public bool IsDead => state == State.Dead;
         public bool IsAlerted => alerted;
+        public HuntPhase Hunt => hunt;
         /// <summary>Chasing / attacking / stumbling after the player (used for the arms-out pose).</summary>
-        public bool IsHunting => alerted && (state == State.Chase || state == State.Stumble);
+        public bool IsHunting => alerted && hunt != HuntPhase.Search && (state == State.Chase || state == State.Stumble);
         public float Health => health;
         public float HorizontalSpeed => rb && !rb.isKinematic ? Flat(rb.linearVelocity).magnitude : 0f;
         public float ActionProgress { get; private set; }
@@ -146,8 +184,12 @@ namespace BodycamHorror.Enemies
         readonly Dictionary<HumanBodyBones, float> limbDamage = new Dictionary<HumanBodyBones, float>();
         Vector3 moveDir = Vector3.forward;
         float avoidTimer, avoidSide;
-        Vector3 wanderTarget;
-        float wanderTimer;
+        Vector3 idleLook, roamTarget;
+        float idleLookTimer, roamPauseTimer, roamStuckTimer;
+        bool hasRoamTarget;
+        HuntPhase hunt = HuntPhase.Chase;
+        Vector3 lastSeenPos;
+        float lastSeenTime, lastSeenDeadline, searchTimer;
 
         // action data
         float actionDuration;
@@ -196,7 +238,9 @@ namespace BodycamHorror.Enemies
             runSpeed = Random.Range(runSpeedRange.x, runSpeedRange.y);
             senseTimer = Random.value * 0.25f;
             voiceTimer = Random.Range(1f, 5f);
-            wanderTarget = transform.position;
+            idleLook = transform.forward;
+            idleLookTimer = Random.Range(idleLookInterval.x, idleLookInterval.y);
+            roamPauseTimer = Random.Range(0f, roamPause.y);   // a pack does not set off in step
         }
 
         void OnEnable()
@@ -280,17 +324,65 @@ namespace BodycamHorror.Enemies
         void Sense()
         {
             if (!player) { FindPlayer(); if (!player) return; }
-            if (alerted) return;
-            float dist = Vector3.Distance(rb.position, player.position);
-            if (dist < closeAggroRange || (dist < aggroRange && CanSeePlayer())) Alert(true, true);
+            Vector3 to = player.position - rb.position;
+            float dist = to.magnitude;
+            if (alerted && hunt == HuntPhase.Chase)
+            {
+                // already on the player: it keeps tabs on them all round, as long as nothing is in the way
+                if (dist <= aggroRange && CanSeePlayer()) MarkPlayerSeen();
+                else if (Time.time - lastSeenTime > loseSightGrace) StartGoToLastSeen();
+                return;
+            }
+            if (dist > aggroRange) return;
+            bool inView = dist < closeAggroRange || Vector3.Angle(transform.forward, Flat(to)) < sightAngle * 0.5f;
+            if (!inView || !CanSeePlayer()) return;
+            if (alerted) MarkPlayerSeen();   // spotted again while looking for them
+            else Alert(true, true);
         }
 
         bool CanSeePlayer()
         {
-            Vector3 eye = rb.position + Vector3.up * 1.6f;
-            Vector3 target = player.position + Vector3.up * 1.5f;
+            Vector3 eye = rb.position + Vector3.up * (capsule.height - 0.1f);
+            // the player's real head height, so crouching behind cover actually hides them
+            Vector3 target = playerRig ? playerRig.transform.position : player.position + Vector3.up * 1.5f;
             Vector3 d = target - eye;
             return !ProbeWorld(eye, d.normalized, d.magnitude, out _);
+        }
+
+        void MarkPlayerSeen()
+        {
+            hunt = HuntPhase.Chase;
+            if (!player) return;
+            lastSeenPos = player.position;
+            lastSeenTime = Time.time;
+        }
+
+        void StartGoToLastSeen()
+        {
+            hunt = HuntPhase.GoToLastSeen;
+            roamStuckTimer = 0f;
+            float distance = Flat(lastSeenPos - rb.position).magnitude;
+            lastSeenDeadline = Time.time + distance / Mathf.Max(runSpeed * lastSeenSpeedScale, 0.5f) + 3f;
+        }
+
+        void StartSearch()
+        {
+            hunt = HuntPhase.Search;
+            searchTimer = Random.Range(searchTime.x, searchTime.y);
+            hasRoamTarget = false;
+            roamStuckTimer = 0f;
+            idleLookTimer = 0f;
+            roamPauseTimer = Random.Range(searchPause.x, searchPause.y);   // a beat of looking around on the spot
+        }
+
+        void LoseInterest()
+        {
+            alerted = false;
+            hunt = HuntPhase.Chase;
+            hasRoamTarget = false;
+            roamStuckTimer = 0f;
+            roamPauseTimer = Random.Range(roamPause.x, roamPause.y);
+            SetState(State.Idle);
         }
 
         /// <summary>Starts hunting the player; <paramref name="spread"/> wakes up others nearby.</summary>
@@ -299,6 +391,7 @@ namespace BodycamHorror.Enemies
             if (state == State.Dead) return;
             bool wasAlerted = alerted;
             alerted = true;
+            MarkPlayerSeen();
             if (state == State.Idle)
             {
                 bool far = !player || Vector3.Distance(rb.position, player.position) > 7f;
@@ -318,7 +411,7 @@ namespace BodycamHorror.Enemies
 
         void OnGunshot()
         {
-            if (!alerted && player && Vector3.Distance(rb.position, player.position) < gunshotAlertRange) Alert(true, false);
+            if (player && Vector3.Distance(rb.position, player.position) < gunshotAlertRange) Alert(true, false);
         }
 
         // ------------------------------------------------------------------ movement
@@ -329,7 +422,10 @@ namespace BodycamHorror.Enemies
             float dt = Time.fixedDeltaTime;
             switch (state)
             {
-                case State.Idle: Wander(dt); break;
+                case State.Idle:
+                    if (temper == Temper.Roamer) WalkBetweenSpots(dt, false);
+                    else StandAround(dt, idleTurnSpeed);
+                    break;
                 case State.Chase: Chase(dt); break;
                 case State.Attack: AttackMove(dt); break;
                 case State.Stumble: StumbleMove(dt); break;
@@ -343,26 +439,122 @@ namespace BodycamHorror.Enemies
                 rb.angularVelocity = Vector3.zero;   // only our own turning steers the yaw
         }
 
-        void Wander(float dt)
+        /// <summary>Stays put and every so often turns its head and shoulders somewhere else, slowly.</summary>
+        void StandAround(float dt, float turnRate)
         {
-            wanderTimer -= dt;
-            if (wanderTimer <= 0f || Flat(wanderTarget - rb.position).magnitude < 0.5f)
+            idleLookTimer -= dt;
+            if (idleLookTimer <= 0f)
             {
-                wanderTimer = Random.Range(3f, 7f);
-                Vector2 r = Random.insideUnitCircle * 4f;
-                wanderTarget = rb.position + new Vector3(r.x, 0f, r.y);
+                idleLookTimer = Random.Range(idleLookInterval.x, idleLookInterval.y);
+                idleLook = Quaternion.Euler(0f, Random.Range(-70f, 70f), 0f) * Flat(transform.forward).normalized;
             }
-            Vector3 to = Flat(wanderTarget - rb.position);
-            bool stand = wanderTimer > 4.5f;   // spend part of the time just swaying on the spot
-            Vector3 dir = to.sqrMagnitude > 0.01f ? to.normalized : transform.forward;
-            dir = Avoid(dir, dt);
-            Move(dir, stand ? 0f : wanderSpeed, dt);
-            if (!stand) CheckObstacles(dir);
+            Move(idleLook, 0f, dt, turnRate);
         }
+
+        /// <summary>Walks from one spot to the next, pausing to look around in between.</summary>
+        void WalkBetweenSpots(float dt, bool searching)
+        {
+            if (roamPauseTimer > 0f)
+            {
+                roamPauseTimer -= dt;
+                StandAround(dt, searching ? roamTurnSpeed : idleTurnSpeed);
+                return;
+            }
+            if (!hasRoamTarget && !(searching ? PickSearchTarget() : PickRoamTarget()))
+            {
+                roamPauseTimer = 1f;   // boxed in for now: try again in a moment
+                return;
+            }
+
+            Vector3 to = Flat(roamTarget - rb.position);
+            roamStuckTimer = HorizontalSpeed < 0.3f ? roamStuckTimer + dt : 0f;
+            if (to.magnitude < 1f || roamStuckTimer > 1.5f || DropAhead(to.normalized))
+            {
+                Vector2 pause = searching ? searchPause : roamPause;
+                hasRoamTarget = false;
+                roamStuckTimer = 0f;
+                idleLookTimer = 0f;
+                roamPauseTimer = Random.Range(pause.x, pause.y);
+                return;
+            }
+
+            Vector3 dir = Avoid(to.normalized, dt);
+            dir = (dir + Separation() * separationWeight).normalized;
+            Move(dir, searching ? Mathf.Min(searchSpeed, runSpeed) : wanderSpeed, dt, roamTurnSpeed);
+            CheckObstacles(dir);
+        }
+
+        /// <summary>Lost the player: heads for the spot they were last seen at.</summary>
+        void GoToLastSeen(float dt)
+        {
+            Vector3 to = Flat(lastSeenPos - rb.position);
+            float dist = to.magnitude;
+            roamStuckTimer = HorizontalSpeed < 0.3f ? roamStuckTimer + dt : 0f;
+            if (dist < 1.5f || roamStuckTimer > 1.5f || Time.time > lastSeenDeadline)
+            {
+                StartSearch();
+                return;
+            }
+            Vector3 dir = Avoid(to / dist, dt);
+            dir = (dir + Separation() * separationWeight).normalized;
+            Move(dir, runSpeed * lastSeenSpeedScale * Mathf.Clamp01(dist / 2.5f + 0.35f), dt);
+            CheckObstacles(dir);
+            TryShove();
+        }
+
+        /// <summary>Picks a spot near where the player was last seen, reachable in a straight line.</summary>
+        bool PickSearchTarget()
+        {
+            Vector3 chest = rb.position + Vector3.up * 0.9f;
+            for (int i = 0; i < 8; i++)
+            {
+                Vector2 r = Random.insideUnitCircle * searchRadius;
+                Vector3 spot = lastSeenPos + new Vector3(r.x, 0f, r.y);
+                Vector3 to = Flat(spot - rb.position);
+                float length = to.magnitude;
+                if (length < 1.5f || ProbeWorld(chest, to / length, length + 0.5f, out _)) continue;
+                if (!ProbeWorld(spot + Vector3.up * 2f, Vector3.down, 4f, out RaycastHit ground)) continue;
+                roamTarget = ground.point;
+                hasRoamTarget = true;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Picks a walkable spot with a clear straight line to it, if one turns up in a few tries.</summary>
+        bool PickRoamTarget()
+        {
+            Vector3 chest = rb.position + Vector3.up * 0.9f;
+            for (int i = 0; i < 8; i++)
+            {
+                float angle = Random.Range(0f, Mathf.PI * 2f);
+                Vector3 dir = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+                float length = Random.Range(roamLegLength.x, roamLegLength.y);
+                if (ProbeWorld(chest, dir, length, out RaycastHit wall)) length = wall.distance - 1f;
+                if (length < roamLegLength.x * 0.5f) continue;
+                if (!ProbeWorld(rb.position + dir * length + Vector3.up * 2f, Vector3.down, 4f, out RaycastHit ground)) continue;
+                roamTarget = ground.point;
+                hasRoamTarget = true;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>A drop too deep to climb back out of, about a stride ahead.</summary>
+        bool DropAhead(Vector3 dir) =>
+            !ProbeWorld(rb.position + dir + Vector3.up * 0.5f, Vector3.down, 0.5f + maxClimbHeight, out _);
 
         void Chase(float dt)
         {
             if (!player) { SetState(State.Idle); return; }
+            if (hunt == HuntPhase.GoToLastSeen) { GoToLastSeen(dt); return; }
+            if (hunt == HuntPhase.Search)
+            {
+                searchTimer -= dt;
+                if (searchTimer <= 0f) LoseInterest();
+                else WalkBetweenSpots(dt, true);
+                return;
+            }
             Vector3 toP = Flat(player.position - rb.position);
             float dist = toP.magnitude;
             if (dist < (crippled ? crawlAttackRange : attackRange) && Mathf.Abs(player.position.y - rb.position.y) < 1.3f && attackCooldownTimer <= 0f)
@@ -380,7 +572,7 @@ namespace BodycamHorror.Enemies
             TryShove();
         }
 
-        void Move(Vector3 dir, float speed, float dt)
+        void Move(Vector3 dir, float speed, float dt, float turnRate = 0f)
         {
             moveDir = dir;
             Vector3 v = rb.linearVelocity;
@@ -388,14 +580,14 @@ namespace BodycamHorror.Enemies
             bool grounded = IsGrounded();
             Vector3 change = Vector3.ClampMagnitude(dir * speed - h, acceleration * dt * (grounded ? 1f : 0.15f));
             rb.AddForce(change, ForceMode.VelocityChange);
-            Face(dir, dt);
+            Face(dir, dt, turnRate);
         }
 
-        void Face(Vector3 dir, float dt)
+        void Face(Vector3 dir, float dt, float turnRate = 0f)
         {
             if (dir.sqrMagnitude < 0.001f) return;
             Quaternion target = Quaternion.LookRotation(Flat(dir).normalized, Vector3.up);
-            rb.MoveRotation(Quaternion.RotateTowards(rb.rotation, target, turnSpeed * dt));
+            rb.MoveRotation(Quaternion.RotateTowards(rb.rotation, target, (turnRate > 0f ? turnRate : turnSpeed) * dt));
         }
 
         bool IsGrounded() =>
@@ -589,7 +781,7 @@ namespace BodycamHorror.Enemies
         {
             // keep lurching onwards at a fraction of the pace
             Vector3 dir = moveDir;
-            if (alerted && player) dir = Vector3.Slerp(moveDir, Flat(player.position - rb.position).normalized, 0.3f);
+            if (alerted && hunt == HuntPhase.Chase && player) dir = Vector3.Slerp(moveDir, Flat(player.position - rb.position).normalized, 0.3f);
             Move(dir, runSpeed * 0.45f, dt);
         }
 
@@ -652,7 +844,7 @@ namespace BodycamHorror.Enemies
             float groundY = getUpFromPos.y;
             if (ProbeWorld(getUpFromPos + Vector3.up * 1.2f, Vector3.down, 3f, out RaycastHit g)) groundY = g.point.y;
             getUpToPos = new Vector3(getUpFromPos.x, groundY, getUpFromPos.z);
-            Vector3 face = player && alerted ? Flat(player.position - getUpFromPos) : Flat(rb.rotation * Vector3.forward);
+            Vector3 face = player && alerted && hunt == HuntPhase.Chase ? Flat(player.position - getUpFromPos) : Flat(rb.rotation * Vector3.forward);
             getUpToRot = Quaternion.LookRotation(face.sqrMagnitude > 0.001f ? face.normalized : Vector3.forward, Vector3.up);
             Say("grunt", 0.7f, Random.Range(0.9f, 1.1f));
         }
@@ -739,7 +931,7 @@ namespace BodycamHorror.Enemies
             Vector3 toP = player ? Flat(player.position - rb.position) : transform.forward;
             float p = stateTimer / actionDuration;
             // plant, then lunge into the swing
-            float lunge = p > 0.3f && p < 0.55f ? 2.2f : 0f;
+            float lunge = !crippled && p > 0.3f && p < 0.55f ? 2.2f : 0f;
             Move(toP.sqrMagnitude > 0.001f ? toP.normalized : transform.forward, lunge, dt);
         }
 
@@ -752,7 +944,9 @@ namespace BodycamHorror.Enemies
                 if (player)
                 {
                     Vector3 toP = player.position - rb.position;
-                    bool inReach = Flat(toP).magnitude <= attackRange + 0.45f && Mathf.Abs(toP.y) < 1.4f
+                    // a crawler only gets at the ankles: it has less reach and a jump clears it
+                    bool inReach = Flat(toP).magnitude <= (crippled ? crawlAttackRange : attackRange) + 0.45f
+                                   && Mathf.Abs(toP.y) < (crippled ? crawlAttackHeight : 1.4f)
                                    && Vector3.Dot(Flat(toP).normalized, transform.forward) > 0.4f;
                     if (inReach) HitPlayer(Flat(toP).normalized);
                 }

@@ -161,7 +161,7 @@ namespace BodycamHorror.Player
             {
                 // weapon light: rigid on the gun, no trailing
                 if (gun != MountedOn) { EnsureLightBody(gun); MountedOn = gun; }
-                Transform g = gun.transform;
+                Transform g = gun.VisualRoot;
                 transform.SetPositionAndRotation(g.TransformPoint(gun.muzzle.localPosition + gun.flashlightOffset), g.rotation);
                 smoothInit = false;
                 // the soft hand fill stays at the chest: right next to the fore-end it would blow the fingers out
@@ -213,7 +213,7 @@ namespace BodycamHorror.Player
         void EnsureLightBody(Firearm gun)
         {
             if (lenses.ContainsKey(gun) && lenses[gun]) return;
-            var old = gun.transform.Find("WeaponLight");
+            var old = gun.VisualRoot.Find("WeaponLight");
             if (old) Destroy(old.gameObject);
 
             var baseMat = GraphicsSettings.currentRenderPipeline ? GraphicsSettings.currentRenderPipeline.defaultMaterial : null;
@@ -232,7 +232,7 @@ namespace BodycamHorror.Player
             }
 
             var root = new GameObject("WeaponLight").transform;
-            root.SetParent(gun.transform, false);
+            root.SetParent(gun.VisualRoot, false);
             root.localPosition = gun.muzzle.localPosition + gun.flashlightOffset;
             root.gameObject.layer = gun.gameObject.layer;
             // body (along +Z), a clamp up to the gun, and the lens at the front

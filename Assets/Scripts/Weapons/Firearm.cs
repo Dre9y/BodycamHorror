@@ -105,6 +105,37 @@ namespace BodycamHorror.Weapons
 
         public int Ammo { get; set; }
         public bool CanFire => Time.time >= nextFireTime;
+        /// <summary>Clips pose the gun while running, so <see cref="PlayerShooting"/> does not lower it.</summary>
+        public bool ClipsDriveRun { get; protected set; }
+        /// <summary>Clips put the gun away and draw it (<see cref="DrawTime"/>, <see cref="HolsterTime"/>).</summary>
+        public bool ClipsDriveSwitch { get; protected set; }
+        /// <summary>Clips do the reload, so <see cref="PlayerShooting"/> does not tilt the gun for it.</summary>
+        public bool ClipsDriveReload { get; protected set; }
+        /// <summary>Its own pose for being carried low on the run (weapon-holder space), if the general one does not suit it.</summary>
+        public virtual bool TryGetLoweredPose(out Vector3 position, out Vector3 euler) { position = euler = Vector3.zero; return false; }
+        /// <summary>Its own pose for being put away (weapon-holder space), if the general one does not suit it.</summary>
+        public virtual bool TryGetHolsterPose(out Vector3 position, out Vector3 euler) { position = euler = Vector3.zero; return false; }
+        /// <summary>Its own pose for a parkour move (weapon-holder space), if the general ones do not suit it.</summary>
+        public virtual bool TryGetCarryPose(MoveState state, float progress, Vector3 readyPosition, Quaternion readyRotation,
+                                            out Vector3 position, out Quaternion rotation)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            return false;
+        }
+        /// <summary>What accessories mounted on the gun should follow.</summary>
+        public virtual Transform VisualRoot => transform;
+        public float DrawTime { get; protected set; }
+        public float HolsterTime { get; protected set; }
+        /// <summary>Reload moments as a share of the whole reload (a negative mag-in uses the default).</summary>
+        public float ReloadMagOutAt { get; protected set; } = 0.16f;
+        public float ReloadMagInAt { get; protected set; } = -1f;
+        public float ReloadRackAt { get; protected set; } = 0.84f;
+        /// <summary>Per shell: how long getting into and out of the loading position takes (negative = half of reloadTime).</summary>
+        public float ReloadEnterTime { get; protected set; } = -1f;
+        public float ReloadExitTime { get; protected set; } = -1f;
+        /// <summary>Per shell: share of the insert time at which the shell goes in.</summary>
+        public float ShellInsertShare { get; protected set; } = 0.75f;
         public Vector3 LeftGripPosition => leftGrip ? leftGrip.position : transform.position;
         /// <summary>Extra pose (pivot space) the weapon wants right now, e.g. rocking while pumping.</summary>
         public virtual void GetHandlingOffset(out Vector3 position, out Vector3 euler) { position = Vector3.zero; euler = Vector3.zero; }

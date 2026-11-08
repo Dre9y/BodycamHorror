@@ -3000,8 +3000,8 @@ MonoBehaviour:
   sightHeight: 0.0733
   slideTravel: 0.0337
   headHeight: 1.62
-  viewOffset: {x: 0, y: 0, z: 0}
-  aimDistance: 0.24
+  viewOffset: {x: 0.032, y: 0.048, z: -0.076}
+  aimDistance: 0.26
   armsRoot: {fileID: 5921813005490057708}
   armsIdleClip: {fileID: 2412397177285405822, guid: 9d3ee07f94cc84649ab93ee29d07e41f, type: 3}
   leftShoulder: {x: -0.17, y: -0.25, z: -0.06}

@@ -196,6 +196,7 @@ namespace BodycamHorror.Weapons
         float reloadTimer, reloadDuration = 1f, shellTimer;
         bool reloadMagOut, reloadMagIn, reloadRacked, reloadFromEmpty, shellInserted, abortReload;
         int shellsLoaded;
+        float reloadPoseW;
 
         BareHands bareHands;
         MeleeKind meleeKind;
@@ -454,6 +455,15 @@ namespace BodycamHorror.Weapons
             if (parkour) UpdateCarryPose(state, readyPos, readyRot);
             pos = Vector3.Lerp(pos, carryPos, Smooth(carryW));
             rot = Quaternion.Slerp(rot, carryRot, Smooth(carryW));
+
+            // --- reload: guns that would load out of frame come up into view
+            bool hasReloadPose = w.TryGetReloadPose(out Vector3 reloadPos, out Vector3 reloadEuler);
+            reloadPoseW = Approach(reloadPoseW, IsReloading && hasReloadPose ? 1f : 0f, 8f, dt);
+            if (hasReloadPose && reloadPoseW > 0.001f)
+            {
+                pos = Vector3.Lerp(pos, reloadPos, Smooth(reloadPoseW));
+                rot = Quaternion.Slerp(rot, Quaternion.Euler(reloadEuler), Smooth(reloadPoseW));
+            }
 
             // --- reload: tilt the gun towards the free hand
             if (IsReloading && !w.ClipsDriveReload)

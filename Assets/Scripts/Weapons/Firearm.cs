@@ -115,6 +115,8 @@ namespace BodycamHorror.Weapons
         public virtual bool TryGetLoweredPose(out Vector3 position, out Vector3 euler) { position = euler = Vector3.zero; return false; }
         /// <summary>Its own pose for being put away (weapon-holder space), if the general one does not suit it.</summary>
         public virtual bool TryGetHolsterPose(out Vector3 position, out Vector3 euler) { position = euler = Vector3.zero; return false; }
+        /// <summary>Where to hold it while reloading (weapon-holder space), if the work would otherwise happen out of frame.</summary>
+        public virtual bool TryGetReloadPose(out Vector3 position, out Vector3 euler) { position = euler = Vector3.zero; return false; }
         /// <summary>Its own pose for a parkour move (weapon-holder space), if the general ones do not suit it.</summary>
         public virtual bool TryGetCarryPose(MoveState state, float progress, Vector3 readyPosition, Quaternion readyRotation,
                                             out Vector3 position, out Quaternion rotation)

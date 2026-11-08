@@ -128,6 +128,13 @@ namespace BodycamHorror.Weapons
             return true;
         }
 
+        public override bool TryGetReloadPose(out Vector3 position, out Vector3 euler)
+        {
+            position = hands ? hands.reloadPosition : Vector3.zero;
+            euler = hands ? hands.reloadEuler : Vector3.zero;
+            return hands;
+        }
+
         public override bool TryGetHolsterPose(out Vector3 position, out Vector3 euler)
         {
             position = hands ? hands.holsterPosition : Vector3.zero;

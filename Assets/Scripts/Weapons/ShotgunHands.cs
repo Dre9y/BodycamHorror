@@ -30,19 +30,24 @@ namespace BodycamHorror.Weapons
 
         [Header("Placement")]
         [Tooltip("Where the gun is carried relative to the clips' pose: low and to the right, butt in the shoulder.")]
-        public Vector3 readyOffset = new Vector3(0.108f, -0.175f, -0.084f);
+        public Vector3 readyOffset = new Vector3(0.0676f, -0.1253f, -0.144f);
         [Tooltip("Distance of the gun from the eye when aiming.")]
-        public float aimDistance = 0.3f;
+        public float aimDistance = 0.25f;
         [Tooltip("How far below the aim point the gun is held when aiming, so the target stays in view.")]
         public float aimDrop = 0.08f;
         [Tooltip("How far right of the aim point the gun is held when aiming.")]
         public float aimSide = 0.03f;
         [Tooltip("Carried low on the run (weapon-holder space).")]
-        public Vector3 sprintPosition = new Vector3(0.17f, -0.31f, 0.14f);
+        public Vector3 sprintPosition = new Vector3(0.14f, -0.27f, 0.09f);
         public Vector3 sprintEuler = new Vector3(20f, -14f, 10f);
         [Tooltip("Put away: low and out of frame, without tipping the butt up into the lens.")]
         public Vector3 holsterPosition = new Vector3(0.2f, -0.6f, 0.1f);
         public Vector3 holsterEuler = new Vector3(18f, -12f, 12f);
+        [Tooltip("Lifted towards the middle of the view while loading, so the hand and the shells are in frame.")]
+        public Vector3 reloadPosition = new Vector3(0.08f, -0.17f, 0.26f);
+        public Vector3 reloadEuler = new Vector3(-8f, -10f, 18f);
+        [Tooltip("Moves the left hand on the pump, in gun space.")]
+        public Vector3 leftHandOffset = new Vector3(0f, 0.016f, 0f);
         [Tooltip("Shoulders in weapon-holder space.")]
         public Vector3 leftShoulder = new Vector3(-0.13f, -0.3f, 0.05f);
         public Vector3 rightShoulder = new Vector3(0.24f, -0.3f, -0.18f);
@@ -204,6 +209,7 @@ namespace BodycamHorror.Weapons
             ArmRig.Arm left = rig.Left, right = rig.Right;
             Vector3 rightPos = Move(right.hand.position), leftPos = Move(left.hand.position);
             Quaternion rightRot = worldTurn * right.hand.rotation, leftRot = worldTurn * left.hand.rotation;
+            leftPos += gun.transform.TransformDirection(leftHandOffset);
 
             float freeTarget = shooting.IsReloading ? 0f : 1f - shooting.TwoHandWeight;
             leftFree = Mathf.MoveTowards(leftFree, freeTarget, dt * 8f);

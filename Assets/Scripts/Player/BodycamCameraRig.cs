@@ -14,20 +14,35 @@ namespace BodycamHorror.Player
         public Camera cam;
 
         [Header("FOV")]
-        public float baseFov = 88f;
-        public float sprintFov = 95f;
-        public float slideFov = 100f;
+        public float baseFov = 68f;
+        public float sprintFov = 73f;
+        public float slideFov = 78f;
         public float fovSharpness = 6f;
 
         [Header("Footstep bob")]
         [Tooltip("Meters travelled per left+right step cycle at walk / sprint.")]
-        public float strideWalk = 1.6f;
-        public float strideSprint = 2.4f;
-        public float bobVertical = 0.035f;
-        public float bobHorizontal = 0.025f;
-        public float bobRoll = 1.1f;
-        public float bobPitch = 0.6f;
+        public float strideWalk = 3f;
+        public float strideSprint = 5.6f;
+        public float bobVertical = 0.05f;
+        public float bobHorizontal = 0.04f;
+        public float bobRoll = 1.8f;
+        public float bobPitch = 1.2f;
         public float sprintBobMultiplier = 1.8f;
+        [Tooltip("Share of each step spent dropping onto the foot; the rest is the slow climb to the next one.")]
+        [Range(0.05f, 0.6f)] public float stepDropShare = 0.25f;
+
+        [Header("Footfalls (a loaded body landing on each foot)")]
+        [Tooltip("Downward jolt per footfall at a sprint (m/s).")]
+        public float stepDropKick = 0.55f;
+        [Tooltip("Head nod per footfall at a sprint (deg/s).")]
+        public float stepPitchKick = 28f;
+        [Tooltip("Roll towards the leading foot per footfall at a sprint (deg/s).")]
+        public float stepRollKick = 10f;
+        public float stepTremor = 0.12f;
+        [Tooltip("Strength of a walking footfall compared with a sprinting one.")]
+        [Range(0f, 1f)] public float walkStepWeight = 0.35f;
+        [Tooltip("Share of the footfall left while aiming.")]
+        [Range(0f, 1f)] public float aimStepWeight = 0.4f;
 
         [Header("Follow the hands")]
         [Tooltip("Optional. When set, the camera follows the gun's recoil and sway.")]
@@ -44,7 +59,7 @@ namespace BodycamHorror.Player
         public float maxLag = 6f;
 
         [Header("Aim")]
-        public float aimFov = 76f;
+        public float aimFov = 60f;
 
         [Header("Lean")]
         public float strafeRoll = 1.2f;
@@ -94,6 +109,7 @@ namespace BodycamHorror.Player
         float trauma, tremor, stumbleSide = 1f, seed, breathPhase;
         Quaternion followRot;
         bool followInit;
+        int lastFootfall;
 
         void Awake()
         {
@@ -154,7 +170,10 @@ namespace BodycamHorror.Player
             float stride = Mathf.Lerp(strideWalk, strideSprint, sprint01);
             StepPhase += speed * dt * (Mathf.PI * 2f / stride);
             float s = Mathf.Sin(StepPhase);
-            float step = Mathf.Abs(s);
+            // each step: the body drops quickly onto the foot, then climbs slowly towards the next one
+            float stepT = Mathf.Repeat(StepPhase / Mathf.PI, 1f);
+            float step = stepT < stepDropShare ? Smooth(stepT / stepDropShare) : 1f - Smooth((stepT - stepDropShare) / (1f - stepDropShare));
+            Footfall(state, sprint01);
             targetPos.y -= step * bobVertical * bob;
             targetPos.x += s * bobHorizontal * bob;
             targetRot.z += s * bobRoll * bob;
@@ -379,6 +398,22 @@ namespace BodycamHorror.Player
         }
 
         static float Smooth(float t) { t = Mathf.Clamp01(t); return t * t * (3f - 2f * t); }
+
+        /// <summary>Once per step, as the foot comes down: a jolt through the body into the camera.</summary>
+        void Footfall(MoveState state, float sprint01)
+        {
+            int step = Mathf.FloorToInt(StepPhase / Mathf.PI);
+            if (step == lastFootfall) return;
+            lastFootfall = step;
+            if (state != MoveState.Grounded || BobAmount < 0.2f) return;
+            float k = Mathf.Lerp(walkStepWeight, 1f, sprint01);
+            if (player.IsCrouching) k *= 0.6f;
+            if (weapon && weapon.isActiveAndEnabled) k *= Mathf.Lerp(1f, aimStepWeight, weapon.AimWeight);
+            posVelocity.y -= stepDropKick * k;
+            rotVelocity.x += stepPitchKick * k;
+            rotVelocity.z += Mathf.Sign(Mathf.Cos(StepPhase)) * stepRollKick * k;   // the way the body is about to sway
+            AddTremor(stepTremor * k);
+        }
 
         void OnStateChanged(MoveState from, MoveState to)
         {

@@ -3991,7 +3991,7 @@ Camera:
     height: 1
   near clip plane: 0.03
   far clip plane: 1000
-  field of view: 88
+  field of view: 68
   orthographic: 0
   orthographic size: 5
   m_Depth: -1
@@ -14552,24 +14552,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.BodycamCameraRig
   player: {fileID: 904302999}
   cam: {fileID: 330585545}
-  baseFov: 88
-  sprintFov: 95
-  slideFov: 100
+  baseFov: 68
+  sprintFov: 73
+  slideFov: 78
   fovSharpness: 6
-  strideWalk: 1.6
-  strideSprint: 2.4
-  bobVertical: 0.035
-  bobHorizontal: 0.025
-  bobRoll: 1.1
-  bobPitch: 0.6
+  strideWalk: 3
+  strideSprint: 5.6
+  bobVertical: 0.05
+  bobHorizontal: 0.04
+  bobRoll: 1.8
+  bobPitch: 1.2
   sprintBobMultiplier: 1.8
+  stepDropShare: 0.25
+  stepDropKick: 0.55
+  stepPitchKick: 28
+  stepRollKick: 10
+  stepTremor: 0.12
+  walkStepWeight: 0.35
+  aimStepWeight: 0.4
   weapon: {fileID: 1822031957}
   handFollowLag: 0.03
   handFollowAmount: 0.85
   maxFollowAngle: 6
   lagRoll: 0.006
   maxLag: 6
-  aimFov: 76
+  aimFov: 60
   strafeRoll: 1.2
   brakePitch: 5
   slideRoll: 7

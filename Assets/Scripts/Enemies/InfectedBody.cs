@@ -36,6 +36,8 @@ namespace BodycamHorror.Enemies
         Animator animator;
         bool animated;
         InfectedRagdoll ragdoll;
+        InfectedDismemberment dismember;
+        bool crawling;
         Transform[] poseBones;
         Quaternion[] blendFrom;
         Vector3 blendHipsFrom;
@@ -152,6 +154,19 @@ namespace BodycamHorror.Enemies
                 ragdoll = null;
             }
             HeadHitbox.radius = 0.14f * scale * sizeScale / 0.7f;
+
+            if (ragdoll)
+            {
+                // the bones are the hitboxes now: bullets go through the movement capsule to reach them
+                gameObject.layer = 2;
+                HeadHitbox.enabled = false;
+                var smr = inst.GetComponentInChildren<SkinnedMeshRenderer>();
+                if (smr && smr.sharedMesh.isReadable)
+                {
+                    dismember = gameObject.AddComponent<InfectedDismemberment>();
+                    dismember.Init(smr, animator, ragdoll);
+                }
+            }
         }
 
         void ClearModel()
@@ -174,15 +189,35 @@ namespace BodycamHorror.Enemies
 
         public bool IsHeadCollider(Collider c) => c && (c == HeadHitbox || (ragdoll && c == ragdoll.HeadCollider));
 
-        public void TriggerAttack() { if (animated) animator.SetTrigger("Attack"); }
-        public void TriggerScream() { if (animated) animator.SetTrigger("Scream"); }
+        public void TriggerAttack() { if (animated && !crawling) animator.SetTrigger("Attack"); }
+        public void TriggerScream() { if (animated && !crawling) animator.SetTrigger("Scream"); }
+
+        /// <summary>Switches between walking and dragging itself along on the arms.</summary>
+        public void SetCrawl(bool on)
+        {
+            crawling = on;
+            if (animated) animator.SetBool("Crawl", on);
+        }
+
+        /// <summary>The severable limb a collider belongs to (none for the torso and pelvis).</summary>
+        public bool TryGetLimb(Collider c, out HumanBodyBones limb)
+        {
+            limb = default;
+            if (!ragdoll || !c || !ragdoll.TryGetPart(c, out HumanBodyBones part)) return false;
+            if (System.Array.IndexOf(InfectedDismemberment.Severable, part) < 0) return false;
+            limb = part;
+            return true;
+        }
+
+        /// <summary>Cuts a limb off (with everything below it). False if it cannot be cut or is already gone.</summary>
+        public bool Sever(HumanBodyBones limb, Vector3 direction, float speed) =>
+            dismember && dismember.Sever(limb, direction, speed);
 
         /// <summary>Goes limp, carrying <paramref name="velocity"/>, shoved at <paramref name="point"/> and toppled about <paramref name="toppleAxis"/>.</summary>
         public void BeginRagdoll(Vector3 velocity, Vector3 impulse, Vector3 point, Vector3 toppleAxis, float topple)
         {
             if (!HasRagdoll) return;
             blending = false;
-            if (HeadHitbox) HeadHitbox.enabled = false;   // the ragdoll's own head collider takes the hits now
             ragdoll.Activate(velocity);
             ragdoll.Impulse(impulse, point);
             ragdoll.Topple(toppleAxis, topple);
@@ -204,13 +239,12 @@ namespace BodycamHorror.Enemies
             for (int i = 0; i < poseBones.Length; i++) blendFrom[i] = poseBones[i].rotation;
             blendHipsFrom = hipsPos;
             ragdoll.Deactivate();
-            if (HeadHitbox) HeadHitbox.enabled = true;
             groundPosition = new Vector3(hipsPos.x, transform.position.y, hipsPos.z);
             if (Physics.Raycast(hipsPos + Vector3.up * 0.5f, Vector3.down, out RaycastHit g, 3f, groundMask, QueryTriggerInteraction.Ignore))
                 groundPosition.y = g.point.y;
             animator.enabled = true;
             animator.SetFloat("Speed", 0f);
-            animator.Play("Locomotion", 0, Random.value);
+            animator.Play(crawling ? "Crawl" : "Locomotion", 0, Random.value);
             blendT = 0f;
             blendTime = Mathf.Max(duration, 0.05f);
             blending = true;

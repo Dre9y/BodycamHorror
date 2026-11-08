@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 
 namespace BodycamHorror.Player
 {
-    public enum MoveState { Grounded, Airborne, Sliding, Mantling, Vaulting, Stumbling, Bumped, BraceWall, HandLanding, Rolling, HardLanding }
+    public enum MoveState { Grounded, Airborne, Sliding, Mantling, Vaulting, Stumbling, Bumped, BraceWall, HandLanding, Rolling, HardLanding, DiveBack, Prone, ProneStandUp }
     public enum ImpactKind { Wall, Stumble, Brace, Scrape }
     public enum LandingKind { Normal, Hands, Roll, Hard }
 
@@ -32,6 +32,24 @@ namespace BodycamHorror.Player
         public float walkSpeed = 3.2f;
         public float sprintSpeed = 7.5f;
         public float crouchSpeed = 1.8f;
+
+        [Header("Running off-axis (share of sprint speed)")]
+        [Range(0.3f, 1f)] public float strafeSprintScale = 0.85f;
+        [Range(0.3f, 1f)] public float backSprintScale = 0.75f;
+
+        [Header("Back dive and lying down (Z / D-pad down)")]
+        public float diveSpeed = 6f;
+        public float diveHeight = 0.55f;
+        public float diveCooldown = 0.4f;
+        [Tooltip("Body height while lying down (at least twice the controller radius).")]
+        public float proneHeight = 0.72f;
+        public float proneCrawlBackSpeed = 1.7f;
+        public float proneCrawlForwardSpeed = 1f;
+        public float proneCrawlSideSpeed = 1.1f;
+        public float proneAcceleration = 14f;
+        [Tooltip("How far (deg) you can look to each side while lying on your back.")]
+        public float proneYawLimit = 85f;
+        public float proneStandUpTime = 0.4f;
 
         [Header("Inertia")]
         [Tooltip("Acceleration at walking pace.")]
@@ -192,7 +210,9 @@ namespace BodycamHorror.Player
         public Vector3 LastImpactPoint { get; private set; }
 
         CharacterController cc;
-        InputAction moveAction, lookAction, lookStickAction, jumpAction, sprintAction, crouchAction, braceAction;
+        InputAction moveAction, lookAction, lookStickAction, jumpAction, sprintAction, crouchAction, braceAction, diveAction;
+        bool divePressed;
+        float nextDiveTime, proneYaw, proneAirTime;
         float lastBracePressTime = -10f, airApexY, graceTimer;
         float speedCapStart = 1f, recoveryTimer, recoveryDuration;
         Vector3 braceNormal, braceIncomingDir;
@@ -251,12 +271,15 @@ namespace BodycamHorror.Player
 
             braceAction = new InputAction("Brace", InputActionType.Button, "<Keyboard>/q");
             braceAction.AddBinding("<Gamepad>/rightShoulder");
+
+            diveAction = new InputAction("Dive", InputActionType.Button, "<Keyboard>/z");
+            diveAction.AddBinding("<Gamepad>/dpad/down");
         }
 
         void OnEnable()
         {
             moveAction.Enable(); lookAction.Enable(); lookStickAction.Enable();
-            jumpAction.Enable(); sprintAction.Enable(); crouchAction.Enable(); braceAction.Enable();
+            jumpAction.Enable(); sprintAction.Enable(); crouchAction.Enable(); braceAction.Enable(); diveAction.Enable();
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -264,7 +287,7 @@ namespace BodycamHorror.Player
         void OnDisable()
         {
             moveAction.Disable(); lookAction.Disable(); lookStickAction.Disable();
-            jumpAction.Disable(); sprintAction.Disable(); crouchAction.Disable(); braceAction.Disable();
+            jumpAction.Disable(); sprintAction.Disable(); crouchAction.Disable(); braceAction.Disable(); diveAction.Disable();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
@@ -272,7 +295,7 @@ namespace BodycamHorror.Player
         void OnDestroy()
         {
             moveAction?.Dispose(); lookAction?.Dispose(); lookStickAction?.Dispose();
-            jumpAction?.Dispose(); sprintAction?.Dispose(); crouchAction?.Dispose(); braceAction?.Dispose();
+            jumpAction?.Dispose(); sprintAction?.Dispose(); crouchAction?.Dispose(); braceAction?.Dispose(); diveAction?.Dispose();
         }
 
         void Update()
@@ -304,6 +327,9 @@ namespace BodycamHorror.Player
                 case MoveState.HandLanding: UpdateHandLanding(dt); break;
                 case MoveState.Rolling: UpdateRoll(dt); break;
                 case MoveState.HardLanding: UpdateHardLanding(dt); break;
+                case MoveState.DiveBack: UpdateDive(dt); break;
+                case MoveState.Prone: UpdateProne(dt); break;
+                case MoveState.ProneStandUp: UpdateProneStandUp(dt); break;
             }
 
             UpdateHeight(dt);
@@ -322,6 +348,7 @@ namespace BodycamHorror.Player
             jumpHeld = jumpAction.IsPressed();
             if (jumpAction.WasPressedThisFrame()) lastJumpPressTime = Time.time;
             if (braceAction.WasPressedThisFrame()) lastBracePressTime = Time.time;
+            divePressed = diveAction.WasPressedThisFrame();
         }
 
         void HandleCursor()
@@ -356,6 +383,17 @@ namespace BodycamHorror.Player
                 yawStep += Mathf.DeltaAngle(yaw + d.x, autoYawTarget) * (1f - Mathf.Exp(-dt / Mathf.Max(braceTurnSmoothing, 0.001f)));
             }
             yaw += yawStep;
+            if (State == MoveState.Prone)
+            {
+                // on your back you can only twist so far to each side
+                float off = Mathf.DeltaAngle(proneYaw, yaw);
+                if (Mathf.Abs(off) > proneYawLimit)
+                {
+                    float clamped = proneYaw + Mathf.Sign(off) * proneYawLimit;
+                    yawStep -= Mathf.DeltaAngle(clamped, yaw);
+                    yaw = clamped;
+                }
+            }
             float newPitch = Mathf.Clamp(pitch - d.y, -maxPitch, maxPitch);
             LookVelocity = new Vector2(yawStep, newPitch - pitch) / dt;
             pitch = newPitch;
@@ -376,15 +414,19 @@ namespace BodycamHorror.Player
 
             if (grounded)
             {
+                if (divePressed && Time.time >= nextDiveTime) { StartDive(); return; }
                 if (crouchPressed && hVel.magnitude >= slideMinSpeed) { StartSlide(); return; }
                 if (crouchHeld) crouching = true;
                 else if (crouching && CanStandUp()) crouching = false;
             }
             else if (crouchHeld) IsTucked = true;   // Ctrl while falling: tuck for the landing
 
-            bool sprinting = sprintHeld && !sprintBlocked && moveInput.y > 0.3f && !crouching;
+            bool sprinting = sprintHeld && !sprintBlocked && moveInput.sqrMagnitude > 0.04f && !crouching;
             IsSprinting = sprinting && grounded && hVel.magnitude > walkSpeed + 0.5f;
-            float target = (crouching ? crouchSpeed : sprinting ? sprintSpeed : walkSpeed) * inputMag;
+            // full speed only straight ahead: a little slower sideways, slower still backwards
+            float heading = moveInput.sqrMagnitude > 0.0001f ? moveInput.y / moveInput.magnitude : 1f;
+            float offAxis = heading >= 0f ? Mathf.Lerp(strafeSprintScale, 1f, heading) : Mathf.Lerp(strafeSprintScale, backSprintScale, -heading);
+            float target = (crouching ? crouchSpeed : sprinting ? sprintSpeed * offAxis : walkSpeed) * inputMag;
             if (grounded) target *= moveSpeedScale * SpeedCap;
             // Braced for a wall: the body holds its line and speed, so the camera is free to pick
             // where the push-off goes without the turn braking you before the hit.
@@ -597,6 +639,63 @@ namespace BodycamHorror.Player
                 crouching = crouchHeld || !CanStandUp();
                 SetState(grounded ? MoveState.Grounded : MoveState.Airborne);
             }
+        }
+
+        // ------------------------------------------------------------------ back dive / lying down
+
+        void StartDive()
+        {
+            Vector3 back = -Flat(transform.forward).normalized;
+            Vector3 dir = (back + transform.right * (moveInput.x * 0.4f)).normalized;
+            hVel = dir * Mathf.Max(diveSpeed, Vector3.Dot(hVel, dir));
+            vVel = Mathf.Sqrt(2f * diveHeight * -gravity);
+            jumpConsumed = true;
+            groundedLast = false;
+            crouching = false;
+            nextDiveTime = Time.time + diveCooldown;
+            SetState(MoveState.DiveBack);
+        }
+
+        void UpdateDive(float dt)
+        {
+            ActionProgress = Mathf.Clamp01(stateTimer / 0.5f);
+            bool grounded = MoveCharacter(dt);
+            if (!grounded || stateTimer < 0.08f) return;
+            // land on your back, skidding a little
+            hVel *= 0.4f;
+            proneYaw = yaw;
+            proneAirTime = 0f;
+            SetState(MoveState.Prone);
+        }
+
+        void UpdateProne(float dt)
+        {
+            Vector3 wish = transform.right * moveInput.x + transform.forward * moveInput.y;
+            float mag = Mathf.Min(1f, wish.magnitude);
+            float speed = Mathf.Abs(moveInput.y) >= Mathf.Abs(moveInput.x)
+                ? (moveInput.y < 0f ? proneCrawlBackSpeed : proneCrawlForwardSpeed)
+                : proneCrawlSideSpeed;
+            Vector3 target = mag > 0.01f ? Flat(wish).normalized * (speed * mag) : Vector3.zero;
+            hVel = Vector3.MoveTowards(hVel, target, proneAcceleration * dt);
+
+            bool grounded = MoveCharacter(dt);
+            proneAirTime = grounded ? 0f : proneAirTime + dt;
+            if (proneAirTime > 0.2f) { SetState(MoveState.Airborne); return; }   // crawled off an edge
+
+            bool getUp = divePressed || Time.time - lastJumpPressTime <= jumpBufferTime;
+            if (!getUp || stateTimer < 0.15f || !CanStandUp()) return;
+            lastJumpPressTime = -10f;
+            SetState(MoveState.ProneStandUp);
+        }
+
+        void UpdateProneStandUp(float dt)
+        {
+            ActionProgress = Mathf.Clamp01(stateTimer / Mathf.Max(proneStandUpTime, 0.01f));
+            hVel = Vector3.MoveTowards(hVel, Vector3.zero, stopFriction * dt);
+            bool grounded = MoveCharacter(dt);
+            if (ActionProgress < 1f) return;
+            nextDiveTime = Time.time + diveCooldown;
+            SetState(grounded ? MoveState.Grounded : MoveState.Airborne);
         }
 
         // ------------------------------------------------------------------ wall brace
@@ -914,14 +1013,16 @@ namespace BodycamHorror.Player
             if (!cc.enabled) return;
             bool ducked = crouching || State == MoveState.HandLanding
                           || (State == MoveState.HardLanding && ActionProgress < 0.6f);
-            float target = State == MoveState.Sliding || State == MoveState.Rolling ? slideHeight
+            float target = State == MoveState.Prone ? Mathf.Max(proneHeight, cc.radius * 2f)
+                         : State == MoveState.DiveBack ? crouchHeight
+                         : State == MoveState.Sliding || State == MoveState.Rolling ? slideHeight
                          : ducked ? crouchHeight : standHeight;
             float h = Mathf.MoveTowards(cc.height, target, heightChangeSpeed * dt);
             cc.height = h;
             cc.center = Vector3.up * (h * 0.5f);
             // The controller lifts itself by stepOffset on every move; keep it low when ducking
             // or the head clips things the body should pass under.
-            cc.stepOffset = State == MoveState.Sliding || State == MoveState.Rolling ? 0.05f
+            cc.stepOffset = State == MoveState.Sliding || State == MoveState.Rolling || State == MoveState.Prone ? 0.05f
                           : ducked ? Mathf.Min(standStepOffset, 0.2f) : standStepOffset;
             if (cameraPivot) cameraPivot.localPosition = new Vector3(0f, h - eyeOffsetFromTop, 0f);
         }

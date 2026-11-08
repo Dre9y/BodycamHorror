@@ -6785,7 +6785,7 @@ MonoBehaviour:
   hardLandingRecovery: {x: 1.5, y: 3}
   environmentMask:
     serializedVersion: 2
-    m_Bits: 4294967291
+    m_Bits: 4294967035
   respawnBelowY: -30
 --- !u!143 &904303000
 CharacterController:

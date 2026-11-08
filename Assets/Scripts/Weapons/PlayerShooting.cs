@@ -529,7 +529,7 @@ namespace BodycamHorror.Weapons
 
             float speed01 = Mathf.Clamp01(player.Speed / Mathf.Max(player.sprintSpeed, 0.1f));
             float spread = Mathf.Lerp(w.hipSpread, w.aimSpread, aimW) + moveSpread * speed01
-                           + (player.State == MoveState.Airborne ? airSpread : 0f)
+                           + (player.State == MoveState.Airborne || player.State == MoveState.DiveBack ? airSpread : 0f)
                            + oneHandSpread * (1f - twoHandW)
                            + (stress ? stress.Tremor * stressSpread : 0f);
 
@@ -659,6 +659,7 @@ namespace BodycamHorror.Weapons
             float force = withWeapon && w ? w.meleeForce : punchForce;
             Vector3 dir = transform.forward;
 
+            Physics.SyncTransforms();   // bone hitboxes follow the animation
             // Start a little behind the eye (still inside the body): a sphere cast misses whatever it begins inside.
             const float backStep = 0.3f;
             bool hit = Physics.SphereCast(transform.position - dir * backStep, meleeRadius, dir, out RaycastHit info, meleeRange + backStep,

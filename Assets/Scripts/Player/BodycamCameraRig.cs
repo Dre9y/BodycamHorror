@@ -212,6 +212,24 @@ namespace BodycamHorror.Player
                 case MoveState.Bumped:
                     targetRot.x -= 4f * (1f - player.ActionProgress);
                     break;
+                case MoveState.DiveBack:
+                {
+                    // thrown backwards: chin up, a touch of roll
+                    float a = Mathf.Sin(Mathf.Min(player.ActionProgress, 1f) * Mathf.PI * 0.5f);
+                    targetRot.x -= a * 14f;
+                    targetRot.z += a * 4f;
+                    break;
+                }
+                case MoveState.Prone:
+                {
+                    // lying on the back, chest-cam tilted up; shoulders work side to side while crawling
+                    float crawl = Mathf.Clamp01(speed / 1.5f);
+                    float c = Mathf.Sin(StepPhase * 1.6f);
+                    targetRot.x -= 5f;
+                    targetRot.z += c * 3.5f * crawl;
+                    targetPos.x += c * 0.03f * crawl;
+                    break;
+                }
                 case MoveState.BraceWall:
                 {
                     // body compresses into the hands, then springs off
@@ -367,6 +385,15 @@ namespace BodycamHorror.Player
             if (to == MoveState.Airborne && player.VerticalVelocity > 0f) rotVelocity.x -= 30f;   // push-off
             if (from == MoveState.Vaulting && to == MoveState.Grounded) { posVelocity.y -= 1.2f; trauma = Mathf.Max(trauma, 0.25f); }
             if (from == MoveState.Mantling && to == MoveState.Grounded) posVelocity.y -= 0.6f;
+            if (to == MoveState.DiveBack) rotVelocity.x -= 60f;
+            if (from == MoveState.DiveBack && to == MoveState.Prone)
+            {
+                // slammed onto the back
+                posVelocity.y -= 2.2f * impactStrength;
+                rotVelocity.x -= 70f * impactStrength;
+                trauma = Mathf.Max(trauma, 0.4f * impactStrength);
+                AddTremor(0.6f * impactStrength);
+            }
         }
 
         static void StepSpring(ref Vector3 value, ref Vector3 velocity, Vector3 target, float k, float d, float dt)

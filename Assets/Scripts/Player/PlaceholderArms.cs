@@ -164,7 +164,8 @@ namespace BodycamHorror.Player
             }
 
             // Brace ready: the left hand comes up to meet the wall.
-            bool normalMove = player.State == MoveState.Grounded || player.State == MoveState.Airborne || player.State == MoveState.Sliding;
+            bool normalMove = player.State == MoveState.Grounded || player.State == MoveState.Airborne || player.State == MoveState.Sliding
+                              || player.State == MoveState.DiveBack || player.State == MoveState.Prone || player.State == MoveState.ProneStandUp;
             if (player.IsBraceReady && normalMove) { pl = new Vector3(-0.2f, -0.1f, 0.5f); rl = new Vector3(-20f, 10f, 0f); }
 
             float k = 1f - Mathf.Exp(-poseSharpness * dt);

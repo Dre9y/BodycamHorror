@@ -90,10 +90,19 @@ namespace BodycamHorror.Weapons
             }
         }
 
+        Material lastBloodMaterial;
+
+        /// <summary>Blood spray for callers without a material of their own (a hit has already supplied one).</summary>
+        public void BloodDefault(Vector3 point, Vector3 dir, Color color, float amount = 1f)
+        {
+            if (lastBloodMaterial) Blood(point, dir, dir, lastBloodMaterial, color, amount);
+        }
+
         /// <summary>Blood spray out of a flesh hit, mostly along the bullet's travel and back out of the wound.</summary>
         public void Blood(Vector3 point, Vector3 normal, Vector3 dir, Material material, Color color, float amount = 1f)
         {
             if (!material) return;
+            lastBloodMaterial = material;
             if (!fx) fx = CreateSystem(material);
             var p = new ParticleSystem.EmitParams();
             int count = Mathf.Max(2, Mathf.RoundToInt(10 * amount));

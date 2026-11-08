@@ -166,15 +166,55 @@ namespace BodycamHorror.Enemies
 
         static Vector3 Abs(Vector3 v) => new Vector3(Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z));
 
+        /// <summary>Layer of the dormant bone colliders: shots and blows find them, physics ignores them.</summary>
+        public static int HitboxLayer
+        {
+            get
+            {
+                if (hitboxLayer >= 0) return hitboxLayer;
+                hitboxLayer = LayerMask.NameToLayer("Hitbox");
+                if (hitboxLayer >= 0)
+                    for (int i = 0; i < 32; i++) Physics.IgnoreLayerCollision(hitboxLayer, i, true);
+                return hitboxLayer;
+            }
+        }
+        static int hitboxLayer = -1;
+
+        readonly HashSet<Collider> severedColliders = new HashSet<Collider>();
+
         void SetDormant()
         {
+            int layer = HitboxLayer;
             foreach (var p in parts)
             {
                 p.rb.isKinematic = true;
-                p.rb.detectCollisions = false;
-                p.col.enabled = false;
+                p.rb.interpolation = RigidbodyInterpolation.None;
+                p.rb.detectCollisions = true;
+                p.col.enabled = !severedColliders.Contains(p.col);
+                if (layer >= 0) p.bone.gameObject.layer = layer;
             }
             IsActive = false;
+        }
+
+        /// <summary>Which body part a collider belongs to.</summary>
+        public bool TryGetPart(Collider c, out HumanBodyBones part)
+        {
+            foreach (var p in parts)
+                if (p.col == c) { part = p.id; return true; }
+            part = default;
+            return false;
+        }
+
+        /// <summary>The limb from <paramref name="bone"/> down is gone: nothing there to hit or to collide.</summary>
+        public void DisableBelow(Transform bone)
+        {
+            foreach (var p in parts)
+            {
+                if (!p.bone.IsChildOf(bone)) continue;
+                severedColliders.Add(p.col);
+                p.col.enabled = false;
+                p.rb.useGravity = false;
+            }
         }
 
         /// <summary>Goes limp: the Animator lets go and every bone starts with <paramref name="velocity"/>.</summary>
@@ -184,8 +224,9 @@ namespace BodycamHorror.Enemies
             animator.enabled = false;
             foreach (var p in parts)
             {
-                p.col.enabled = true;
-                p.rb.detectCollisions = true;
+                p.bone.gameObject.layer = 0;   // real body now: collides with the world
+                p.col.enabled = !severedColliders.Contains(p.col);
+                p.rb.interpolation = RigidbodyInterpolation.Interpolate;
                 p.rb.isKinematic = false;
                 p.rb.linearVelocity = velocity;
                 p.rb.angularVelocity = Vector3.zero;
@@ -204,6 +245,7 @@ namespace BodycamHorror.Enemies
             float best = float.MaxValue;
             foreach (var p in parts)
             {
+                if (!p.col.enabled) continue;   // severed
                 float d = (p.col.ClosestPoint(point) - point).sqrMagnitude;
                 if (d < best) { best = d; nearest = p; }
                 p.rb.AddForce(velocityChange * 0.35f, ForceMode.VelocityChange);

@@ -153,6 +153,7 @@ namespace BodycamHorror.Weapons
             nextFireTime = Time.time + fireInterval;
             Ammo--;
 
+            Physics.SyncTransforms();   // bone hitboxes follow the animation, so bring them up to date for this frame
             Vector3 origin = muzzle.position;
             Vector3 aim = Cone(muzzle.forward, aimSpreadDegrees);
             bool anyHit = false;

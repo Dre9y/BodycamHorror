@@ -91,8 +91,23 @@ namespace BodycamHorror.Enemies
         public float attackCooldown = 0.9f;
 
         [Header("Physics")]
-        public LayerMask environmentMask = ~(1 << 2);
+        public LayerMask environmentMask = ~((1 << 2) | (1 << 8));   // not Ignore Raycast or Hitbox
         public float mass = 65f;
+
+        [Header("Limbs")]
+        [Tooltip("Damage a forearm or shin takes before it comes off.")]
+        public float lowerLimbHealth = 50f;
+        [Tooltip("Damage an upper arm or thigh takes before it comes off.")]
+        public float upperLimbHealth = 70f;
+        [Tooltip("Headshot damage before the head comes off (which kills).")]
+        public float headHealth = 100f;
+        [Tooltip("Share of a hit to an arm / leg that counts against overall health.")]
+        [Range(0f, 1f)] public float armHealthScale = 0.5f;
+        [Range(0f, 1f)] public float legHealthScale = 0.7f;
+        public float severThrowSpeed = 3.5f;
+        [Tooltip("Speed once a leg is gone and it has to drag itself along.")]
+        public float crawlSpeed = 1.5f;
+        public float crawlAttackRange = 1.15f;
 
         [Header("Voice")]
         [Tooltip("Growls, shrieks and grunts (placeholder synth). Off for now.")]
@@ -127,7 +142,8 @@ namespace BodycamHorror.Enemies
 
         State state = State.Idle;
         float health, stateTimer, runSpeed, senseTimer, attackCooldownTimer, shoveTimer, voiceTimer, crowdTimer;
-        bool alerted, attackHitDone;
+        bool alerted, attackHitDone, crippled;
+        readonly Dictionary<HumanBodyBones, float> limbDamage = new Dictionary<HumanBodyBones, float>();
         Vector3 moveDir = Vector3.forward;
         float avoidTimer, avoidSide;
         Vector3 wanderTarget;
@@ -349,7 +365,7 @@ namespace BodycamHorror.Enemies
             if (!player) { SetState(State.Idle); return; }
             Vector3 toP = Flat(player.position - rb.position);
             float dist = toP.magnitude;
-            if (dist < attackRange && Mathf.Abs(player.position.y - rb.position.y) < 1.3f && attackCooldownTimer <= 0f)
+            if (dist < (crippled ? crawlAttackRange : attackRange) && Mathf.Abs(player.position.y - rb.position.y) < 1.3f && attackCooldownTimer <= 0f)
             {
                 StartAttack();
                 return;
@@ -409,7 +425,7 @@ namespace BodycamHorror.Enemies
             bool head = ProbeWorld(feet + Vector3.up * 1.6f, dir, reach, out _);
             if (head && !knee) return true;                                     // beam / overhang
             if (!knee) return false;
-            return ObstacleTop(k.point, dir, out _) > maxClimbHeight;          // too tall to climb
+            return ObstacleTop(k.point, dir, out _) > (crippled ? stepHeight : maxClimbHeight);   // too tall to climb
         }
 
         float FreeDistance(Vector3 dir) =>
@@ -432,6 +448,7 @@ namespace BodycamHorror.Enemies
         /// <summary>Steps over, trips on or climbs what is right in front.</summary>
         void CheckObstacles(Vector3 dir)
         {
+            if (crippled) return;   // no legs to climb or trip with; Avoid() steers it round things
             float speed = HorizontalSpeed;
             float reach = capsule.radius + 0.25f + speed * 0.06f;
             if (!ProbeWorld(rb.position + Vector3.up * 0.2f, dir, reach, out RaycastHit knee) || knee.normal.y > 0.6f) return;
@@ -486,7 +503,7 @@ namespace BodycamHorror.Enemies
 
         void TryShove()
         {
-            if (shoveTimer > 0f || HorizontalSpeed < shoveMinSpeed) return;
+            if (crippled || shoveTimer > 0f || HorizontalSpeed < shoveMinSpeed) return;
             foreach (var other in All)
             {
                 if (other == this || other.IsDead || other.state == State.Fallen || other.state == State.Climb) continue;
@@ -770,14 +787,31 @@ namespace BodycamHorror.Enemies
 
         public void TakeDamage(in DamageInfo info)
         {
-            if (state == State.Dead) return;
             bool head = !info.melee && body && body.IsHeadCollider(info.collider);
             float dmg = info.amount * (head ? headshotMultiplier : 1f);
-            health -= dmg;
+            HumanBodyBones limb = default;
+            bool onLimb = !info.melee && body && body.TryGetLimb(info.collider, out limb);
+            bool severed = onLimb && DamageLimb(limb, dmg, info.direction);
+
+            if (state == State.Dead)
+            {
+                if (Ragdolled) body.RagdollImpulse(info.direction.normalized * Mathf.Clamp(dmg * 0.04f, 0.5f, 3f), info.point);
+                return;   // a corpse can still lose limbs
+            }
+
+            bool arm = onLimb && IsArm(limb), leg = onLimb && IsLeg(limb);
+            health -= dmg * (arm ? armHealthScale : leg ? legHealthScale : 1f);
+            if (severed && limb == HumanBodyBones.Head) health = 0f;
             Alert(false, true);
 
             Vector3 push = Flat(info.direction).sqrMagnitude > 0.001f ? Flat(info.direction).normalized : -transform.forward;
             if (health <= 0f) { Die(info, push); return; }
+            if (severed && leg)
+            {
+                BecomeCrippled();
+                Fall(push, 1f);     // the leg is gone: down it goes, and from now on it crawls
+                return;
+            }
             if (Ragdolled)
             {
                 // shot while down: the body jerks with the hit
@@ -796,6 +830,34 @@ namespace BodycamHorror.Enemies
                 }
             }
             else if (!rb.isKinematic) rb.AddForce(push * 0.7f, ForceMode.VelocityChange);
+        }
+
+        static bool IsArm(HumanBodyBones b) => b == HumanBodyBones.LeftUpperArm || b == HumanBodyBones.LeftLowerArm
+                                               || b == HumanBodyBones.RightUpperArm || b == HumanBodyBones.RightLowerArm;
+        static bool IsLeg(HumanBodyBones b) => b == HumanBodyBones.LeftUpperLeg || b == HumanBodyBones.LeftLowerLeg
+                                               || b == HumanBodyBones.RightUpperLeg || b == HumanBodyBones.RightLowerLeg;
+
+        /// <summary>Adds damage to a limb; true if that was enough to take it off.</summary>
+        bool DamageLimb(HumanBodyBones limb, float dmg, Vector3 direction)
+        {
+            limbDamage.TryGetValue(limb, out float total);
+            total += dmg;
+            limbDamage[limb] = total;
+            float limit = limb == HumanBodyBones.Head ? headHealth
+                : limb == HumanBodyBones.LeftLowerArm || limb == HumanBodyBones.RightLowerArm
+                  || limb == HumanBodyBones.LeftLowerLeg || limb == HumanBodyBones.RightLowerLeg ? lowerLimbHealth
+                : upperLimbHealth;
+            return total >= limit && body.Sever(limb, direction, severThrowSpeed);
+        }
+
+        void BecomeCrippled()
+        {
+            if (crippled) return;
+            crippled = true;
+            runSpeed = crawlSpeed;
+            capsule.height = 0.6f;
+            capsule.center = new Vector3(0f, 0.3f, 0f);
+            body.SetCrawl(true);
         }
 
         void Die(in DamageInfo info, Vector3 push)

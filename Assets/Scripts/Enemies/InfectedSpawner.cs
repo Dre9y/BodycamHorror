@@ -16,7 +16,7 @@ namespace BodycamHorror.Enemies
         public bool startAlerted = false;
         public bool respawnWhenAllDead = true;
         public float respawnDelay = 6f;
-        public LayerMask groundMask = ~(1 << 2);
+        public LayerMask groundMask = ~((1 << 2) | (1 << 8));   // not Ignore Raycast or Hitbox
 
         [Header("Look (empty = box placeholder)")]
         [Tooltip("Rigged model with Mixamo bone names; the infected pose its skeleton procedurally.")]

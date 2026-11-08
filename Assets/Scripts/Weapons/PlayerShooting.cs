@@ -362,9 +362,8 @@ namespace BodycamHorror.Weapons
 
             // wall tuck: something right in front of the chest pushes the gun up and back
             float tuckTarget = 0f;
-            if (w && Physics.SphereCast(transform.position - transform.up * 0.1f, tuckProbeRadius, transform.forward, out RaycastHit wall,
-                    w.tuckDistance, w.hitMask, QueryTriggerInteraction.Ignore))
-                tuckTarget = Mathf.InverseLerp(w.tuckDistance, w.tuckDistance * 0.45f, wall.distance);
+            if (w && ProbeTuck(w, out float wallDistance))
+                tuckTarget = Mathf.InverseLerp(w.tuckDistance, w.tuckDistance * 0.45f, wallDistance);
 
             bool meleeing = meleeKind != MeleeKind.None;
             bool lowerTarget = player.IsSprinting && raiseTimer <= 0f;
@@ -485,6 +484,23 @@ namespace BodycamHorror.Weapons
             w.transform.localRotation = rot * Quaternion.Euler(recoilRot + sway + tremor);
 
             TryFire(w);
+        }
+
+        static readonly RaycastHit[] TuckHits = new RaycastHit[8];
+
+        /// <summary>Nearest solid thing right in front of the chest. Bodies do not count: the gun has to
+        /// stay up and fire when enemies are in your face.</summary>
+        bool ProbeTuck(Firearm w, out float distance)
+        {
+            distance = float.MaxValue;
+            int n = Physics.SphereCastNonAlloc(transform.position - transform.up * 0.1f, tuckProbeRadius, transform.forward, TuckHits,
+                                               w.tuckDistance, w.hitMask, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+            {
+                if (TuckHits[i].distance >= distance || TuckHits[i].collider.GetComponentInParent<FleshSurface>()) continue;
+                distance = TuckHits[i].distance;
+            }
+            return distance < float.MaxValue;
         }
 
         void UpdateLookLead(float dt, float sdt)
@@ -643,7 +659,9 @@ namespace BodycamHorror.Weapons
             float force = withWeapon && w ? w.meleeForce : punchForce;
             Vector3 dir = transform.forward;
 
-            bool hit = Physics.SphereCast(transform.position, meleeRadius, dir, out RaycastHit info, meleeRange,
+            // Start a little behind the eye (still inside the body): a sphere cast misses whatever it begins inside.
+            const float backStep = 0.3f;
+            bool hit = Physics.SphereCast(transform.position - dir * backStep, meleeRadius, dir, out RaycastHit info, meleeRange + backStep,
                                           meleeMask, QueryTriggerInteraction.Ignore);
             if (hit)
             {

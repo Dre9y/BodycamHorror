@@ -13,8 +13,8 @@ namespace BodycamHorror.Player
     /// it has to brake first. Running into walls bumps you, running into low obstacles trips you.
     /// Moves: walk, sprint, crouch, jump, slide, vault, mantle (climb onto ledges).
     /// Brace (Q / RB) just before running into a tall wall: the hands absorb the hit and push off in a
-    /// new direction keeping most of the speed. Crouch (Ctrl) pressed while falling tucks for the
-    /// landing: a hand landing up to ~1.5x body height, a roll from higher. Untucked drops land hard.
+    /// new direction keeping most of the speed. Crouch (Ctrl) pressed while falling rolls out of the
+    /// landing. Without it the hands take a medium drop on their own and a high one lands hard.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public class BodycamPlayerController : MonoBehaviour
@@ -142,12 +142,10 @@ namespace BodycamHorror.Player
         public float pushOffGrace = 0.35f;
 
         [Header("Landing (drop measured from the top of the fall; tuck = Ctrl while falling)")]
-        [Tooltip("Drops below this (m) are ordinary landings.")]
+        [Tooltip("Drops below this (m) are ordinary landings. From here up a tuck rolls, otherwise the hands take the landing.")]
         public float landingMinDrop = 1.8f;
-        [Tooltip("Untucked drops above this (m) are hard landings.")]
+        [Tooltip("Untucked drops above this (m) are hard landings instead of hand landings.")]
         public float hardLandingDrop = 3.0f;
-        [Tooltip("Tucked drops above this (m) roll instead of landing on the hands (~1.5x body height).")]
-        public float rollDrop = 2.7f;
         [Tooltip("Drop (m) at which a hard landing is at its worst.")]
         public float severeDrop = 8f;
         public float handLandingTime = 0.34f;
@@ -558,16 +556,10 @@ namespace BodycamHorror.Player
         {
             if (drop < landingMinDrop) return LandingKind.Normal;
 
-            if (IsTucked)
-            {
-                if (drop > rollDrop) { StartRoll(); return LandingKind.Roll; }
-                StartHandLanding();
-                return LandingKind.Hands;
-            }
-
+            if (IsTucked) { StartRoll(); return LandingKind.Roll; }
             if (drop >= hardLandingDrop) { StartHardLanding(drop); return LandingKind.Hard; }
-            hVel *= 0.85f;   // a stiff-legged drop still costs a little
-            return LandingKind.Normal;
+            StartHandLanding();
+            return LandingKind.Hands;
         }
 
         void StartHandLanding()

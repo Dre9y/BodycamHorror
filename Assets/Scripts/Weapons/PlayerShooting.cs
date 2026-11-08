@@ -131,6 +131,10 @@ namespace BodycamHorror.Weapons
         public float aimBreathScale = 0.5f;
         public float bobPosition = 0.012f;
         public float strafeRoll = 1.5f;
+        [Tooltip("Share of the camera's step motion the hands follow when aiming, so the sights stay put in the frame.")]
+        [Range(0f, 1f)] public float aimFollowBody = 0.9f;
+        [Tooltip("How far the gun sinks when walking while aiming, to keep it out of the view (m).")]
+        public float aimWalkDrop = 0.012f;
 
         /// <summary>Weapon rotation away from the settled aim (recoil + breathing), degrees, pivot space.</summary>
         public Vector3 AimOffset { get; private set; }
@@ -290,12 +294,8 @@ namespace BodycamHorror.Weapons
             {
                 raiseTimer = raiseHoldTime;
                 if (!Current) TryStartMelee();      // bare hands: the trigger throws punches
-                else
-                {
-                    lastFireRequest = Time.time;
-                    // pull the trigger mid shell-by-shell reload with a round in: stop loading and shoot
-                    if (IsReloading && Current.reloadStyle == Firearm.ReloadStyle.PerShell && Current.Ammo > 0) abortReload = true;
-                }
+                else if (IsReloading) InterruptReload();
+                else lastFireRequest = Time.time;
             }
             if (aimHeld) raiseTimer = raiseHoldTime;
             raiseTimer -= Time.deltaTime;
@@ -522,6 +522,17 @@ namespace BodycamHorror.Weapons
             Vector2 leadNow = lead * Mathf.Lerp(1f, aimLeadScale, aimW) * (1f - 0.5f * carryW);
             pos += new Vector3(leadNow.x, -leadNow.y, 0f) * (Mathf.Deg2Rad * leadArm);
             rot = Quaternion.Euler(leadNow.y, leadNow.x, 0f) * rot * Quaternion.Euler(0f, 0f, -leadNow.x * 0.4f);
+
+            // --- aiming: the camera drops on every step while the holder does not, which would jump the
+            // gun up the frame, so the hands go down with it
+            if (rig && aimW > 0.001f)
+            {
+                float follow = aimW * aimFollowBody;
+                Quaternion bodyTilt = Quaternion.Slerp(Quaternion.identity, rig.BodyRotation, follow);
+                pos = rig.BodyPosition * follow + bodyTilt * pos;
+                rot = bodyTilt * rot;
+                pos.y -= aimWalkDrop * Mathf.Clamp01(bob) * aimW;
+            }
 
             w.transform.localPosition = pos + recoilPos + tremorPos;
             w.transform.localRotation = rot * Quaternion.Euler(recoilRot + sway + tremor);
@@ -803,6 +814,14 @@ namespace BodycamHorror.Weapons
 
         void CancelReload() => reloadPhase = ReloadPhase.None;
 
+        /// <summary>The trigger during a reload stops it and does not shoot: a magazine stays as it is,
+        /// shell by shell finishes the shell in hand and comes back to the ready.</summary>
+        void InterruptReload()
+        {
+            if (shown && shown.reloadStyle == Firearm.ReloadStyle.PerShell) abortReload = true;
+            else CancelReload();
+        }
+
         /// <summary>Whether the left hand is off the gun for the reload right now.</summary>
         bool ReloadHandIsBusy()
         {
@@ -894,7 +913,7 @@ namespace BodycamHorror.Weapons
                     break;
                 case ReloadPhase.Loading:
                     shellTimer += dt;
-                    if (abortReload && !shellInserted && w.Ammo > 0) { EnterExit(); break; }
+                    if (abortReload && !shellInserted) { EnterExit(); break; }
                     if (!shellInserted && shellTimer >= w.shellInsertTime * w.ShellInsertShare)
                     {
                         shellInserted = true;
@@ -916,11 +935,7 @@ namespace BodycamHorror.Weapons
                         reloadRacked = true;
                         w.Rack();   // chamber the first shell
                     }
-                    if (reloadTimer >= exit + (reloadFromEmpty ? w.emptyReloadExtra : 0f))
-                    {
-                        CancelReload();
-                        if (abortReload) lastFireRequest = Time.time;   // the trigger pull that stopped the reload
-                    }
+                    if (reloadTimer >= exit + (reloadFromEmpty ? w.emptyReloadExtra : 0f)) CancelReload();
                     break;
             }
         }

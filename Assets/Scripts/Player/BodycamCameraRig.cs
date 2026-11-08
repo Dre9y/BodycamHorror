@@ -104,6 +104,10 @@ namespace BodycamHorror.Player
         public float StepPhase { get; private set; }
         /// <summary>0..1 bob strength this frame.</summary>
         public float BobAmount { get; private set; }
+        /// <summary>How far steps, landings and leaning have moved the camera off the pivot.</summary>
+        public Vector3 BodyPosition => posValue;
+        /// <summary>How far steps, landings and leaning have turned the camera off the pivot.</summary>
+        public Quaternion BodyRotation => Quaternion.Euler(rotValue);
 
         Vector3 posValue, posVelocity, rotValue, rotVelocity, kickValue, kickVelocity;
         float trauma, tremor, stumbleSide = 1f, seed, breathPhase;

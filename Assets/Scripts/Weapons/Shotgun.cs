@@ -91,9 +91,9 @@ namespace BodycamHorror.Weapons
             ClipsDriveReload = true;
             readyPosition = hands.ReadyPosition;
             readyCant = hands.IdleCant;
-            sightHeight = hands.sightHeight;
+            sightHeight = hands.SightHeight;
             aimPosition = hands.AimPosition;
-            if (muzzle) muzzle.SetLocalPositionAndRotation(hands.muzzleLocal, Quaternion.identity);
+            if (muzzle) muzzle.SetLocalPositionAndRotation(hands.MuzzleLocal, Quaternion.identity);
 
             shellInsertTime = hands.ShellTime;
             ReloadEnterTime = hands.EnterTime;

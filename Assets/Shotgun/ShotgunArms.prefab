@@ -2944,6 +2944,7 @@ MonoBehaviour:
   gunEuler: {x: 359.18707, y: 357.897, z: 12.920706}
   muzzleLocal: {x: 0, y: 0.050598934, z: 0.6441126}
   sightHeight: 0.06659894
+  gunScale: 1.25
   readyOffset: {x: 0.06755511, y: -0.12531757, z: -0.1439726}
   aimDistance: 0.25
   aimDrop: 0.08
@@ -2955,6 +2956,7 @@ MonoBehaviour:
   reloadPosition: {x: 0.08, y: -0.17, z: 0.26}
   reloadEuler: {x: -8, y: -10, z: 18}
   leftHandOffset: {x: 0, y: 0.016, z: 0}
+  aimArmsOffset: {x: -0.1, y: 0.16, z: 0.03}
   leftShoulder: {x: -0.13, y: -0.3, z: 0.05}
   rightShoulder: {x: 0.24, y: -0.3, z: -0.18}
   enterEnd: 0.07

@@ -31,7 +31,7 @@ namespace BodycamHorror.Player
         public float spillAngle = 120f;
         public float spillRange = 10f;
 
-        [Header("Hand fill (lights only the hands and gun; the beam skips them, see ViewModelLighting)")]
+        [Header("Hand fill (light on the chest only: lights the bare hands; the beam skips them, see ViewModelLighting)")]
         public float handFillIntensity = 0.5f;
         public float handFillRange = 1.2f;
 
@@ -142,7 +142,6 @@ namespace BodycamHorror.Player
             IsOn = on;
             beam.enabled = on;
             spill.enabled = on;
-            handFill.enabled = on;
             foreach (var lens in lenses.Values) if (lens) lens.sharedMaterial = on ? lensOnMat : lensOffMat;
             if (!click || !audioSource) return;
             if (!clickClip) clickClip = ProceduralAudio.DoubleClick(0.035f, 2600f, 0.45f);   // lost on a Play Mode script reload
@@ -164,8 +163,6 @@ namespace BodycamHorror.Player
                 Transform g = gun.VisualRoot;
                 transform.SetPositionAndRotation(g.TransformPoint(gun.muzzle.localPosition + gun.flashlightOffset), g.rotation);
                 smoothInit = false;
-                // the soft hand fill stays at the chest: right next to the fore-end it would blow the fingers out
-                if (transform.parent) handFill.transform.position = transform.parent.TransformPoint(chestPosition + new Vector3(0f, 0.05f, -0.05f));
             }
             else
             {
@@ -173,12 +170,13 @@ namespace BodycamHorror.Player
                 {
                     MountedOn = null;
                     transform.localPosition = chestPosition;
-                    handFill.transform.localPosition = new Vector3(0f, 0.05f, -0.05f);
                     smoothInit = false;
                 }
                 ChestSwing();
             }
 
+            // on a gun the light is ahead of the hands and shines away from them
+            handFill.enabled = IsOn && !MountedOn;
             UpdateIntensity();
         }
 

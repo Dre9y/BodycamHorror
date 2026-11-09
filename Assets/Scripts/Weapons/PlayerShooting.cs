@@ -131,7 +131,9 @@ namespace BodycamHorror.Weapons
         public float aimBreathScale = 0.5f;
         public float bobPosition = 0.012f;
         public float strafeRoll = 1.5f;
-        [Tooltip("Share of the camera's step motion the hands follow when aiming, so the sights stay put in the frame.")]
+        [Tooltip("Share of the camera's step motion the hands follow, so they do not jump up the frame on every footfall.")]
+        [Range(0f, 1f)] public float hipFollowBody = 0.85f;
+        [Tooltip("The same when aiming: the sights stay put in the frame.")]
         [Range(0f, 1f)] public float aimFollowBody = 0.9f;
         [Tooltip("How far the gun sinks when walking while aiming, to keep it out of the view (m).")]
         public float aimWalkDrop = 0.012f;
@@ -523,16 +525,16 @@ namespace BodycamHorror.Weapons
             pos += new Vector3(leadNow.x, -leadNow.y, 0f) * (Mathf.Deg2Rad * leadArm);
             rot = Quaternion.Euler(leadNow.y, leadNow.x, 0f) * rot * Quaternion.Euler(0f, 0f, -leadNow.x * 0.4f);
 
-            // --- aiming: the camera drops on every step while the holder does not, which would jump the
-            // gun up the frame, so the hands go down with it
-            if (rig && aimW > 0.001f)
+            // --- the camera drops on every step while the holder does not, which would jump the hands
+            // up the frame, so they go down with it (parkour poses have their own motion)
+            float follow = Mathf.Lerp(hipFollowBody, aimFollowBody, aimW) * (1f - carryW);
+            if (rig && follow > 0.001f)
             {
-                float follow = aimW * aimFollowBody;
                 Quaternion bodyTilt = Quaternion.Slerp(Quaternion.identity, rig.BodyRotation, follow);
                 pos = rig.BodyPosition * follow + bodyTilt * pos;
                 rot = bodyTilt * rot;
-                pos.y -= aimWalkDrop * Mathf.Clamp01(bob) * aimW;
             }
+            pos.y -= aimWalkDrop * Mathf.Clamp01(bob) * aimW;
 
             w.transform.localPosition = pos + recoilPos + tremorPos;
             w.transform.localRotation = rot * Quaternion.Euler(recoilRot + sway + tremor);

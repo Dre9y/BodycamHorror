@@ -29,6 +29,8 @@ namespace BodycamHorror.Weapons
         public float sightHeight = 0.06f;
 
         [Header("Placement")]
+        [Tooltip("Size of the gun against the arms, grown around the right palm so the grip stays where it is.")]
+        public float gunScale = 1.25f;
         [Tooltip("Where the gun is carried relative to the clips' pose: low and to the right, butt in the shoulder.")]
         public Vector3 readyOffset = new Vector3(0.0676f, -0.1253f, -0.144f);
         [Tooltip("Distance of the gun from the eye when aiming.")]
@@ -48,6 +50,8 @@ namespace BodycamHorror.Weapons
         public Vector3 reloadEuler = new Vector3(-8f, -10f, 18f);
         [Tooltip("Moves the left hand on the pump, in gun space.")]
         public Vector3 leftHandOffset = new Vector3(0f, 0.016f, 0f);
+        [Tooltip("Moves the arms when aiming (weapon-holder space), so the left forearm comes to the fore-end from the side and not from under it.")]
+        public Vector3 aimArmsOffset = new Vector3(-0.1f, 0.16f, 0.03f);
         [Tooltip("Shoulders in weapon-holder space.")]
         public Vector3 leftShoulder = new Vector3(-0.13f, -0.3f, 0.05f);
         public Vector3 rightShoulder = new Vector3(0.24f, -0.3f, -0.18f);
@@ -90,7 +94,9 @@ namespace BodycamHorror.Weapons
         /// <summary>Where the gun sits at the ready.</summary>
         public Vector3 ReadyPosition => gunPosition + readyOffset;
         /// <summary>Where the gun sits when aiming.</summary>
-        public Vector3 AimPosition => new Vector3(aimSide, -sightHeight - aimDrop, aimDistance);
+        public Vector3 AimPosition => new Vector3(aimSide, -SightHeight - aimDrop, aimDistance);
+        public float SightHeight => sightHeight * gunScale;
+        public Vector3 MuzzleLocal => muzzleLocal * gunScale;
         public Quaternion GunRotation => Quaternion.Euler(gunEuler);
         public float IdleCant => Mathf.DeltaAngle(0f, gunEuler.z);
         public Transform GunAnchor { get; private set; }
@@ -102,11 +108,13 @@ namespace BodycamHorror.Weapons
         Firearm gun;
         PlayerShooting shooting;
         BodycamPlayerController player;
-        Transform holder, freeLeftHand, gunBody, shell;
+        Transform holder, freeLeftHand, gunBody, shell, pump;
         RiggedArms otherArms;
         PlaceholderArms pose;
         ArmRig rig;
-        Vector3 rootBase;
+        Vector3 rootBase, bodyScale, shellScale, pumpPalm;
+        Quaternion pumpHand;
+        float pumpHold = 1f, shotUntil;
         SkinnedMeshRenderer shellRenderer;
         float leftFree, leftOpen;
         bool walking, wasReloading, ready;
@@ -136,6 +144,16 @@ namespace BodycamHorror.Weapons
 
             gunBody = SourceBone("Body");
             shell = SourceBone("12ge_low");
+            bodyScale = gunBody.localScale;
+            shellScale = shell.localScale;
+
+            // the grip on the fore-end, taken from the rest pose
+            pump = SourceBone("Slide");
+            ArmRig.Arm support = rig.Left;
+            Quaternion toPump = Quaternion.Inverse(pump.rotation);
+            pumpHand = toPump * support.hand.rotation;
+            pumpPalm = toPump * (support.hand.position + support.hand.rotation * support.palmCenter - pump.position);
+
             foreach (var smr in sourceRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true))
                 if (smr.name == "12ge_low") shellRenderer = smr;
 
@@ -171,6 +189,7 @@ namespace BodycamHorror.Weapons
             if (!ready) return;
             walking = wasReloading = false;
             leftFree = 0f;
+            pumpHold = 1f;
             sourceAnimator.Play("Idle", 0, 0f);
             if (otherArms) otherArms.RequestHidden(true);
         }
@@ -185,6 +204,7 @@ namespace BodycamHorror.Weapons
             if (!isActiveAndEnabled) return;
             sourceAnimator.CrossFadeInFixedTime("Shot", 0.03f, 0, 0f);
             walking = false;
+            shotUntil = Time.time + shotRecovery;
         }
 
         // ------------------------------------------------------------------ per frame
@@ -196,19 +216,39 @@ namespace BodycamHorror.Weapons
             if (dt <= 0f) return;
             UpdateClips();
             sourceRoot.localPosition = rootBase;
+            gunBody.localScale = bodyScale;   // the bones under it are read at the size the clips were made for
 
             Quaternion dq = gun.transform.localRotation * Quaternion.Inverse(GunRotation);
             Vector3 dp = gun.transform.localPosition - dq * GunPosition;
             Quaternion worldTurn = holder.rotation * dq * Quaternion.Inverse(holder.rotation);
             Vector3 Move(Vector3 p) => holder.TransformPoint(dp + dq * holder.InverseTransformPoint(p));
 
+            ArmRig.Arm left = rig.Left, right = rig.Right;
+            Vector3 grip = Move(right.hand.position + right.hand.rotation * right.palmCenter);
+            Vector3 Grow(Vector3 p) => grip + (p - grip) * gunScale;
+
             // everything worked out in world space first: the rig may shift under it for reach
-            Vector3 bodyPos = Move(gunBody.position), shellPos = Move(shell.position);
+            Vector3 bodyPos = Grow(Move(gunBody.position)), shellPos = Grow(Move(shell.position));
             Quaternion bodyRot = worldTurn * gunBody.rotation, shellRot = worldTurn * shell.rotation;
 
-            ArmRig.Arm left = rig.Left, right = rig.Right;
             Vector3 rightPos = Move(right.hand.position), leftPos = Move(left.hand.position);
             Quaternion rightRot = worldTurn * right.hand.rotation, leftRot = worldTurn * left.hand.rotation;
+            // the support hand stays on the bigger gun: its palm moves with the point it was holding
+            Vector3 leftPalm = Move(left.hand.position + left.hand.rotation * left.palmCenter);
+            leftPos += Grow(leftPalm) - leftPalm;
+
+            // outside the reload the palm rides the fore-end: the walk clips sway the hand on their own.
+            // At the end of a reload it is back there in time for the racking stroke
+            bool onPump = !shooting.IsReloading || (shooting.ReloadStage == 3 && shooting.ReloadStageTime >= ExitTime * 0.8f);
+            pumpHold = Mathf.MoveTowards(pumpHold, onPump ? 1f : 0f, dt * 8f);
+            if (pumpHold > 0.001f)
+            {
+                Quaternion pumpRot = worldTurn * pump.rotation;
+                Quaternion heldRot = pumpRot * pumpHand;
+                Vector3 heldPos = Grow(Move(pump.position)) + pumpRot * (pumpPalm * gunScale) - heldRot * left.palmCenter;
+                leftPos = Vector3.Lerp(leftPos, heldPos, pumpHold);
+                leftRot = Quaternion.Slerp(leftRot, heldRot, pumpHold);
+            }
             leftPos += gun.transform.TransformDirection(leftHandOffset);
 
             float freeTarget = shooting.IsReloading ? 0f : 1f - shooting.TwoHandWeight;
@@ -223,9 +263,13 @@ namespace BodycamHorror.Weapons
 
             left.upper.position = holder.TransformPoint(leftShoulder);
             right.upper.position = holder.TransformPoint(rightShoulder);
+            sourceRoot.position += holder.TransformVector(aimArmsOffset) * shooting.AimWeight;
             Vector3 reachDir = ArmRig.ReachDirection(holder);
             float shift = Mathf.Max(ArmRig.ReachShift(left, leftPos, reachDir), ArmRig.ReachShift(right, rightPos, reachDir));
             sourceRoot.position += reachDir * Mathf.Min(shift, maxReachShift);
+            // forward and down is not always enough for the fore-end: the last centimetres go straight at it,
+            // or the stretched arm would stop short and the palm would slide on the gun as it bobs
+            sourceRoot.position -= ArmRig.ReachCorrection(left, leftPos) * (1f - leftFree);
 
             // a pose the right arm cannot get to: the gun stays in the hand and comes along
             Vector3 gunFix = ArmRig.ReachCorrection(right, rightPos);
@@ -234,6 +278,9 @@ namespace BodycamHorror.Weapons
 
             gunBody.SetPositionAndRotation(bodyPos, bodyRot);
             shell.SetPositionAndRotation(shellPos, shellRot);
+            gunBody.localScale = bodyScale * gunScale;
+            shell.localScale = shellScale * gunScale;
+            GunAnchor.localScale = Vector3.one / gunBody.lossyScale.x;
             ArmRig.Solve(left, leftPos, leftRot, ArmRig.ElbowHint(left, holder));
             ArmRig.Solve(right, rightPos, rightRot, ArmRig.ElbowHint(right, holder));
 
@@ -283,6 +330,8 @@ namespace BodycamHorror.Weapons
                 return;
             }
 
+            // the shot and its pump: nothing may cut in, and the Animator only reports the state after the blend
+            if (Time.time < shotUntil) return;
             var state = sourceAnimator.GetCurrentAnimatorStateInfo(0);
             if (state.IsName("Shot") && state.normalizedTime < 1f) return;
             bool moving = player && player.State == MoveState.Grounded && player.Speed > walkSpeed;

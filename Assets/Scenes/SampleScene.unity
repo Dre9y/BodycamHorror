@@ -2105,6 +2105,7 @@ GameObject:
   - component: {fileID: 330585544}
   - component: {fileID: 330585547}
   - component: {fileID: 330585548}
+  - component: {fileID: 330585549}
   m_Layer: 2
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -2262,6 +2263,29 @@ MonoBehaviour:
   edgeBlur: 0.007
   edgeBlurStart: 0.45
   motionBlur: 0.06
+--- !u!114 &330585549
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 330585543}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 06309e8b918dab848aca8273898ec90e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.AutoExposure
+  shader: {fileID: 4800000, guid: e23a4474ac89445429d6b27276505510, type: 3}
+  targetBrightness: 0.05
+  strength: 0.6
+  minStops: -2
+  maxStops: 1
+  brightenSpeed: 0.7
+  darkenSpeed: 3
+  centreWeight: 0.6
+  whiteBalance: 0.35
+  maxColourShift: 0.22
+  whiteBalanceSpeed: 0.8
 --- !u!1 &393195337
 GameObject:
   m_ObjectHideFlags: 0

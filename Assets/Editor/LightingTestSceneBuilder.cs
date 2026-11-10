@@ -330,18 +330,22 @@ namespace BodycamHorror.EditorTools
             haze.density = 0.013f;
             haze.wisps = 0.6f;
 
-            // what leaks past the shade: a faint glow on the ceiling and the top of the walls
+            // the bare bulb's spill outside the main cone, on the walls beside the lamp. A spot, not a point light:
+            // the shade is closed on top, so nothing may reach the ceiling above it
             var glowObject = new GameObject("Glow");
             glowObject.transform.SetParent(pivot.transform, false);
             glowObject.transform.localPosition = new Vector3(0f, -drop - 0.05f, 0f);
+            glowObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             var glow = glowObject.AddComponent<Light>();
-            glow.type = LightType.Point;
+            glow.type = LightType.Spot;
+            glow.spotAngle = 170f;
+            glow.innerSpotAngle = 130f;
             glow.color = new Color(0.9f, 0.93f, 0.91f);
             glow.intensity = 1.2f;
             glow.range = 3.5f;
             glow.shadows = LightShadows.None;
             ViewModelLighting.AlsoLightViewModel(glow);
-            var halo = glowObject.AddComponent<LightHaze>();   // a soft ball of lit air round the bulb itself
+            var halo = glowObject.AddComponent<LightHaze>();   // a soft dome of lit air under the bulb
             halo.material = hazeMat;
             halo.density = 0.021f;
             halo.wisps = 0.2f;

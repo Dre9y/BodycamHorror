@@ -105,6 +105,16 @@ namespace BodycamHorror.Weapons
         public float impactFxScale = 1f;
         [Range(0f, 1f)] public float volume = 0.9f;
 
+        [Header("Sounds (recordings; an empty slot falls back to a generated placeholder)")]
+        [Tooltip("One is picked at random per shot.")]
+        public AudioClip[] shotClips;
+        public AudioClip dryClip;
+        public AudioClip magOutClip;
+        public AudioClip magInClip;
+        [Tooltip("Slide release / pump stroke.")]
+        public AudioClip rackClip;
+        public AudioClip shellInClip;
+
         public int Ammo { get; set; }
         public bool CanFire => Time.time >= nextFireTime;
         /// <summary>Clips pose the gun while running, so <see cref="PlayerShooting"/> does not lower it.</summary>
@@ -276,8 +286,8 @@ namespace BodycamHorror.Weapons
 
         // ------------------------------------------------------------------ audio
 
-        /// <summary>Generated clips are not serialized (a Play Mode script reload drops them), so they
-        /// are made on demand.</summary>
+        /// <summary>Placeholder for a sound with no recording assigned. Generated clips are not
+        /// serialized (a Play Mode script reload drops them), so they are made on demand.</summary>
         protected abstract AudioClip CreateClip(Sfx sfx);
 
         public void Play(Sfx sfx, float pitch = 1f)
@@ -289,10 +299,25 @@ namespace BodycamHorror.Weapons
                 audioSource.playOnAwake = false;
                 audioSource.spatialBlend = 0f;
             }
-            if (!clips.TryGetValue(sfx, out AudioClip clip) || !clip) clips[sfx] = clip = CreateClip(sfx);
+            AudioClip clip = Recorded(sfx);
+            if (!clip && (!clips.TryGetValue(sfx, out clip) || !clip)) clips[sfx] = clip = CreateClip(sfx);
             if (!clip) return;
             audioSource.pitch = pitch;
             audioSource.PlayOneShot(clip, volume);
+        }
+
+        AudioClip Recorded(Sfx sfx)
+        {
+            switch (sfx)
+            {
+                case Sfx.Shot: return shotClips != null && shotClips.Length > 0 ? shotClips[Random.Range(0, shotClips.Length)] : null;
+                case Sfx.Dry: return dryClip;
+                case Sfx.MagOut: return magOutClip;
+                case Sfx.MagIn: return magInClip;
+                case Sfx.Rack: return rackClip;
+                case Sfx.ShellIn: return shellInClip;
+                default: return null;
+            }
         }
 
         // ------------------------------------------------------------------ placeholder model

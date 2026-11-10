@@ -2938,6 +2938,9 @@ MonoBehaviour:
   mountOnWeapon: 1
   shooting: {fileID: 0}
   bodyColor: {r: 0.06, g: 0.06, b: 0.065, a: 1}
+  onClip: {fileID: 8300000, guid: 876799d44fda71041bec5dc32980a148, type: 3}
+  offClip: {fileID: 8300000, guid: ec777f4252f943a4690ec2457903d7bf, type: 3}
+  clickVolume: 0.8
 --- !u!1 &486345256
 GameObject:
   m_ObjectHideFlags: 0
@@ -7734,6 +7737,13 @@ MonoBehaviour:
   bulletHoleSize: 0.05
   impactFxScale: 0.35
   volume: 0.9
+  shotClips:
+  - {fileID: 8300000, guid: d2a3877ffacef9e4eaad39b4430a0c47, type: 3}
+  dryClip: {fileID: 8300000, guid: fc6c14d597f52314a80bd3af9a294d00, type: 3}
+  magOutClip: {fileID: 0}
+  magInClip: {fileID: 8300000, guid: 5968d521fdc1e4641a547acfc8b68df2, type: 3}
+  rackClip: {fileID: 8300000, guid: b87ce90516c69f543b6b513e894ab345, type: 3}
+  shellInClip: {fileID: 8300000, guid: 5968d521fdc1e4641a547acfc8b68df2, type: 3}
   pump: {fileID: 1399486683}
   pumpTravel: 0.09
   pumpDelay: 0.16
@@ -9470,6 +9480,13 @@ MonoBehaviour:
   bulletHoleSize: 0.07
   impactFxScale: 1
   volume: 0.9
+  shotClips:
+  - {fileID: 8300000, guid: 2b1e6cd663abf0847995bca376a36b0c, type: 3}
+  dryClip: {fileID: 8300000, guid: b5aa4cf98ae3d954bb350d0c609b4385, type: 3}
+  magOutClip: {fileID: 8300000, guid: b382fe6ad8b803e479fe016f0789c128, type: 3}
+  magInClip: {fileID: 8300000, guid: fc7e7ac8f4ba86d419c103d4d0b1b900, type: 3}
+  rackClip: {fileID: 8300000, guid: 8b3061ef480b39e4097883e201062fc2, type: 3}
+  shellInClip: {fileID: 0}
   slide: {fileID: 2062401074}
   slideTravel: 0.028
   modelPrefab: {fileID: 919132149155446097, guid: 7e7b80c2d20e66c4fade2ccee8ab5df1, type: 3}

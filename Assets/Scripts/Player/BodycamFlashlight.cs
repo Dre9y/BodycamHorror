@@ -73,6 +73,11 @@ namespace BodycamHorror.Player
         public PlayerShooting shooting;
         public Color bodyColor = new Color(0.06f, 0.06f, 0.065f);
 
+        [Header("Switch sound (empty = generated click)")]
+        public AudioClip onClip;
+        public AudioClip offClip;
+        [Range(0f, 1f)] public float clickVolume = 0.8f;
+
         public bool IsOn { get; private set; }
         /// <summary>The gun the light is on right now (null = chest).</summary>
         public Firearm MountedOn { get; private set; }
@@ -105,7 +110,6 @@ namespace BodycamHorror.Player
             audioSource = gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake = false;
             audioSource.spatialBlend = 0f;
-            clickClip = ProceduralAudio.DoubleClick(0.035f, 2600f, 0.45f);
             SetOn(startOn, false);
         }
 
@@ -197,8 +201,9 @@ namespace BodycamHorror.Player
             spill.enabled = on;
             foreach (var lens in lenses.Values) if (lens) lens.sharedMaterial = on ? lensOnMat : lensOffMat;
             if (!click || !audioSource) return;
-            if (!clickClip) clickClip = ProceduralAudio.DoubleClick(0.035f, 2600f, 0.45f);   // lost on a Play Mode script reload
-            audioSource.PlayOneShot(clickClip, 0.8f);
+            AudioClip clip = on ? onClip : offClip;
+            if (!clip) clip = clickClip ? clickClip : (clickClip = ProceduralAudio.DoubleClick(0.035f, 2600f, 0.45f));   // lost on a Play Mode script reload
+            audioSource.PlayOneShot(clip, clickVolume);
         }
 
         /// <summary>Makes the light stutter for a moment (bad contact after a knock).</summary>

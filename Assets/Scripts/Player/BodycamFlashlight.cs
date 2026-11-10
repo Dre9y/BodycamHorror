@@ -53,7 +53,7 @@ namespace BodycamHorror.Player
         public float handFillRange = 1.2f;
 
         [Header("Dark fill (always on, light off or not: the hands and gun never vanish into pure black)")]
-        public float darkFillIntensity = 0.26f;
+        public float darkFillIntensity = 0.19f;
         public float darkFillRange = 2f;
         [Tooltip("Where it sits, in the space of this light's parent: up and to one side, so it models the gun rather than flattening it.")]
         public Vector3 darkFillOffset = new Vector3(-0.22f, 0.32f, 0.05f);

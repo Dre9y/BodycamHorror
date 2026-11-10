@@ -16,15 +16,15 @@ namespace BodycamHorror.Player
         [Header("Frame (screen height = 2)")]
         [Tooltip("Where the picture goes fully black, in from the screen edge.")]
         public Vector2 frameInset = new Vector2(0.02f, 0.02f);
-        public float frameRadius = 0.5f;
+        public float frameRadius = 0.22f;
         [Tooltip("Width of the fall-off into the black edge.")]
-        public float frameFeather = 0.28f;
+        public float frameFeather = 0.2f;
 
         [Header("Shading inside the frame")]
         [Tooltip("Where the shading is at full strength, in from the screen edge.")]
         public Vector2 shadeInset = new Vector2(0.1f, 0.02f);
         [Tooltip("How far into the picture the shading reaches.")]
-        public float shadeFeather = 0.6f;
+        public float shadeFeather = 0.45f;
         [Range(0f, 1f)] public float shadeStrength = 0.42f;
 
         [Header("Squint when aiming (added to the above)")]

@@ -2243,10 +2243,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.LensLook
   frameInset: {x: 0.02, y: 0.02}
-  frameRadius: 0.5
-  frameFeather: 0.28
+  frameRadius: 0.22
+  frameFeather: 0.2
   shadeInset: {x: 0.1, y: 0.02}
-  shadeFeather: 0.6
+  shadeFeather: 0.45
   shadeStrength: 0.42
   aimFrameInset: {x: 0.02, y: 0.05}
   aimShadeInset: {x: 0.06, y: 0.04}
@@ -2904,7 +2904,7 @@ MonoBehaviour:
   spillRange: 10
   handFillIntensity: 0.5
   handFillRange: 1.2
-  darkFillIntensity: 0.26
+  darkFillIntensity: 0.19
   darkFillRange: 2
   darkFillOffset: {x: -0.22, y: 0.32, z: 0.05}
   darkFillColor: {r: 0.78, g: 0.84, b: 0.9, a: 1}

@@ -63,8 +63,14 @@ namespace BodycamHorror.EditorTools
             GameObject lampPrefab = BuildLampPrefab();
 
             // start from a copy of SampleScene: the player and the infected spawner keep their saved values
-            AssetDatabase.DeleteAsset(ScenePath);
-            AssetDatabase.CopyAsset(SourceScenePath, ScenePath);
+            // written over the old file, so the scene keeps its GUID (and build-list entry) from one build to the next
+            EditorSceneManager.OpenScene(SourceScenePath, OpenSceneMode.Single);   // never copy over the scene that is open
+            if (File.Exists(ScenePath))
+            {
+                File.Copy(SourceScenePath, ScenePath, true);
+                AssetDatabase.ImportAsset(ScenePath, ImportAssetOptions.ForceUpdate);
+            }
+            else AssetDatabase.CopyAsset(SourceScenePath, ScenePath);
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
             var player = Object.FindAnyObjectByType<BodycamPlayerController>();

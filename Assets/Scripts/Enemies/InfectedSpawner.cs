@@ -18,6 +18,10 @@ namespace BodycamHorror.Enemies
         public float respawnDelay = 6f;
         [Tooltip("Share of the group that roams the location; the rest stand about until they see the player.")]
         [Range(0f, 1f)] public float roamerShare = 0.5f;
+        [Tooltip("Spawn them looking the way the spawner looks instead of a random way.")]
+        public bool faceForward = false;
+        [Tooltip("Blind and deaf: they stand about whatever the player does, until they get hurt. For lighting and animation tests.")]
+        public bool passive = false;
         public LayerMask groundMask = ~((1 << 2) | (1 << 8));   // not Ignore Raycast or Hitbox
 
         [Header("Look (empty = box placeholder)")]
@@ -66,9 +70,16 @@ namespace BodycamHorror.Enemies
                 if (Physics.Raycast(pos + Vector3.up * 3f, Vector3.down, out RaycastHit g, 10f, groundMask, QueryTriggerInteraction.Ignore))
                     pos = g.point + Vector3.up * 0.02f;
                 var go = new GameObject("Infected");
-                go.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
+                go.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, faceForward ? transform.eulerAngles.y : Random.Range(0f, 360f), 0f));
                 var inf = go.AddComponent<Infected>();
                 inf.temper = i < roamers ? Infected.Temper.Roamer : Infected.Temper.Idler;
+                if (passive)
+                {
+                    inf.aggroRange = 0f;
+                    inf.closeAggroRange = 0f;
+                    inf.gunshotAlertRange = 0f;
+                    inf.alertSpreadRange = 0f;
+                }
                 if (modelPrefab) go.GetComponent<InfectedBody>().UseModel(modelPrefab, modelMaterial, modelScale, animatorController, idleVariants, walkVariants, runVariants);
                 alive.Add(inf);
                 if (startAlerted) inf.Alert(false, false);

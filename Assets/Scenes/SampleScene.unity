@@ -602,6 +602,8 @@ MonoBehaviour:
   respawnWhenAllDead: 1
   respawnDelay: 6
   roamerShare: 0.5
+  faceForward: 0
+  passive: 0
   groundMask:
     serializedVersion: 2
     m_Bits: 4294967291
@@ -2242,10 +2244,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.LensLook
   frameInset: {x: 0.02, y: 0.02}
   frameRadius: 0.5
-  frameFeather: 0.55
+  frameFeather: 0.28
   shadeInset: {x: 0.1, y: 0.02}
-  shadeFeather: 1.05
-  shadeStrength: 0.55
+  shadeFeather: 0.6
+  shadeStrength: 0.42
   aimFrameInset: {x: 0.02, y: 0.05}
   aimShadeInset: {x: 0.06, y: 0.04}
   aimShadeStrength: 0.04
@@ -2254,6 +2256,12 @@ MonoBehaviour:
   aperture: 24
   aimAperture: 32
   focusSpeed: 7
+  barrel: 0.42
+  barrelScale: 1.04
+  fringing: 0.32
+  edgeBlur: 0.007
+  edgeBlurStart: 0.45
+  motionBlur: 0.06
 --- !u!1 &393195337
 GameObject:
   m_ObjectHideFlags: 0
@@ -2875,17 +2883,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.BodycamFlashlight
   player: {fileID: 0}
   startOn: 1
-  intensity: 160
+  intensity: 70
   range: 26
   spotAngle: 58
   innerSpotAngle: 22
   color: {r: 1, g: 0.94, b: 0.82, a: 1}
   shadows: 2
+  closeDimDistance: 6
+  closeDimPower: 1.35
+  closeDimFloor: 0.03
+  closeDimSpeed: 9
+  closeDimMask:
+    serializedVersion: 2
+    m_Bits: 4294967291
+  hazeMaterial: {fileID: 2100000, guid: b45e69105b27f0148b684d399f423d01, type: 2}
+  hazeDensity: 0.0007
+  hazeWisps: 0.5
   spillIntensity: 5
   spillAngle: 120
   spillRange: 10
   handFillIntensity: 0.5
   handFillRange: 1.2
+  darkFillIntensity: 0.26
+  darkFillRange: 2
+  darkFillOffset: {x: -0.22, y: 0.32, z: 0.05}
+  darkFillColor: {r: 0.78, g: 0.84, b: 0.9, a: 1}
   swingLag: 0.06
   maxSwing: 10
   knockFlickerTime: 0.45
@@ -7673,6 +7695,7 @@ MonoBehaviour:
   meleeDamage: 45
   meleeForce: 12
   flashlightOffset: {x: 0, y: -0.026, z: -0.06}
+  darkFillScale: 8
   muzzle: {fileID: 1895004561}
   leftGrip: {fileID: 61662650}
   flashMesh: {fileID: 193881108}
@@ -9408,6 +9431,7 @@ MonoBehaviour:
   meleeDamage: 25
   meleeForce: 5
   flashlightOffset: {x: 0, y: -0.047, z: -0.035}
+  darkFillScale: 1
   muzzle: {fileID: 1656965312}
   leftGrip: {fileID: 608398441}
   flashMesh: {fileID: 34740882}
@@ -12874,6 +12898,7 @@ MonoBehaviour:
   lowerSpeed: 7
   carrySpeed: 16
   climbArmsOffset: {x: 0, y: 0.17, z: 0.1}
+  climbLeftShoulderOffset: {x: -0.06, y: 0, z: 0}
   tuckSpeed: 14
   twoHandSpeed: 13
   guardSpeed: 10

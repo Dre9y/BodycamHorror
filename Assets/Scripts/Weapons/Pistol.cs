@@ -54,9 +54,9 @@ namespace BodycamHorror.Weapons
             ClipsDriveRun = ClipsDriveSwitch = ClipsDriveReload = true;
             readyPosition = hands.GunPosition;
             readyCant = hands.IdleCant;
-            sightHeight = hands.sightHeight;
-            aimPosition = new Vector3(0f, -hands.sightHeight, hands.aimDistance);
-            if (muzzle) muzzle.SetLocalPositionAndRotation(hands.muzzleLocal, Quaternion.identity);
+            sightHeight = hands.SightHeight;
+            aimPosition = new Vector3(0f, -hands.SightHeight, hands.aimDistance);
+            if (muzzle) muzzle.SetLocalPositionAndRotation(hands.MuzzleLocal, Quaternion.identity);
             reloadTime = hands.ReloadLength;
             emptyReloadExtra = 0f;
             DrawTime = hands.DrawLength;

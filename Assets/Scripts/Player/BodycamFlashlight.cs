@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BodycamHorror.Environment;
 using BodycamHorror.Weapons;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -19,12 +20,28 @@ namespace BodycamHorror.Player
         public bool startOn = true;
 
         [Header("Beam")]
-        public float intensity = 160f;
+        public float intensity = 70f;
         public float range = 26f;
         public float spotAngle = 58f;
         public float innerSpotAngle = 22f;
         public Color color = new Color(1f, 0.94f, 0.82f);
         public LightShadows shadows = LightShadows.Soft;
+
+        [Header("Close up (the beam eases off near a surface, so a wall or a face at arm's length is not a white blot)")]
+        [Tooltip("Full brightness from this far (m); closer than this the beam dims.")]
+        public float closeDimDistance = 6f;
+        [Tooltip("How hard it dims: 2 would keep the lit spot equally bright at any distance, 0 switches this off.")]
+        [Range(0f, 2f)] public float closeDimPower = 1.35f;
+        [Tooltip("Never dimmer than this share of full brightness.")]
+        [Range(0f, 1f)] public float closeDimFloor = 0.03f;
+        [Tooltip("How quickly it settles (1/s).")]
+        public float closeDimSpeed = 9f;
+        public LayerMask closeDimMask = ~(1 << 2);   // not Ignore Raycast (the player)
+
+        [Header("Beam in the air (needs the Light Haze material)")]
+        public Material hazeMaterial;
+        [Range(0f, 0.05f)] public float hazeDensity = 0.0007f;
+        [Range(0f, 1f)] public float hazeWisps = 0.5f;
 
         [Header("Spill (wide, faint, no shadows)")]
         public float spillIntensity = 5f;
@@ -34,6 +51,13 @@ namespace BodycamHorror.Player
         [Header("Hand fill (light on the chest only: lights the bare hands; the beam skips them, see ViewModelLighting)")]
         public float handFillIntensity = 0.5f;
         public float handFillRange = 1.2f;
+
+        [Header("Dark fill (always on, light off or not: the hands and gun never vanish into pure black)")]
+        public float darkFillIntensity = 0.26f;
+        public float darkFillRange = 2f;
+        [Tooltip("Where it sits, in the space of this light's parent: up and to one side, so it models the gun rather than flattening it.")]
+        public Vector3 darkFillOffset = new Vector3(-0.22f, 0.32f, 0.05f);
+        public Color darkFillColor = new Color(0.78f, 0.84f, 0.9f);
 
         [Header("Feel")]
         [Tooltip("The light trails the view by about this long (s).")]
@@ -53,10 +77,10 @@ namespace BodycamHorror.Player
         /// <summary>The gun the light is on right now (null = chest).</summary>
         public Firearm MountedOn { get; private set; }
 
-        Light beam, spill, handFill;
+        Light beam, spill, handFill, darkFill;
         Quaternion smoothed;
         bool smoothInit;
-        float flicker, seed;
+        float flicker, seed, closeDim = 1f;
         InputAction toggleAction;
         AudioSource audioSource;
         AudioClip clickClip;
@@ -72,6 +96,7 @@ namespace BodycamHorror.Player
             beam = FindOrMakeLight("Beam");
             spill = FindOrMakeLight("Spill");
             handFill = FindOrMakeLight("HandFill");
+            darkFill = MakeDarkFill();
             Configure();
 
             seed = Random.value * 100f;
@@ -82,6 +107,24 @@ namespace BodycamHorror.Player
             audioSource.spatialBlend = 0f;
             clickClip = ProceduralAudio.DoubleClick(0.035f, 2600f, 0.45f);
             SetOn(startOn, false);
+        }
+
+        /// <summary>A whisper of light by the camera that reaches only the hands and gun (their rendering layer).
+        /// It stays by the camera when the flashlight itself rides out on the gun.</summary>
+        Light MakeDarkFill()
+        {
+            var go = new GameObject("ViewModelDarkFill");
+            go.transform.SetParent(transform.parent, false);
+            go.transform.localPosition = darkFillOffset;
+            go.layer = gameObject.layer;
+            var fill = go.AddComponent<Light>();
+            fill.type = LightType.Point;
+            fill.color = darkFillColor;
+            fill.intensity = darkFillIntensity;
+            fill.range = darkFillRange;
+            fill.shadows = LightShadows.None;
+            ViewModelLighting.SetLightLayers(fill, ViewModelLighting.ViewModelLayer);
+            return fill;
         }
 
         Light FindOrMakeLight(string lightName)
@@ -121,6 +164,16 @@ namespace BodycamHorror.Player
             ViewModelLighting.SetLightLayers(beam, ViewModelLighting.WorldLayer);
             ViewModelLighting.SetLightLayers(spill, ViewModelLighting.WorldLayer);
             ViewModelLighting.SetLightLayers(handFill, ViewModelLighting.ViewModelLayer);
+
+            // the beam shows in the air: dust and smoke light up along it, and bodies cut shadows into it
+            if (hazeMaterial && hazeDensity > 0f)
+            {
+                if (!beam.TryGetComponent(out LightHaze haze)) haze = beam.gameObject.AddComponent<LightHaze>();
+                haze.material = hazeMaterial;
+                haze.density = hazeDensity;
+                haze.wisps = hazeWisps;
+                haze.sourceSize = 0.45f;  // the lens is right by the camera: without this the first metre of beam is a white veil
+            }
         }
 
         void OnEnable()
@@ -177,6 +230,10 @@ namespace BodycamHorror.Player
 
             // on a gun the light is ahead of the hands and shines away from them
             handFill.enabled = IsOn && !MountedOn;
+            // each gun takes the dark fill at its own strength
+            Firearm held = shooting && shooting.isActiveAndEnabled ? shooting.CurrentWeapon : null;
+            float fill = darkFillIntensity * (held ? held.darkFillScale : 1f);
+            darkFill.intensity = Mathf.Lerp(darkFill.intensity, fill, 1f - Mathf.Exp(-10f * Time.deltaTime));
             UpdateIntensity();
         }
 
@@ -202,9 +259,28 @@ namespace BodycamHorror.Player
                 float n = Mathf.PerlinNoise(seed, Time.time * 35f);
                 k = n < 0.45f ? 0.05f : Mathf.Lerp(0.5f, 1f, n);
             }
-            beam.intensity = intensity * k;
-            spill.intensity = spillIntensity * k;
+            float near = CloseDim();
+            beam.intensity = intensity * k * near;
+            spill.intensity = spillIntensity * k * near;
             handFill.intensity = handFillIntensity * k;
+        }
+
+        /// <summary>Share of full brightness for whatever the beam is pointed at right now: 1 out in the
+        /// open, falling towards closeDimFloor as the lit surface comes up to the lens.</summary>
+        float CloseDim()
+        {
+            float want = 1f;
+            if (closeDimPower > 0f && closeDimDistance > 0f)
+            {
+                // a fat ray, so a doorframe or a pipe beside the line of sight counts too
+                float distance = closeDimDistance;
+                if (Physics.SphereCast(transform.position - transform.forward * 0.2f, 0.18f, transform.forward, out RaycastHit hit,
+                        closeDimDistance + 0.2f, closeDimMask, QueryTriggerInteraction.Ignore))
+                    distance = Mathf.Max(hit.distance - 0.2f, 0f);
+                want = Mathf.Max(Mathf.Pow(distance / closeDimDistance, closeDimPower), closeDimFloor);
+            }
+            closeDim = Mathf.Lerp(closeDim, want, 1f - Mathf.Exp(-closeDimSpeed * Time.deltaTime));
+            return closeDim;
         }
 
         /// <summary>A small light body under the barrel of this gun (built once per gun, hides with it).</summary>

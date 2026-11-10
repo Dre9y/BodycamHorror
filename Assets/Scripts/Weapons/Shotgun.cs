@@ -60,6 +60,7 @@ namespace BodycamHorror.Weapons
             readyPosition = new Vector3(0.06f, -0.175f, 0.27f);
             aimPosition = new Vector3(0f, -0.125f, 0.2f);
             readyCant = -3f; sightHeight = 0.066f; tuckDistance = 0.95f;
+            darkFillScale = 8f;
             hipSpread = 0.6f; aimSpread = 0.2f;
             kickPitch = 700f; kickYaw = 130f; kickRoll = 180f; kickBack = 3.2f; kickUp = 0.7f;
             cameraTrauma = 0.38f; cameraTremor = 1.1f; cameraKickPitch = 260f; cameraKickRoll = 120f; cameraKickBack = 0.7f;

@@ -18,14 +18,14 @@ namespace BodycamHorror.Player
         public Vector2 frameInset = new Vector2(0.02f, 0.02f);
         public float frameRadius = 0.5f;
         [Tooltip("Width of the fall-off into the black edge.")]
-        public float frameFeather = 0.55f;
+        public float frameFeather = 0.28f;
 
         [Header("Shading inside the frame")]
         [Tooltip("Where the shading is at full strength, in from the screen edge.")]
         public Vector2 shadeInset = new Vector2(0.1f, 0.02f);
         [Tooltip("How far into the picture the shading reaches.")]
-        public float shadeFeather = 1.05f;
-        [Range(0f, 1f)] public float shadeStrength = 0.55f;
+        public float shadeFeather = 0.6f;
+        [Range(0f, 1f)] public float shadeStrength = 0.42f;
 
         [Header("Squint when aiming (added to the above)")]
         public Vector2 aimFrameInset = new Vector2(0.02f, 0.05f);
@@ -44,13 +44,33 @@ namespace BodycamHorror.Player
         [Tooltip("How quickly the eye refocuses.")]
         public float focusSpeed = 7f;
 
+        [Header("Wide-angle glass (the body camera's fisheye)")]
+        [Tooltip("Barrel distortion: straight lines bow outwards towards the edges, as through a short wide lens. 0 = off.")]
+        [Range(0f, 1f)] public float barrel = 0.42f;
+        [Tooltip("Zoom that goes with the distortion: above 1 crops the stretched corners away.")]
+        [Range(0.8f, 1.3f)] public float barrelScale = 1.04f;
+        [Tooltip("Colour fringes towards the edges of the frame, from cheap glass.")]
+        [Range(0f, 1f)] public float fringing = 0.32f;
+
+        [Header("Softness")]
+        [Tooltip("Blur at the very corners of the frame, as a share of the screen height; fades to nothing towards the centre. 0 = off.")]
+        [Range(0f, 0.03f)] public float edgeBlur = 0.007f;
+        [Tooltip("Where the blur starts: 0 = the centre, 1 = the corners.")]
+        [Range(0f, 1f)] public float edgeBlurStart = 0.45f;
+        [Tooltip("Smear when the camera moves or turns fast. 0 = off.")]
+        [Range(0f, 1f)] public float motionBlur = 0.06f;
+
         static readonly int OnId = Shader.PropertyToID("_LensOn");
         static readonly int FrameId = Shader.PropertyToID("_LensFrame");
         static readonly int ShadeId = Shader.PropertyToID("_LensShade");
+        static readonly int BlurId = Shader.PropertyToID("_LensBlur");
 
         Volume volume;
         VolumeProfile profile;
         DepthOfField focus;
+        LensDistortion glass;
+        ChromaticAberration fringe;
+        MotionBlur smear;
         PlayerShooting shooting;
         float aim;
 
@@ -66,6 +86,10 @@ namespace BodycamHorror.Player
             focus.focusDistance.value = focusDistance;
             focus.focalLength.value = focalLength;
             profile.Add<Vignette>(true).intensity.value = 0f;   // the scenes' own, replaced by the frame
+            glass = profile.Add<LensDistortion>(false);
+            fringe = profile.Add<ChromaticAberration>(false);
+            smear = profile.Add<MotionBlur>(false);
+            smear.quality.Override(MotionBlurQuality.Medium);
 
             var go = new GameObject("LensLookVolume");
             volume = go.AddComponent<Volume>();
@@ -90,6 +114,12 @@ namespace BodycamHorror.Player
             aim = Mathf.Lerp(aim, want, 1f - Mathf.Exp(-focusSpeed * Time.deltaTime));
 
             focus.aperture.value = Mathf.Lerp(aperture, aimAperture, aim);
+            glass.intensity.Override(barrel);
+            glass.scale.Override(barrelScale);
+            fringe.intensity.Override(fringing);
+            smear.active = motionBlur > 0f;
+            smear.intensity.Override(motionBlur);
+            Shader.SetGlobalVector(BlurId, new Vector4(edgeBlur, edgeBlurStart, 0f, 0f));
 
             Vector2 frame = frameInset + aimFrameInset * aim;
             Vector2 shade = shadeInset + aimShadeInset * aim;

@@ -81,6 +81,8 @@ namespace BodycamHorror.Weapons
         [Header("Accessories")]
         [Tooltip("Weapon light position, in weapon space relative to the muzzle (under the barrel).")]
         public Vector3 flashlightOffset = new Vector3(0f, -0.047f, -0.035f);
+        [Tooltip("How much of the always-on dark fill this gun and its hands get (BodycamFlashlight). Dark metal barely answers a faint light and needs several times more.")]
+        public float darkFillScale = 1f;
 
         [Header("Parts (built by Build Placeholder Model)")]
         public Transform muzzle;

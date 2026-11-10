@@ -26,6 +26,8 @@ namespace BodycamHorror.Weapons
         public float sightHeight = 0.075f;
         [Tooltip("Slide travel when locked back on an empty magazine (m).")]
         public float slideTravel = 0.0337f;
+        [Tooltip("Size of the gun against the hands; it shrinks or grows about the firing hand's palm, so the grip stays in the hand.")]
+        [Range(0.7f, 1.2f)] public float gunScale = 0.9f;
 
         [Header("Placement")]
         [Tooltip("Height of the rig's Head bone: this point goes on the camera.")]
@@ -69,6 +71,11 @@ namespace BodycamHorror.Weapons
         public float IdleCant => Mathf.DeltaAngle(0f, gunEuler.z);
         /// <summary>Point on the gun that moves with the clips; things mounted on the gun ride on it.</summary>
         public Transform GunAnchor { get; private set; }
+        /// <summary>Gun-space points at the gun's actual size (valid after Bind).</summary>
+        public Vector3 MuzzleLocal => Sized(muzzleLocal);
+        public float SightHeight => Sized(Vector3.up * sightHeight).y;
+
+        Vector3 Sized(Vector3 gunPoint) => gunPoint * gunScale + gripLocal * (1f - gunScale);
 
         /// <summary>A hand of the rig that plays the clips, and how it maps onto a hand of the shared arms.</summary>
         class SourceHand
@@ -90,6 +97,8 @@ namespace BodycamHorror.Weapons
         Animator animator;
         Transform gunBase, gunSlide, gunMag;
         Vector3 slideRest, armsBase;      // slide relative to the gun base bone, Idle pose
+        Vector3 gripLocal, anchorRest;    // firing palm in gun space; the anchor relative to the gun base bone
+        Vector3 baseScale, slideScale, magScale;
         ArmRig rig;
         SourceHand srcLeft, srcRight;
         float leftFree, leftOpen, slideLock;
@@ -135,6 +144,11 @@ namespace BodycamHorror.Weapons
             GunAnchor = new GameObject("GunAnchor").transform;
             GunAnchor.SetParent(gunBase, false);
             GunAnchor.SetPositionAndRotation(holder.TransformPoint(GunPosition), holder.rotation * GunRotation);
+            anchorRest = Quaternion.Inverse(gunBase.rotation) * (GunAnchor.position - gunBase.position);
+            gripLocal = Quaternion.Inverse(GunAnchor.rotation) * (srcRight.hand.position + srcRight.hand.rotation * srcRight.palmCenter - GunAnchor.position);
+            baseScale = gunBase.localScale;
+            slideScale = gunSlide.localScale;
+            magScale = gunMag.localScale;
 
             otherArms = owner ? owner.GetComponentInChildren<RiggedArms>(true) : null;
             pose = owner ? owner.GetComponentInChildren<PlaceholderArms>(true) : null;
@@ -250,9 +264,19 @@ namespace BodycamHorror.Weapons
             Vector3 gunFix = ArmRig.ReachCorrection(right, rightPos);
             rightPos += gunFix;
             leftPos += gunFix * (1f - leftFree);
-            gunBase.SetPositionAndRotation(basePos + gunFix, baseRot);
-            gunSlide.SetPositionAndRotation(slidePos + gunFix, slideRot);
-            gunMag.SetPositionAndRotation(magPos + gunFix, magRot);
+
+            // the gun at its own size: every part pulled towards (or pushed away from) the firing palm
+            Vector3 grip = Move(srcRight.hand.position + srcRight.hand.rotation * srcRight.palmCenter);
+            Vector3 AtSize(Vector3 p) => grip + (p - grip) * gunScale + gunFix;
+            gunBase.localScale = baseScale * gunScale;
+            gunSlide.localScale = slideScale * (gunSlide.IsChildOf(gunBase) ? 1f : gunScale);
+            gunMag.localScale = magScale * (gunMag.IsChildOf(gunBase) || gunMag.IsChildOf(gunSlide) ? 1f : gunScale);
+            gunBase.SetPositionAndRotation(AtSize(basePos), baseRot);
+            gunSlide.SetPositionAndRotation(AtSize(slidePos), slideRot);
+            gunMag.SetPositionAndRotation(AtSize(magPos), magRot);
+            // what rides on the anchor (muzzle, weapon light) is placed in gun space at full size already
+            GunAnchor.position = basePos + gunFix + baseRot * anchorRest;
+            GunAnchor.localScale = Vector3.one / gunScale;
 
             ArmRig.Solve(left, leftPos, leftRot, ArmRig.ElbowHint(left, holder));
             ArmRig.Solve(right, rightPos, rightRot, ArmRig.ElbowHint(right, holder));

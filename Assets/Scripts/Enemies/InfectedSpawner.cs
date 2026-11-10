@@ -27,8 +27,12 @@ namespace BodycamHorror.Enemies
         public float modelScale = 1f;
         [Tooltip("Humanoid models: controller with Locomotion (Speed / LocoSpeed), Attack and Scream. Empty = procedural poses.")]
         public RuntimeAnimatorController animatorController;
-        [Tooltip("Idle clips handed out at random so a pack does not sway in sync.")]
+        [Tooltip("Idle clips handed out at random so a pack does not sway in sync. The first is the one in the controller.")]
         public AnimationClip[] idleVariants;
+        [Tooltip("The same for walking.")]
+        public AnimationClip[] walkVariants;
+        [Tooltip("The same for running.")]
+        public AnimationClip[] runVariants;
 
         readonly List<Infected> alive = new List<Infected>();
         float respawnTimer = -1f;
@@ -65,7 +69,7 @@ namespace BodycamHorror.Enemies
                 go.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
                 var inf = go.AddComponent<Infected>();
                 inf.temper = i < roamers ? Infected.Temper.Roamer : Infected.Temper.Idler;
-                if (modelPrefab) go.GetComponent<InfectedBody>().UseModel(modelPrefab, modelMaterial, modelScale, animatorController, idleVariants);
+                if (modelPrefab) go.GetComponent<InfectedBody>().UseModel(modelPrefab, modelMaterial, modelScale, animatorController, idleVariants, walkVariants, runVariants);
                 alive.Add(inf);
                 if (startAlerted) inf.Alert(false, false);
             }

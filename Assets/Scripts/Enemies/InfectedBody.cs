@@ -16,6 +16,8 @@ namespace BodycamHorror.Enemies
         [Tooltip("Metres per left+right stride at a run.")]
         public float stride = 1.7f;
         public float poseSharpness = 12f;
+        [Tooltip("Animated models: running this fast (m/s) plays the run clip at its own speed. Higher = slower legs.")]
+        public float runClipReferenceSpeed = 8f;
 
         public SphereCollider HeadHitbox { get; private set; }
 
@@ -42,10 +44,14 @@ namespace BodycamHorror.Enemies
         Quaternion[] blendFrom;
         Vector3 blendHipsFrom;
         float blendT, blendTime;
-        bool blending;
+        bool blending, hitPlaying;
         Transform aHips, aSpine, aChest, aNeck, aHead;
         Transform aArmL, aForeL, aHandL, aArmR, aForeR, aHandR, aThighL, aShinL, aFootL, aThighR, aShinR, aFootR;
-        float overlayLean;
+
+        // speeds of the one-shot states in the animator controller: the code waits for them
+        const float TripClipSpeed = 1.2f, StandClipSpeed = 1.6f;
+        const string TripClip = "Zombie_Idle_TripOverToCrawlIdle_KneeHeight", StandClip = "Zombie_Crawl_CrawlIdle_To_Stand";
+        const int AttackVariants = 3;
 
         // rigged body (procedurally posed)
         bool rigged;
@@ -69,8 +75,10 @@ namespace BodycamHorror.Enemies
         /// animator controller it is animated (plus a ragdoll); otherwise a Mixamo-named skeleton is
         /// posed procedurally.
         /// </summary>
+        /// <param name="clipVariants">Sets of clips that can stand in for one another, the first of each being the one
+        /// in the controller: every infected picks its own so a pack does not move in sync.</param>
         public void UseModel(GameObject prefab, Material material, float scale = 1f,
-                             RuntimeAnimatorController controller = null, AnimationClip[] idleVariants = null)
+                             RuntimeAnimatorController controller = null, params AnimationClip[][] clipVariants)
         {
             if (!prefab) return;
             ClearModel();
@@ -90,7 +98,7 @@ namespace BodycamHorror.Enemies
             var anim = inst.GetComponentInChildren<Animator>();
             if (controller && anim && anim.avatar && anim.avatar.isHuman)
             {
-                SetUpAnimated(inst, anim, controller, idleVariants, scale);
+                SetUpAnimated(inst, anim, controller, clipVariants, scale);
                 return;
             }
             foreach (var a in inst.GetComponentsInChildren<Animator>(true)) Destroy(a);
@@ -120,18 +128,13 @@ namespace BodycamHorror.Enemies
             HeadHitbox.radius = 0.14f * scale * sizeScale;
         }
 
-        void SetUpAnimated(GameObject inst, Animator anim, RuntimeAnimatorController controller, AnimationClip[] idleVariants, float scale)
+        void SetUpAnimated(GameObject inst, Animator anim, RuntimeAnimatorController controller, AnimationClip[][] clipVariants, float scale)
         {
             animator = anim;
             animated = true;
             var ov = new AnimatorOverrideController(controller);
-            if (idleVariants != null && idleVariants.Length > 0)
-            {
-                // a different idle for each one so a pack does not sway in sync
-                var pick = idleVariants[Random.Range(0, idleVariants.Length)];
-                foreach (var c in controller.animationClips)
-                    if (c && c.name.Contains("idle") && pick) { ov[c] = pick; break; }
-            }
+            foreach (AnimationClip[] variants in clipVariants)
+                if (variants != null && variants.Length > 0 && variants[0]) ov[variants[0]] = variants[Random.Range(0, variants.Length)];
             animator.runtimeAnimatorController = ov;
             animator.applyRootMotion = false;
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
@@ -189,8 +192,57 @@ namespace BodycamHorror.Enemies
 
         public bool IsHeadCollider(Collider c) => c && (c == HeadHitbox || (ragdoll && c == ragdoll.HeadCollider));
 
-        public void TriggerAttack() { if (animated && !crawling) animator.SetTrigger("Attack"); }
+        public void TriggerAttack()
+        {
+            if (!animated || crawling) return;
+            animator.SetInteger("AttackIndex", Random.Range(0, AttackVariants));
+            animator.SetTrigger("Attack");
+        }
+
         public void TriggerScream() { if (animated && !crawling) animator.SetTrigger("Scream"); }
+
+        /// <summary>Seconds from the trip until it is lying on the ground.</summary>
+        public float TripTime => ClipLength(TripClip) / TripClipSpeed;
+        /// <summary>Seconds to get up off the ground.</summary>
+        public float StandUpTime => ClipLength(StandClip) / StandClipSpeed;
+
+        float ClipLength(string clipName)
+        {
+            foreach (AnimationClip c in animator.runtimeAnimatorController.animationClips)
+                if (c && c.name == clipName) return c.length;
+            return 1f;
+        }
+
+        /// <summary>Goes down over an obstacle and stays on the ground until <see cref="PlayStandUp"/>.</summary>
+        public void PlayTrip(bool highObstacle)
+        {
+            hitPlaying = false;
+            if (animated) animator.CrossFadeInFixedTime(highObstacle ? "TripMid" : "TripKnee", 0.1f, 0, 0f);
+        }
+
+        /// <summary>Gets up off the ground. Returns how long that takes.</summary>
+        public float PlayStandUp()
+        {
+            animator.CrossFadeInFixedTime("StandUp", 0.15f, 0, 0f);
+            return StandUpTime;
+        }
+
+        /// <summary>Reels from a blow; with no body part given, loses its footing.</summary>
+        public void PlayHit(HumanBodyBones? part)
+        {
+            if (!animated || crawling) return;
+            string hit = part switch
+            {
+                HumanBodyBones.LeftUpperArm or HumanBodyBones.LeftLowerArm => "HitLeftArm",
+                HumanBodyBones.RightUpperArm or HumanBodyBones.RightLowerArm => "HitRightArm",
+                HumanBodyBones.LeftUpperLeg or HumanBodyBones.LeftLowerLeg => "HitLeftLeg",
+                HumanBodyBones.RightUpperLeg or HumanBodyBones.RightLowerLeg => "HitRightLeg",
+                null => Random.value < 0.5f ? "HitLeftLeg" : "HitRightLeg",
+                _ => "HitHead",
+            };
+            animator.CrossFadeInFixedTime(hit, 0.08f, 0, 0f);
+            hitPlaying = true;
+        }
 
         /// <summary>Switches between walking and dragging itself along on the arms.</summary>
         public void SetCrawl(bool on)
@@ -218,6 +270,7 @@ namespace BodycamHorror.Enemies
         {
             if (!HasRagdoll) return;
             blending = false;
+            hitPlaying = false;
             ragdoll.Activate(velocity);
             ragdoll.Impulse(impulse, point);
             ragdoll.Topple(toppleAxis, topple);
@@ -227,15 +280,19 @@ namespace BodycamHorror.Enemies
 
         /// <summary>
         /// Leaves the ragdoll: works out where the body lies and which way it should face standing up,
-        /// then blends from the lying pose into the animation over <paramref name="duration"/>.
+        /// then blends from the lying pose into the animation over <paramref name="duration"/>. Face down it
+        /// pushes itself up with the clip for that, which only makes sense from that position.
         /// The caller moves the root to <paramref name="groundPosition"/> / <paramref name="facing"/>.
         /// </summary>
-        public void BeginGetUp(float duration, LayerMask groundMask, out Vector3 groundPosition, out Quaternion facing)
+        /// <returns>How long getting up takes.</returns>
+        public float BeginGetUp(float duration, LayerMask groundMask, out Vector3 groundPosition, out Quaternion facing)
         {
             Vector3 hipsPos = aHips.position;
             Vector3 f = aHead.position - hipsPos;
             f.y = 0f;
             facing = Quaternion.LookRotation(f.sqrMagnitude > 0.01f ? f.normalized : transform.forward, Vector3.up);
+            Vector3 chestFacing = Vector3.Cross(aArmR.position - aArmL.position, aHead.position - hipsPos);
+            bool standClip = !crawling && chestFacing.y < 0f;
             for (int i = 0; i < poseBones.Length; i++) blendFrom[i] = poseBones[i].rotation;
             blendHipsFrom = hipsPos;
             ragdoll.Deactivate();
@@ -244,10 +301,11 @@ namespace BodycamHorror.Enemies
                 groundPosition.y = g.point.y;
             animator.enabled = true;
             animator.SetFloat("Speed", 0f);
-            animator.Play(crawling ? "Crawl" : "Locomotion", 0, Random.value);
+            animator.Play(standClip ? "StandUp" : crawling ? "Crawl" : "Locomotion", 0, standClip ? 0f : Random.value);
             blendT = 0f;
-            blendTime = Mathf.Max(duration, 0.05f);
+            blendTime = standClip ? 0.4f : Mathf.Max(duration, 0.05f);
             blending = true;
+            return standClip ? StandUpTime : duration;
         }
 
         void BuildBoxes()
@@ -415,26 +473,19 @@ namespace BodycamHorror.Enemies
             Infected.State state = brain.CurrentState;
             float speed = brain.HorizontalSpeed;
             animator.SetFloat("Speed", speed, 0.12f, dt);
-            animator.SetFloat("LocoSpeed", speed > 3f ? Mathf.Clamp(speed / 4.2f, 0.8f, 1.8f) : 1f);
+            animator.SetFloat("LocoSpeed", speed > 3f ? Mathf.Clamp(speed / runClipReferenceSpeed, 0.6f, 1.1f) : 1f);
             animator.SetBool("Biting", crawling && state == Infected.State.Attack);
+
+            // the reaction clips are far longer than the stagger: back to moving once it is over
+            if (hitPlaying && state != Infected.State.Stumble)
+            {
+                hitPlaying = false;
+                if (state != Infected.State.Fallen && state != Infected.State.Tripped)
+                    animator.CrossFadeInFixedTime("Locomotion", 0.25f, 0, 0f);
+            }
 
             Quaternion root = transform.rotation;
             Vector3 right = root * Vector3.right;
-            float p = brain.ActionProgress;
-
-            // stumbling: pitch the upper body forward, arms thrown out
-            float stumble = state == Infected.State.Stumble ? Mathf.Sin(Mathf.Clamp01(p) * Mathf.PI) : 0f;
-            overlayLean = Mathf.Lerp(overlayLean, stumble * 40f, 1f - Mathf.Exp(-14f * dt));
-            if (overlayLean > 0.5f)
-            {
-                Rotate(aSpine, Quaternion.AngleAxis(overlayLean * 0.5f, right));
-                if (aChest) Rotate(aChest, Quaternion.AngleAxis(overlayLean * 0.5f, right));
-                float a = overlayLean / 40f;
-                Vector3 outL = Quaternion.AngleAxis(-50f, root * Vector3.forward) * (root * Vector3.down);
-                Vector3 outR = Quaternion.AngleAxis(50f, root * Vector3.forward) * (root * Vector3.down);
-                AimLimb(aArmL, aForeL, aHandL, Vector3.Slerp(aForeL.position - aArmL.position, outL, a), -15f, right);
-                AimLimb(aArmR, aForeR, aHandR, Vector3.Slerp(aForeR.position - aArmR.position, outR, a), -15f, right);
-            }
 
             // climbing: no clip for it, so reach up for the edge and haul with bent legs
             if (state == Infected.State.Climb)

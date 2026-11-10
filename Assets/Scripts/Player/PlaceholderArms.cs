@@ -116,8 +116,8 @@ namespace BodycamHorror.Player
                 case MoveState.Mantling:
                     // reach up and grab, then push the body over the edge
                     float reach = 1f - Mathf.Clamp01((p - 0.45f) / 0.55f);
-                    pl = Vector3.Lerp(new Vector3(-0.22f, -0.38f, 0.45f), new Vector3(-0.25f, 0.02f, 0.62f), reach);
-                    pr = Vector3.Lerp(new Vector3(0.22f, -0.38f, 0.45f), new Vector3(0.25f, 0.02f, 0.62f), reach);
+                    pl = Vector3.Lerp(new Vector3(-0.22f, -0.38f, 0.45f), new Vector3(-0.25f, 0.02f, 0.48f), reach);
+                    pr = Vector3.Lerp(new Vector3(0.22f, -0.38f, 0.45f), new Vector3(0.25f, 0.02f, 0.48f), reach);
                     rl = Vector3.Lerp(new Vector3(45f, 5f, 0f), new Vector3(-30f, 5f, 0f), reach);
                     rr = Vector3.Lerp(new Vector3(45f, -5f, 0f), new Vector3(-30f, -5f, 0f), reach);
                     break;
@@ -138,8 +138,9 @@ namespace BodycamHorror.Player
                     rr = Vector3.Lerp(rr, new Vector3(-15f, 0f, 0f), brace);
                     break;
                 case MoveState.Stumbling:
-                    pl = new Vector3(-0.32f, -0.30f, 0.6f); rl = new Vector3(20f, 15f, -20f);
-                    pr = new Vector3(0.32f, -0.30f, 0.6f); rr = new Vector3(20f, -15f, 20f);
+                    // thrown out to catch the fall on the palms, close enough to stay in frame
+                    pl = new Vector3(-0.21f, -0.24f, 0.42f); rl = new Vector3(-30f, 8f, 0f);
+                    pr = new Vector3(0.21f, -0.24f, 0.42f); rr = new Vector3(-30f, -8f, 0f);
                     break;
                 case MoveState.BraceWall:
                     // both palms flat on the wall
@@ -161,6 +162,16 @@ namespace BodycamHorror.Player
                     pl = new Vector3(-0.36f, -0.42f, 0.42f); rl = new Vector3(50f, 20f, -30f);
                     pr = new Vector3(0.36f, -0.42f, 0.42f); rr = new Vector3(50f, -20f, 30f);
                     break;
+            }
+
+            // A trip throws the camera down and forward: the hands go with it or they are left above the frame.
+            if (player.State == MoveState.Stumbling && rig)
+            {
+                Quaternion fall = rig.BodyRotation;
+                pl = rig.BodyPosition + fall * pl;
+                pr = rig.BodyPosition + fall * pr;
+                rl = (fall * Quaternion.Euler(rl)).eulerAngles;
+                rr = (fall * Quaternion.Euler(rr)).eulerAngles;
             }
 
             // Brace ready: the left hand comes up to meet the wall.

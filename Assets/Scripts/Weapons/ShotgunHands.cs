@@ -52,6 +52,11 @@ namespace BodycamHorror.Weapons
         public Vector3 leftHandOffset = new Vector3(0f, 0.016f, 0f);
         [Tooltip("Moves the arms when aiming (weapon-holder space), so the left forearm comes to the fore-end from the side and not from under it.")]
         public Vector3 aimArmsOffset = new Vector3(-0.1f, 0.16f, 0.03f);
+        [Tooltip("Climbing: how far out to the side the left elbow points, against how far down (m from the shoulder).")]
+        public float climbElbowOut = 1f;
+        public float climbElbowDown = 0.15f;
+        [Tooltip("Climbing: moves the left shoulder on top of the shared climbing shift (weapon-holder space).")]
+        public Vector3 climbLeftShoulder = new Vector3(-0.2f, 0f, 0f);
         [Tooltip("Shoulders in weapon-holder space.")]
         public Vector3 leftShoulder = new Vector3(-0.13f, -0.3f, 0.05f);
         public Vector3 rightShoulder = new Vector3(0.24f, -0.3f, -0.18f);
@@ -261,9 +266,9 @@ namespace BodycamHorror.Weapons
                 leftRot = Quaternion.Slerp(leftRot, freeRot, leftFree);
             }
 
-            left.upper.position = holder.TransformPoint(leftShoulder);
+            left.upper.position = holder.TransformPoint(leftShoulder + shooting.ClimbLeftShoulderShift + climbLeftShoulder * shooting.ClimbWeight);
             right.upper.position = holder.TransformPoint(rightShoulder);
-            sourceRoot.position += holder.TransformVector(aimArmsOffset) * shooting.AimWeight;
+            sourceRoot.position += holder.TransformVector(aimArmsOffset * shooting.AimWeight + shooting.ClimbArmsShift);
             Vector3 reachDir = ArmRig.ReachDirection(holder);
             float shift = Mathf.Max(ArmRig.ReachShift(left, leftPos, reachDir), ArmRig.ReachShift(right, rightPos, reachDir));
             sourceRoot.position += reachDir * Mathf.Min(shift, maxReachShift);
@@ -281,7 +286,9 @@ namespace BodycamHorror.Weapons
             gunBody.localScale = bodyScale * gunScale;
             shell.localScale = shellScale * gunScale;
             GunAnchor.localScale = Vector3.one / gunBody.lossyScale.x;
-            ArmRig.Solve(left, leftPos, leftRot, ArmRig.ElbowHint(left, holder));
+            // climbing: the left elbow flares out to the side, not down under the frame
+            Vector3 sideHint = left.upper.position + holder.right * (left.side * climbElbowOut) - holder.up * climbElbowDown;
+            ArmRig.Solve(left, leftPos, leftRot, Vector3.Lerp(ArmRig.ElbowHint(left, holder), sideHint, shooting.ClimbWeight));
             ArmRig.Solve(right, rightPos, rightRot, ArmRig.ElbowHint(right, holder));
 
             bool parkour = player && !(player.State == MoveState.Grounded || player.State == MoveState.Airborne || player.State == MoveState.Sliding);

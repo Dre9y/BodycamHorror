@@ -44,6 +44,10 @@ namespace BodycamHorror.Weapons
         public float aimSpeed = 11f;
         public float lowerSpeed = 7f;
         public float carrySpeed = 16f;
+        [Tooltip("Moves the arms while climbing a ledge (weapon-holder space), so they reach for it from the shoulders and not from under the frame.")]
+        public Vector3 climbArmsOffset = new Vector3(0f, 0.17f, 0.1f);
+        [Tooltip("Moves just the left shoulder while climbing, so the elbow has room to bend.")]
+        public Vector3 climbLeftShoulderOffset = new Vector3(-0.06f, 0f, 0f);
         public float tuckSpeed = 14f;
         public float twoHandSpeed = 13f;
         public float guardSpeed = 10f;
@@ -142,6 +146,23 @@ namespace BodycamHorror.Weapons
         public Vector3 AimOffset { get; private set; }
         /// <summary>0..1: how much the camera should follow the gun right now (only while it is up).</summary>
         public float CameraFollowWeight { get; private set; }
+        /// <summary>How far the arms are moved right now because of climbing (weapon-holder space).</summary>
+        public Vector3 ClimbArmsShift => climbArmsOffset * Smooth(climbW) + StumbleArmsShift;
+
+        /// <summary>A trip throws the camera down past the shoulders: they go with it, or the upper arms fill the frame.</summary>
+        Vector3 StumbleArmsShift
+        {
+            get
+            {
+                if (!rig || stumbleW <= 0f) return Vector3.zero;
+                Vector3 shoulders = new Vector3(0f, -0.25f, -0.06f);
+                return (rig.BodyPosition + rig.BodyRotation * shoulders - shoulders) * Smooth(stumbleW);
+            }
+        }
+        /// <summary>How far the left shoulder is moved right now because of climbing.</summary>
+        public Vector3 ClimbLeftShoulderShift => climbLeftShoulderOffset * Smooth(climbW);
+        /// <summary>0..1: how far into the climbing pose the arms are.</summary>
+        public float ClimbWeight => Smooth(climbW);
         public float AimWeight => aimW;
         public float TwoHandWeight => twoHandW;
         public bool IsReloading => reloadPhase != ReloadPhase.None;
@@ -185,7 +206,7 @@ namespace BodycamHorror.Weapons
         bool aimHeld;
         float lastFireRequest = -10f, raiseTimer, lastScrollTime = -10f;
 
-        float aimW, lowW, tuckW, carryW, twoHandW = 1f, guardW, switchW;
+        float aimW, lowW, tuckW, carryW, climbW, stumbleW, twoHandW = 1f, guardW, switchW;
         Vector3 carryPos;
         Quaternion carryRot = Quaternion.identity;
 
@@ -409,6 +430,8 @@ namespace BodycamHorror.Weapons
             lowW = Approach(lowW, lowerTarget ? 1f : 0f, lowerSpeed, dt);
             tuckW = Approach(tuckW, tuckTarget, tuckSpeed, dt);
             carryW = Approach(carryW, parkour ? 1f : 0f, carrySpeed, dt);
+            climbW = Approach(climbW, state == MoveState.Mantling ? 1f : 0f, carrySpeed, dt);
+            stumbleW = Approach(stumbleW, state == MoveState.Stumbling ? 1f : 0f, carrySpeed, dt);
             twoHandW = Approach(twoHandW, twoHandTarget ? 1f : 0f, twoHandSpeed, dt);
             guardW = Approach(guardW, !w && !parkour && !lowerTarget ? 1f : 0f, guardSpeed, dt);
 
@@ -527,7 +550,7 @@ namespace BodycamHorror.Weapons
 
             // --- the camera drops on every step while the holder does not, which would jump the hands
             // up the frame, so they go down with it (parkour poses have their own motion)
-            float follow = Mathf.Lerp(hipFollowBody, aimFollowBody, aimW) * (1f - carryW);
+            float follow = state == MoveState.Stumbling ? 1f : Mathf.Lerp(hipFollowBody, aimFollowBody, aimW) * (1f - carryW);
             if (rig && follow > 0.001f)
             {
                 Quaternion bodyTilt = Quaternion.Slerp(Quaternion.identity, rig.BodyRotation, follow);
@@ -616,7 +639,7 @@ namespace BodycamHorror.Weapons
                 {
                     // gun hand goes up onto the ledge with the other one, then pushes the body over
                     float reach = 1f - Mathf.Clamp01((p - 0.45f) / 0.55f);
-                    carryPos = Vector3.Lerp(new Vector3(0.22f, -0.36f, 0.42f), new Vector3(0.24f, 0.0f, 0.6f), reach);
+                    carryPos = Vector3.Lerp(new Vector3(0.22f, -0.36f, 0.42f), new Vector3(0.24f, 0.0f, 0.48f), reach);
                     carryRot = Quaternion.Euler(Vector3.Lerp(new Vector3(55f, -8f, 0f), new Vector3(-10f, -12f, 70f), reach));
                     break;
                 }
@@ -625,8 +648,8 @@ namespace BodycamHorror.Weapons
                     carryRot = Quaternion.Euler(35f, 15f, 30f);
                     break;
                 case MoveState.Stumbling:
-                    carryPos = new Vector3(0.3f, -0.3f, 0.55f);
-                    carryRot = Quaternion.Euler(25f, -15f, 25f);
+                    carryPos = new Vector3(0.22f, -0.24f, 0.4f);
+                    carryRot = Quaternion.Euler(35f, -12f, 18f);
                     break;
                 case MoveState.Bumped:
                 {

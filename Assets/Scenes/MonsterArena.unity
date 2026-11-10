@@ -4083,19 +4083,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.LensLook
   frameInset: {x: 0.02, y: 0.02}
   frameRadius: 0.5
-  frameFeather: 0.18
+  frameFeather: 0.55
   shadeInset: {x: 0.1, y: 0.02}
   shadeFeather: 1.05
-  shadeStrength: 0.72
+  shadeStrength: 0.55
   aimFrameInset: {x: 0.02, y: 0.05}
   aimShadeInset: {x: 0.06, y: 0.04}
   aimShadeStrength: 0.04
-  focusStart: 7
-  focusEnd: 32
-  blurRadius: 1.3
-  aimFocusStart: 35
-  aimFocusEnd: 120
-  aimBlurRadius: 0.7
+  focusDistance: 6
+  focalLength: 35
+  aperture: 24
+  aimAperture: 32
   focusSpeed: 7
 --- !u!1 &343256307
 GameObject:
@@ -10239,7 +10237,6 @@ MonoBehaviour:
   pushOffGrace: 0.35
   landingMinDrop: 1.8
   hardLandingDrop: 3
-  rollDrop: 2.7
   severeDrop: 8
   handLandingTime: 0.34
   handLandingKeepSpeed: 0.85
@@ -18957,6 +18954,7 @@ MonoBehaviour:
   aimSpeed: 11
   lowerSpeed: 7
   carrySpeed: 16
+  climbArmsOffset: {x: 0, y: 0.17, z: 0.1}
   tuckSpeed: 14
   twoHandSpeed: 13
   guardSpeed: 10
@@ -19010,6 +19008,9 @@ MonoBehaviour:
   aimBreathScale: 0.5
   bobPosition: 0.012
   strafeRoll: 1.5
+  hipFollowBody: 0.85
+  aimFollowBody: 0.9
+  aimWalkDrop: 0.012
 --- !u!4 &1822031958
 Transform:
   m_ObjectHideFlags: 0

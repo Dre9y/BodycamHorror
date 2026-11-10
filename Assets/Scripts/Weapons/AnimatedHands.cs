@@ -239,8 +239,9 @@ namespace BodycamHorror.Weapons
                 leftRot = Quaternion.Slerp(leftRot, freeRot, leftFree);
             }
 
-            left.upper.position = holder.TransformPoint(leftShoulder);
+            left.upper.position = holder.TransformPoint(leftShoulder + shooting.ClimbLeftShoulderShift);
             right.upper.position = holder.TransformPoint(rightShoulder);
+            armsRoot.position += holder.TransformVector(shooting.ClimbArmsShift);
             Vector3 reachDir = ArmRig.ReachDirection(holder);
             float shift = Mathf.Max(ArmRig.ReachShift(left, leftPos, reachDir), ArmRig.ReachShift(right, rightPos, reachDir));
             armsRoot.position += reachDir * Mathf.Min(shift, maxReachShift);

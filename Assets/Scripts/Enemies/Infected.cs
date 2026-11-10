@@ -18,7 +18,7 @@ namespace BodycamHorror.Enemies
     [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
     public class Infected : MonoBehaviour, IDamageable, IPushable
     {
-        public enum State { Idle, Chase, Attack, Climb, Stumble, Fallen, GettingUp, Dead, Scream }
+        public enum State { Idle, Chase, Attack, Climb, Stumble, Tripped, Fallen, GettingUp, Dead, Scream }
         /// <summary>What it does while it has not noticed the player.</summary>
         public enum Temper { Idler, Roamer }
         /// <summary>How an alerted one is going after the player.</summary>
@@ -91,6 +91,10 @@ namespace BodycamHorror.Enemies
         [Tooltip("Share of trips that end flat on the ground (the rest stumble over and keep going).")]
         [Range(0f, 1f)] public float tripFallChance = 0.5f;
         public float stumbleTime = 0.7f;
+        [Tooltip("Animated models: above this tall an obstacle takes the higher of the two trip clips.")]
+        public float tripHighObstacle = 0.6f;
+        [Tooltip("Seconds it lies on the ground after tripping before it starts to get up.")]
+        public Vector2 trippedLieTime = new Vector2(0.2f, 0.8f);
         public Vector2 fallenTime = new Vector2(1.5f, 3f);
         public float getUpTime = 0.8f;
 
@@ -149,6 +153,8 @@ namespace BodycamHorror.Enemies
         [Header("Voice")]
         [Tooltip("Growls, shrieks and grunts (placeholder synth). Off for now.")]
         public bool voiceEnabled = false;
+
+        const float StandingCapsuleHeight = 1.44f, CrawlCapsuleHeight = 0.6f;
 
         public static readonly List<Infected> All = new List<Infected>();
         /// <summary>Raised when an infected dies.</summary>
@@ -217,8 +223,8 @@ namespace BodycamHorror.Enemies
             rb.linearDamping = 0f;
             rb.angularDamping = 2f;
 
-            capsule.center = new Vector3(0f, 0.72f, 0f);
-            capsule.height = 1.44f;
+            capsule.center = new Vector3(0f, StandingCapsuleHeight * 0.5f, 0f);
+            capsule.height = StandingCapsuleHeight;
             capsule.radius = 0.27f;
             slippery = new PhysicsMaterial("InfectedSlippery")
             { dynamicFriction = 0f, staticFriction = 0f, bounciness = 0f, frictionCombine = PhysicsMaterialCombine.Minimum };
@@ -299,6 +305,9 @@ namespace BodycamHorror.Enemies
                 case State.Stumble:
                     ActionProgress = Mathf.Clamp01(stateTimer / actionDuration);
                     if (stateTimer >= actionDuration) SetState(alerted ? State.Chase : State.Idle);
+                    break;
+                case State.Tripped:
+                    if (stateTimer >= actionDuration) StartClipGetUp();
                     break;
                 case State.Fallen:
                 {
@@ -429,6 +438,7 @@ namespace BodycamHorror.Enemies
                 case State.Chase: Chase(dt); break;
                 case State.Attack: AttackMove(dt); break;
                 case State.Stumble: StumbleMove(dt); break;
+                case State.Tripped: Move(moveDir, stateTimer < 0.5f ? runSpeed * 0.3f : 0f, dt); break;
                 case State.Climb: ClimbMove(dt); break;
                 case State.GettingUp: GetUpMove(); break;
                 case State.Scream:
@@ -698,7 +708,7 @@ namespace BodycamHorror.Enemies
             if (crippled || shoveTimer > 0f || HorizontalSpeed < shoveMinSpeed) return;
             foreach (var other in All)
             {
-                if (other == this || other.IsDead || other.state == State.Fallen || other.state == State.Climb) continue;
+                if (other == this || other.IsDead || other.IsDown || other.state == State.Climb) continue;
                 Vector3 d = Flat(other.rb.position - rb.position);
                 float dd = d.magnitude;
                 if (dd < 0.01f || dd > shoveRange || Vector3.Dot(d / dd, moveDir) < 0.5f) continue;
@@ -718,7 +728,7 @@ namespace BodycamHorror.Enemies
             float best = crowdRange;
             foreach (var other in All)
             {
-                if (other == this || other.IsDead || other.state == State.Fallen || other.state == State.Climb
+                if (other == this || other.IsDead || other.IsDown || other.state == State.Climb
                     || other.state == State.GettingUp) continue;
                 float d = Flat(other.rb.position - rb.position).magnitude;
                 if (d < best) { best = d; nearest = other; }
@@ -741,7 +751,7 @@ namespace BodycamHorror.Enemies
             float r = Random.value;
             Vector3 dir = Flat(impulse).normalized;
             if (r < fallChance) Fall(dir, 0.8f);
-            else if (r < fallChance + stumbleChance && state != State.Fallen) Stumble(stumbleTime * 0.7f, 0f, dir);
+            else if (r < fallChance + stumbleChance && !IsDown) Stumble(stumbleTime * 0.7f, 0f, dir);
         }
 
         /// <summary>Shoved by the player's melee: knocked back a step, off balance, swing broken.</summary>
@@ -753,7 +763,7 @@ namespace BodycamHorror.Enemies
             if (state == State.Climb) { rb.isKinematic = false; Fall(dir, 0.6f); return; }   // pushed off the ledge
             Alert(false, true);
             rb.AddForce(dir * strength + Vector3.up * 0.4f, ForceMode.VelocityChange);
-            if (state == State.Fallen || state == State.GettingUp) return;
+            if (IsDown || state == State.GettingUp) return;
             Stumble(pushedStumbleTime, 0f, dir);
             attackCooldownTimer = Mathf.Max(attackCooldownTimer, 0.5f);
         }
@@ -762,15 +772,37 @@ namespace BodycamHorror.Enemies
 
         void Trip(float obstacleHeight, Vector3 dir)
         {
-            if (Random.value < tripFallChance) Fall(dir, 1.1f);
-            else Stumble(stumbleTime, obstacleHeight, dir);
+            if (Random.value >= tripFallChance) Stumble(stumbleTime, obstacleHeight, dir);
+            else if (body && body.IsAnimated) GoDownTripped(obstacleHeight, dir);
+            else Fall(dir, 1.1f);
         }
 
-        void Stumble(float duration, float hopHeight, Vector3 dir)
+        /// <summary>Animated bodies go down over the obstacle with the clip for it, lie there a moment and get up.</summary>
+        void GoDownTripped(float obstacleHeight, Vector3 dir)
+        {
+            SetState(State.Tripped);
+            actionDuration = body.TripTime + Random.Range(trippedLieTime.x, trippedLieTime.y);
+            moveDir = dir;
+            capsule.height = CrawlCapsuleHeight;
+            capsule.center = new Vector3(0f, CrawlCapsuleHeight * 0.5f, 0f);
+            body.PlayTrip(obstacleHeight > tripHighObstacle);
+        }
+
+        void StartClipGetUp()
+        {
+            SetState(State.GettingUp);
+            getUpFromRagdoll = true;   // the body gets itself up; the root just waits for it
+            getUpDuration = body.PlayStandUp();
+            rb.isKinematic = true;
+            Say("grunt", 0.7f, Random.Range(0.9f, 1.1f));
+        }
+
+        void Stumble(float duration, float hopHeight, Vector3 dir, HumanBodyBones? hitPart = null)
         {
             SetState(State.Stumble);
             actionDuration = duration;
             moveDir = dir;
+            if (body) body.PlayHit(hitPart);
             Vector3 v = rb.linearVelocity;
             v.x *= 0.7f; v.z *= 0.7f;
             if (hopHeight > 0f) v.y = Mathf.Sqrt(2f * 9.81f * (hopHeight + 0.15f));   // feet dragged up and over it
@@ -786,7 +818,9 @@ namespace BodycamHorror.Enemies
         }
 
         bool Ragdolled => body && body.RagdollActive;
+        bool IsDown => state == State.Fallen || state == State.Tripped;
         bool getUpFromRagdoll;
+        float getUpDuration;
 
         void Fall(Vector3 dir, float strength)
         {
@@ -829,7 +863,7 @@ namespace BodycamHorror.Enemies
             {
                 SetState(State.GettingUp);
                 getUpFromRagdoll = true;
-                body.BeginGetUp(getUpTime, environmentMask, out Vector3 ground, out Quaternion facing);
+                getUpDuration = body.BeginGetUp(getUpTime, environmentMask, out Vector3 ground, out Quaternion facing);
                 transform.SetPositionAndRotation(ground, facing);
                 rb.position = ground;
                 rb.rotation = facing;
@@ -837,6 +871,7 @@ namespace BodycamHorror.Enemies
                 return;
             }
             getUpFromRagdoll = false;
+            getUpDuration = getUpTime;
             SetState(State.GettingUp);
             rb.isKinematic = true;
             getUpFromPos = rb.position;
@@ -851,7 +886,7 @@ namespace BodycamHorror.Enemies
 
         void GetUpMove()
         {
-            float p = Mathf.Clamp01(stateTimer / getUpTime);
+            float p = Mathf.Clamp01(stateTimer / getUpDuration);
             ActionProgress = p;
             if (getUpFromRagdoll)
             {
@@ -1017,10 +1052,10 @@ namespace BodycamHorror.Enemies
             else if (dmg >= staggerDamage)
             {
                 if (state == State.Climb) { rb.isKinematic = false; Fall(push, 0.8f); }   // knocked off the wall
-                else if (state != State.Fallen && state != State.GettingUp)
+                else if (!IsDown && state != State.GettingUp)
                 {
                     rb.AddForce(push * 2.2f, ForceMode.VelocityChange);
-                    Stumble(0.45f, 0f, push);
+                    Stumble(0.45f, 0f, push, onLimb ? limb : HumanBodyBones.Head);
                 }
             }
             else if (!rb.isKinematic) rb.AddForce(push * 0.7f, ForceMode.VelocityChange);
@@ -1049,8 +1084,8 @@ namespace BodycamHorror.Enemies
             if (crippled) return;
             crippled = true;
             runSpeed = crawlSpeed;
-            capsule.height = 0.6f;
-            capsule.center = new Vector3(0f, 0.3f, 0f);
+            capsule.height = CrawlCapsuleHeight;
+            capsule.center = new Vector3(0f, CrawlCapsuleHeight * 0.5f, 0f);
             body.SetCrawl(true);
         }
 
@@ -1082,6 +1117,11 @@ namespace BodycamHorror.Enemies
 
         void SetState(State s)
         {
+            if (state == State.Tripped && s != State.Tripped && !crippled)
+            {
+                capsule.height = StandingCapsuleHeight;
+                capsule.center = new Vector3(0f, StandingCapsuleHeight * 0.5f, 0f);
+            }
             state = s;
             stateTimer = 0f;
             ActionProgress = 0f;

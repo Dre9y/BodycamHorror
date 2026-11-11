@@ -116,6 +116,13 @@ namespace BodycamHorror.Weapons
         public float leadArm = 0.3f;
         [Range(0f, 1f)] public float aimLeadScale = 0.6f;
 
+        [Header("Free aim (aiming down the sights)")]
+        [Tooltip("While aiming, the look input first swings the gun this far up or down from the middle of the view (degrees); "
+                 + "the view only starts to turn once the gun is at that edge. The shots go where the gun points. 0 = the gun stays centred.")]
+        public float freeAimRadius = 6f;
+        [Tooltip("The same sideways: wider, so the gun can sweep across a doorway before the view starts to turn.")]
+        public float freeAimHorizontalRadius = 12f;
+
         [Header("Stress tremor (needs PlayerStress on the player)")]
         public PlayerStress stress;
         [Tooltip("Hand tremor at full stress (deg).")]
@@ -494,6 +501,8 @@ namespace BodycamHorror.Weapons
             stumbleW = Approach(stumbleW, state == MoveState.Stumbling ? 1f : 0f, carrySpeed, dt);
             twoHandW = Approach(twoHandW, twoHandTarget ? 1f : 0f, twoHandSpeed, dt);
             guardW = Approach(guardW, !w && !parkour && !lowerTarget ? 1f : 0f, guardSpeed, dt);
+            // coming out of the aim the circle closes and the view turns to where the gun was pointing
+            player.FreeLookRadius = new Vector2(freeAimHorizontalRadius, freeAimRadius) * Smooth(aimW);
 
             float sdt = Mathf.Min(dt, 1f / 30f);   // clamped step keeps the stiff springs stable on frame spikes
             UpdateLookLead(dt, sdt);
@@ -607,6 +616,15 @@ namespace BodycamHorror.Weapons
             Vector2 leadNow = lead * Mathf.Lerp(1f, aimLeadScale, aimW) * (1f - 0.5f * carryW);
             pos += new Vector3(leadNow.x, -leadNow.y, 0f) * (Mathf.Deg2Rad * leadArm);
             rot = Quaternion.Euler(leadNow.y, leadNow.x, 0f) * rot * Quaternion.Euler(0f, 0f, -leadNow.x * 0.4f);
+
+            // --- free aim: the whole pose swings about the eye, so the sights stay lined up wherever the gun is in the frame
+            Vector2 free = player.FreeLook;
+            if (free != Vector2.zero)
+            {
+                Quaternion swing = Quaternion.Euler(free.y, free.x, 0f);
+                pos = swing * pos;
+                rot = swing * rot;
+            }
 
             // --- the camera drops on every step while the holder does not, which would jump the hands
             // up the frame, so they go down with it (parkour poses have their own motion)

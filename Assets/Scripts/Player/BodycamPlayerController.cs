@@ -9,8 +9,8 @@ namespace BodycamHorror.Player
     public enum LandingKind { Normal, Hands, Roll, Hard }
 
     /// <summary>
-    /// First-person parkour controller with momentum: at speed the body can't turn on the spot,
-    /// it has to brake first. Running into walls bumps you, running into low obstacles trips you.
+    /// First-person parkour controller. On the ground it moves like any shooter: straight where the keys
+    /// point, at once. Running head-on into walls still bumps you, running into low obstacles trips you.
     /// Moves: walk, sprint, crouch, jump, slide, vault, mantle (climb onto ledges).
     /// Brace (Q / RB) just before running into a tall wall: the hands absorb the hit and push off in a
     /// new direction keeping most of the speed. Crouch (Ctrl) pressed while falling rolls out of the
@@ -51,22 +51,13 @@ namespace BodycamHorror.Player
         public float proneYawLimit = 85f;
         public float proneStandUpTime = 0.4f;
 
-        [Header("Inertia")]
-        [Tooltip("Acceleration at walking pace.")]
-        public float walkAcceleration = 10f;
-        [Tooltip("Acceleration near top sprint speed: getting fully up to speed takes time.")]
-        public float sprintAcceleration = 4.5f;
-        [Tooltip("Deceleration when trying to turn sharply or reverse at speed.")]
-        public float brakeDeceleration = 16f;
-        [Tooltip("Deceleration with no input.")]
-        public float stopFriction = 9f;
-        [Tooltip("How fast the movement direction can turn at walking speed (deg/s).")]
-        public float turnRateWalk = 600f;
-        [Tooltip("How fast the movement direction can turn at full sprint (deg/s).")]
-        public float turnRateSprint = 80f;
-        [Tooltip("Above this angle between current motion and desired direction the body brakes instead of turning.")]
-        public float sharpTurnAngle = 65f;
-        [Range(0f, 1f)] public float airControl = 0.2f;
+        [Header("Movement feel")]
+        [Tooltip("How fast the body gets up to speed and changes direction on the ground (m/s2). High = it goes where the keys point at once.")]
+        public float acceleration = 60f;
+        [Tooltip("How fast it stops when the keys are let go (m/s2).")]
+        public float deceleration = 70f;
+        [Tooltip("How fast its motion can be changed in the air, and for a moment after a wall push-off (m/s2).")]
+        public float airAcceleration = 14f;
 
         [Header("Jump & Gravity")]
         public float jumpHeight = 1.1f;
@@ -103,9 +94,17 @@ namespace BodycamHorror.Player
         public float vaultMaxThickness = 1.0f;
         public float vaultMinSpeed = 3.5f;
 
+        [Header("Slipping past corners")]
+        [Tooltip("Catching the corner of an obstacle with up to this much of the body (m) eases you round it instead of stopping you. 0 = off.")]
+        public float cornerSlipWidth = 0.3f;
+        [Tooltip("How fast the body is eased sideways round the corner (m/s).")]
+        public float cornerSlipSpeed = 3.5f;
+
         [Header("Impacts")]
-        public float wallBumpMinSpeed = 4.5f;
-        public float stumbleMinSpeed = 4f;
+        [Tooltip("Slowest head-on run into a wall that stuns you: close to top sprint, so a sprint that has only just started does not.")]
+        public float wallBumpMinSpeed = 6.8f;
+        [Tooltip("Slowest run into a low obstacle that trips you.")]
+        public float stumbleMinSpeed = 6.5f;
         [Tooltip("Obstacles up to this height (above the feet) trip you instead of stopping you.")]
         public float stumbleMaxObstacleHeight = 0.65f;
         public float bumpStunTime = 0.6f;
@@ -138,7 +137,7 @@ namespace BodycamHorror.Player
         [Range(0f, 1f)] public float braceLookAwayThreshold = 0.35f;
         [Tooltip("Smoothing of the camera auto-turn (s); it settles in about 4x this.")]
         public float braceTurnSmoothing = 0.07f;
-        [Tooltip("After a push-off, sharp-turn braking is off for this long so you can line up.")]
+        [Tooltip("After a push-off the body rides the push for this long before the keys take over fully.")]
         public float pushOffGrace = 0.35f;
 
         [Header("Landing (drop measured from the top of the fall; tuck = Ctrl while falling)")]
@@ -196,11 +195,15 @@ namespace BodycamHorror.Player
         public float VerticalVelocity => vVel;
         public float Speed => hVel.magnitude;
         public float SprintBlend => Mathf.InverseLerp(walkSpeed, sprintSpeed, hVel.magnitude);
-        public bool IsBraking { get; private set; }
         /// <summary>Grounded, sprint held and actually moving faster than a walk.</summary>
         public bool IsSprinting { get; private set; }
         public bool IsCrouching => crouching;
         public Vector2 LookVelocity { get; private set; }  // deg/s: x = yaw, y = pitch (down positive)
+        /// <summary>Free aim: look input first moves the gun inside an ellipse this many degrees from the middle of the
+        /// view (x = sideways, y = up and down), and only turns the view once the gun is at its edge. Zero = off. Set by PlayerShooting.</summary>
+        public Vector2 FreeLookRadius { get; set; }
+        /// <summary>Where the gun is inside that ellipse, degrees: x = right, y = down.</summary>
+        public Vector2 FreeLook { get; private set; }
         public float StateTime => stateTimer;
         public float ActionProgress { get; private set; }  // 0..1 during mantle/vault/stun
         /// <summary>What the player last ran into (for impact sounds, damage, etc.).</summary>
@@ -211,6 +214,7 @@ namespace BodycamHorror.Player
         InputAction moveAction, lookAction, lookStickAction, jumpAction, sprintAction, crouchAction, braceAction;
         float nextDiveTime, proneYaw, proneAirTime;
         float lastBracePressTime = -10f, airApexY, graceTimer;
+        bool cornerSlipping;
         float speedCapStart = 1f, recoveryTimer, recoveryDuration;
         Vector3 braceNormal, braceIncomingDir;
         float braceIncomingSpeed;
@@ -304,8 +308,8 @@ namespace BodycamHorror.Player
             stateTimer += dt;
             impactCooldown -= dt;
             graceTimer -= dt;
+            cornerSlipping = false;
             if (recoveryTimer > 0f) { recoveryTimer -= dt; if (recoveryTimer <= 0f) recoveryDuration = 0f; }
-            IsBraking = false;
             IsSprinting = false;
 
             switch (State)
@@ -367,6 +371,17 @@ namespace BodycamHorror.Player
             if (State == MoveState.Stumbling || State == MoveState.Bumped || State == MoveState.HardLanding) d *= 0.35f;
             else if (State == MoveState.Rolling) d *= 0.5f;
 
+            // free aim: the gun takes the look input until it reaches the edge of its zone, the view takes the rest
+            if (FreeLookRadius != Vector2.zero || FreeLook != Vector2.zero)
+            {
+                // the zone closing (coming out of the aim) just brings the gun back to the middle: the view stays where it is
+                FreeLook = ClampToFreeLookZone(FreeLook);
+                Vector2 want = FreeLook + new Vector2(d.x, -d.y);
+                FreeLook = ClampToFreeLookZone(want);
+                Vector2 rest = want - FreeLook;
+                d = new Vector2(rest.x, -rest.y);
+            }
+
             float yawStep = d.x;
             if (autoYawTimer > 0f)
             {
@@ -396,6 +411,14 @@ namespace BodycamHorror.Player
             if (cameraPivot) cameraPivot.localRotation = Quaternion.Euler(pitch + RollAngle, 0f, 0f);
         }
 
+        /// <summary>Nearest point inside the free-aim ellipse: squash it to a unit circle, clamp, stretch back.</summary>
+        Vector2 ClampToFreeLookZone(Vector2 p)
+        {
+            Vector2 r = FreeLookRadius;
+            if (r.x <= 1e-4f || r.y <= 1e-4f) return Vector2.zero;
+            return Vector2.Scale(Vector2.ClampMagnitude(new Vector2(p.x / r.x, p.y / r.y), 1f), r);
+        }
+
         // ------------------------------------------------------------------ locomotion
 
         void UpdateLocomotion(float dt)
@@ -423,7 +446,7 @@ namespace BodycamHorror.Player
             // Braced for a wall: the body holds its line and speed, so the camera is free to pick
             // where the push-off goes without the turn braking you before the hit.
             bool committed = IsBraceReady && hVel.magnitude > walkSpeed;
-            if (!committed) Steer(wishDir, target, dt, grounded ? 1f : airControl, grounded);
+            if (!committed) Steer(wishDir, target, dt, grounded);
 
             // jump / vault / mantle
             bool jumpBuffered = Time.time - lastJumpPressTime <= jumpBufferTime;
@@ -452,6 +475,7 @@ namespace BodycamHorror.Player
                 if (TryStartVaultOrMantle(false)) return;
             }
 
+            CornerSlip(dt);
             bool nowGrounded = MoveCharacter(dt);
             if (State == MoveState.Grounded && !nowGrounded) SetState(MoveState.Airborne);
             else if (State == MoveState.Airborne && nowGrounded) SetState(MoveState.Grounded);
@@ -465,46 +489,59 @@ namespace BodycamHorror.Player
             SetState(MoveState.Airborne);
         }
 
-        /// <summary>Momentum steering: the velocity vector turns at a limited rate, and sharp
-        /// direction changes at speed brake first.</summary>
-        void Steer(Vector3 wishDir, float targetSpeed, float dt, float control, bool grounded)
+        /// <summary>Plain shooter steering: on the ground the velocity goes straight for where the keys
+        /// point, at any speed and in any direction, and stops as soon as they are let go. In the air
+        /// it keeps what it had and can only be nudged.</summary>
+        void Steer(Vector3 wishDir, float targetSpeed, float dt, bool grounded)
         {
+            bool input = targetSpeed >= 0.05f;
+            if (!grounded)
+            {
+                if (!input) return;   // no keys in the air: carry on as thrown
+                // steering in the air turns the jump, it does not brake it down to walking pace
+                float carried = Mathf.Max(targetSpeed, hVel.magnitude);
+                hVel = Vector3.MoveTowards(hVel, wishDir * carried, airAcceleration * dt);
+                return;
+            }
+
+            // right after a wall push-off the body rides the push for a moment instead of snapping to the keys
+            float rate = !input ? deceleration : graceTimer > 0f ? airAcceleration : acceleration;
+            hVel = Vector3.MoveTowards(hVel, input ? wishDir * targetSpeed : Vector3.zero, rate * dt);
+        }
+
+        /// <summary>Clipping the corner of a crate or a door frame with a shoulder should not stop a run.
+        /// If something is in the way just ahead, but the way is clear a little to the side away from it,
+        /// the body is eased over to that side and carries on. A wall met square-on has no clear side
+        /// and is left alone.</summary>
+        void CornerSlip(float dt)
+        {
+            cornerSlipping = false;
             float speed = hVel.magnitude;
-
-            if (targetSpeed < 0.05f)
-            {
-                if (grounded) hVel = Vector3.MoveTowards(hVel, Vector3.zero, stopFriction * dt);
-                return;
-            }
-
-            if (speed < 0.3f)
-            {
-                hVel = Vector3.MoveTowards(hVel, wishDir * targetSpeed, walkAcceleration * control * dt);
-                return;
-            }
-
+            if (cornerSlipWidth <= 0f || speed < 1f) return;
             Vector3 dir = hVel / speed;
-            float angle = Vector3.Angle(dir, wishDir);
-            float sprint01 = Mathf.InverseLerp(walkSpeed, sprintSpeed, speed);
 
-            if (grounded && angle > sharpTurnAngle && speed > walkSpeed + 0.3f && graceTimer <= 0f)
-            {
-                // Too fast to turn this hard: plant the feet and brake.
-                IsBraking = true;
-                speed = Mathf.MoveTowards(speed, 0f, brakeDeceleration * dt);
-            }
-            else
-            {
-                float turnRate = Mathf.Lerp(turnRateWalk, turnRateSprint, sprint01) * control;
-                dir = Vector3.RotateTowards(dir, wishDir, turnRate * Mathf.Deg2Rad * dt, 0f);
+            // the body from above step height to the head: steps and kerbs are the controller's own business
+            float radius = cc.radius * 0.95f;
+            Vector3 centre = transform.position + cc.center;
+            float half = Mathf.Max(cc.height * 0.5f - cc.radius, 0f);
+            Vector3 top = centre + Vector3.up * half;
+            Vector3 bottom = centre + Vector3.up * Mathf.Min(-half + cc.stepOffset + 0.05f, half);
+            float reach = speed * dt + 0.15f;
+            Vector3 back = -dir * 0.05f;   // start a touch behind, so something already touching still counts
 
-                float accel;
-                if (speed < targetSpeed) accel = Mathf.Lerp(walkAcceleration, sprintAcceleration, sprint01);
-                else accel = grounded ? stopFriction : 0f;   // keep momentum in the air
-                speed = Mathf.MoveTowards(speed, targetSpeed, accel * control * dt);
-            }
+            if (!Physics.CapsuleCast(bottom + back, top + back, radius, dir, out RaycastHit hit, reach + 0.05f,
+                    environmentMask, QueryTriggerInteraction.Ignore)) return;
 
-            hVel = dir * speed;
+            // step to the side away from what is in the way: there must be room to stand and a clear run ahead
+            Vector3 side = Vector3.Cross(Vector3.up, dir);
+            float sign = Vector3.Dot(hit.point - centre, side) > 0f ? -1f : 1f;
+            Vector3 shift = side * (sign * cornerSlipWidth);
+            if (Physics.CheckCapsule(bottom + shift, top + shift, radius, environmentMask, QueryTriggerInteraction.Ignore)) return;
+            if (Physics.CapsuleCast(bottom + shift + back, top + shift + back, radius, dir, reach + 0.35f,
+                    environmentMask, QueryTriggerInteraction.Ignore)) return;
+
+            cornerSlipping = true;
+            cc.Move(side * (sign * Mathf.Min(cornerSlipSpeed * dt, cornerSlipWidth)));
         }
 
         /// <summary>Applies gravity, moves the controller and tracks landing. Returns grounded.</summary>
@@ -685,7 +722,7 @@ namespace BodycamHorror.Player
         void UpdateProneStandUp(float dt)
         {
             ActionProgress = Mathf.Clamp01(stateTimer / Mathf.Max(proneStandUpTime, 0.01f));
-            hVel = Vector3.MoveTowards(hVel, Vector3.zero, stopFriction * dt);
+            hVel = Vector3.MoveTowards(hVel, Vector3.zero, deceleration * dt);
             bool grounded = MoveCharacter(dt);
             if (ActionProgress < 1f) return;
             nextDiveTime = Time.time + diveCooldown;
@@ -916,6 +953,7 @@ namespace BodycamHorror.Player
 
             float into = -Vector3.Dot(hVel, flatN);
             if (into <= 0f) return;
+            if (cornerSlipping) return;   // being eased round this corner: no impact, no speed lost
 
             bool freeMove = State == MoveState.Grounded || State == MoveState.Airborne || State == MoveState.Sliding;
             // Straight-on vs. glancing: cosine of the angle between the run and the wall normal.

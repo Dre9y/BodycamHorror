@@ -13,9 +13,9 @@ namespace BodycamHorror.EditorTools
     /// <summary>
     /// Builds Assets/Scenes/LightingTest.unity from scratch: a straight corridor that opens into a
     /// square room, a passive infected under a hanging lamp in each (the one in the room swings),
-    /// cold fog and the cold, dirty grade. The player and the infected look are taken from
+    /// and the shared game look (GameLook). The player and the infected look are taken from
     /// SampleScene, so their saved values come along. Also makes the things the scene needs if they
-    /// are missing: materials for the scanned wall / floor / ceiling textures, the lamp prefab, the haze material and the grade.
+    /// are missing: materials for the scanned wall / floor / ceiling textures, the lamp prefab and the haze material.
     /// Menu: BodycamHorror > Build Lighting Test Scene.
     /// </summary>
     public static class LightingTestSceneBuilder
@@ -25,7 +25,6 @@ namespace BodycamHorror.EditorTools
         internal const string TextureDir = "Assets/Textures/Environment";
         internal const string MaterialDir = "Assets/Materials/Environment";
         const string PrefabDir = "Assets/Prefabs/Environment";
-        const string ProfilePath = "Assets/Settings/ColdGrimeProfile.asset";
 
         // layout, metres. The corridor runs along +Z from the player's back wall into the room.
         const float Height = 3f;
@@ -58,8 +57,7 @@ namespace BodycamHorror.EditorTools
             wallPlaster = EnvironmentTextures.ScannedMaterial("PaintedPlaster015", MaterialDir, TextureDir, new Color(0.72f, 0.72f, 0.68f), 1.2f);
             Material floor = EnvironmentTextures.ScannedMaterial("Tiles110", MaterialDir, TextureDir, new Color(0.6f, 0.6f, 0.58f), 1f);
             Material ceiling = EnvironmentTextures.ScannedMaterial("Plaster007", MaterialDir, TextureDir, new Color(0.7f, 0.7f, 0.66f), 1.2f);
-            Texture2D lensDirt = EnvironmentTextures.LensDirt(TextureDir);
-            VolumeProfile grade = BuildGrade(lensDirt);
+            VolumeProfile grade = GameLook.BuildProfile();   // the look every scene of the game shares
             GameObject lampPrefab = BuildLampPrefab();
 
             // start from a copy of SampleScene: the player and the infected spawner keep their saved values
@@ -112,7 +110,12 @@ namespace BodycamHorror.EditorTools
                 SetUpStander(third, "Infected_LightRoom", new Vector3(LightRoomCentre.x, 0f, LightRoomCentre.y), 270f);
             }
 
-            ApplyAtmosphere();
+            GameLook.ApplyAtmosphere();
+            foreach (AutoExposure exposure in Object.FindObjectsByType<AutoExposure>(FindObjectsInactive.Include))
+            {
+                exposure.maxStops = GameLook.MaxStops;
+                EditorUtility.SetDirty(exposure);
+            }
             AddDust();
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -122,97 +125,6 @@ namespace BodycamHorror.EditorTools
         }
 
         // ------------------------------------------------------------------ atmosphere
-
-        static void ApplyAtmosphere()
-        {
-            // thin cold murk: far ends of the corridor sink into it, and it is lit grey-blue rather than black
-            RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogColor = new Color(0.036f, 0.042f, 0.05f);
-            RenderSettings.fogDensity = 0.036f;
-
-            // indoors: no sky, a whisper of cold fill so the unlit parts are not pure black
-            RenderSettings.skybox = null;
-            RenderSettings.sun = null;
-            RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.014f, 0.017f, 0.022f);
-            RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
-            RenderSettings.customReflectionTexture = null;
-            RenderSettings.reflectionIntensity = 0f;
-        }
-
-        /// <summary>Cold, slightly dirty look: cool white balance, washed-out colour, milky grey-blue
-        /// shadows, a little grain, a smeared lens in the bloom.</summary>
-        static VolumeProfile BuildGrade(Texture2D lensDirt)
-        {
-            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(ProfilePath);
-            if (!profile)
-            {
-                profile = ScriptableObject.CreateInstance<VolumeProfile>();
-                AssetDatabase.CreateAsset(profile, ProfilePath);
-            }
-            // rebuilt in place, so scenes already pointing at the profile keep their reference
-            for (int i = profile.components.Count - 1; i >= 0; i--)
-            {
-                var old = profile.components[i];
-                profile.components.RemoveAt(i);
-                if (old) Object.DestroyImmediate(old, true);
-            }
-
-            Add<Tonemapping>(profile).mode.Override(TonemappingMode.ACES);
-
-            var white = Add<WhiteBalance>(profile);
-            white.temperature.Override(-4f);
-            white.tint.Override(0f);
-
-            var adjust = Add<ColorAdjustments>(profile);
-            adjust.postExposure.Override(0.35f);
-            adjust.contrast.Override(10f);
-            adjust.saturation.Override(-26f);
-            adjust.colorFilter.Override(new Color(0.985f, 0.99f, 1f));
-
-            var lgg = Add<LiftGammaGain>(profile);
-            lgg.lift.Override(new Vector4(0.99f, 1f, 1.012f, 0.012f));     // blacks lifted, a shade to the cold side: the milky, unwashed look
-            lgg.gamma.Override(new Vector4(0.99f, 1f, 1.01f, -0.02f));
-            lgg.gain.Override(new Vector4(1f, 1f, 0.98f, 0f));
-
-            var split = Add<SplitToning>(profile);
-            split.shadows.Override(new Color(0.48f, 0.495f, 0.52f));
-            split.highlights.Override(new Color(0.53f, 0.52f, 0.48f));     // whites a shade off clean
-            split.balance.Override(-10f);
-
-            var bloom = Add<Bloom>(profile);
-            bloom.threshold.Override(0.85f);
-            bloom.intensity.Override(0.9f);
-            bloom.scatter.Override(0.78f);
-            bloom.highQualityFiltering.Override(true);
-            bloom.dirtTexture.Override(lensDirt);
-            bloom.dirtIntensity.Override(2.5f);
-
-            var grain = Add<FilmGrain>(profile);
-            grain.type.Override(FilmGrainLookup.Medium1);
-            grain.intensity.Override(0.1f);
-            grain.response.Override(0.7f);
-
-
-            var vignette = Add<Vignette>(profile);
-            vignette.color.Override(Color.black);
-            vignette.intensity.Override(0.38f);
-            vignette.smoothness.Override(0.45f);
-
-            EditorUtility.SetDirty(profile);
-            AssetDatabase.SaveAssets();
-            return profile;
-        }
-
-        static T Add<T>(VolumeProfile profile) where T : VolumeComponent
-        {
-            T component = profile.Add<T>(false);
-            component.name = typeof(T).Name;
-            component.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
-            AssetDatabase.AddObjectToAsset(component, profile);
-            return component;
-        }
 
         /// <summary>Dust in the air around the camera: specks that only show where a light catches them.</summary>
         internal static void AddDust()

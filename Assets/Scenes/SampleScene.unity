@@ -15,27 +15,27 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
   m_Fog: 1
-  m_FogColor: {r: 0.04, g: 0.05, b: 0.06, a: 1}
+  m_FogColor: {r: 0, g: 0, b: 0, a: 1}
   m_FogMode: 3
-  m_FogDensity: 0.04
+  m_FogDensity: 0.036
   m_LinearFogStart: 0
   m_LinearFogEnd: 300
-  m_AmbientSkyColor: {r: 0.08, g: 0.09, b: 0.12, a: 1}
+  m_AmbientSkyColor: {r: 0.004, g: 0.004, b: 0.004, a: 1}
   m_AmbientEquatorColor: {r: 0.05, g: 0.05, b: 0.07, a: 1}
   m_AmbientGroundColor: {r: 0.02, g: 0.02, b: 0.02, a: 1}
   m_AmbientIntensity: 1
-  m_AmbientMode: 1
+  m_AmbientMode: 3
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 0}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
   m_HaloTexture: {fileID: 0}
   m_SpotCookie: {fileID: 10001, guid: 0000000000000000e000000000000000, type: 0}
-  m_DefaultReflectionMode: 0
+  m_DefaultReflectionMode: 1
   m_DefaultReflectionResolution: 128
   m_ReflectionBounces: 1
-  m_ReflectionIntensity: 1
+  m_ReflectionIntensity: 0
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
   m_UseRadianceAmbientProbe: 0
@@ -2279,7 +2279,7 @@ MonoBehaviour:
   targetBrightness: 0.05
   strength: 0.6
   minStops: -2
-  maxStops: 1
+  maxStops: 0.5
   brightenSpeed: 0.7
   darkenSpeed: 3
   centreWeight: 0.6
@@ -6364,7 +6364,7 @@ MonoBehaviour:
   priority: 0
   blendDistance: 0
   weight: 1
-  sharedProfile: {fileID: 11400000, guid: 10fc4df2da32a41aaa32d77bc913491c, type: 2}
+  sharedProfile: {fileID: 11400000, guid: b7e92c5cc9b7a764098a08aa0a67988c, type: 2}
 --- !u!4 &832575519
 Transform:
   m_ObjectHideFlags: 0
@@ -6851,8 +6851,8 @@ MonoBehaviour:
   vaultMaxHeight: 1.25
   vaultMaxThickness: 1
   vaultMinSpeed: 3.5
-  wallBumpMinSpeed: 4.5
-  stumbleMinSpeed: 4
+  wallBumpMinSpeed: 6.8
+  stumbleMinSpeed: 6.5
   stumbleMaxObstacleHeight: 0.65
   bumpStunTime: 0.6
   stumbleTime: 0.8
@@ -12928,6 +12928,7 @@ MonoBehaviour:
   - {fileID: 1312344687}
   - {fileID: 1115230851}
   startSlot: 0
+  startUnarmed: 0
   convergenceDistance: 20
   loweredPosition: {x: 0.1, y: -0.34, z: 0.31}
   loweredEuler: {x: 42, y: -18, z: 14}
@@ -12979,6 +12980,7 @@ MonoBehaviour:
   leadDamping: 19
   leadArm: 0.3
   aimLeadScale: 0.6
+  freeAimRadius: 6
   stress: {fileID: 0}
   stressTremorAngle: 1.6
   stressTremorPosition: 0.005

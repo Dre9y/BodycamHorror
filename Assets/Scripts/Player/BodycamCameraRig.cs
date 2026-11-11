@@ -63,7 +63,6 @@ namespace BodycamHorror.Player
 
         [Header("Lean")]
         public float strafeRoll = 1.2f;
-        public float brakePitch = 5f;
         public float slideRoll = 7f;
 
         [Header("Springs")]
@@ -197,7 +196,6 @@ namespace BodycamHorror.Player
 
             // Lean
             targetRot.z += -localVel.x * strafeRoll;
-            if (player.IsBraking) { targetRot.x += brakePitch; targetPos.y -= 0.04f; targetPos.z += 0.03f; }
 
             switch (state)
             {

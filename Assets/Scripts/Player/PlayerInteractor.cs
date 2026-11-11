@@ -41,7 +41,7 @@ namespace BodycamHorror.Player
 
         Camera cam;
         InputAction useAction;
-        string keyLabel = "F";
+        string keyLabel = "E";
         Vector3 promptPoint;
         float promptAlpha;
         GUIStyle labelStyle;
@@ -58,7 +58,7 @@ namespace BodycamHorror.Player
         void Awake()
         {
             Instance = this;
-            useAction = new InputAction("Interact", InputActionType.Button, "<Keyboard>/f");
+            useAction = new InputAction("Interact", InputActionType.Button, "<Keyboard>/e");
             useAction.AddBinding("<Gamepad>/dpad/down");
             // the key as printed on a QWERTY board, whatever layout is active (a Russian layout would show "А")
             string shown = InputControlPath.ToHumanReadableString(useAction.bindings[0].effectivePath,

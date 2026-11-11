@@ -77,11 +77,11 @@ namespace BodycamHorror.EditorTools
                 }
             }
 
-            if (volume) volume.sharedProfile = BuildGrade();
+            if (volume) volume.sharedProfile = GameLook.BuildProfile();   // the shared look, which was worked out in this room
             // the camera must not open up to "see" in the dark: that is what turns black into grey
-            foreach (AutoExposure exposure in Object.FindObjectsByType<AutoExposure>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (AutoExposure exposure in Object.FindObjectsByType<AutoExposure>(FindObjectsInactive.Include))
             {
-                exposure.maxStops = 0.5f;
+                exposure.maxStops = GameLook.MaxStops;
                 EditorUtility.SetDirty(exposure);
             }
 
@@ -89,17 +89,7 @@ namespace BodycamHorror.EditorTools
             PlacePistol(pistol, new Vector3(0f, 0f, PistolZ));
 
             // no lamps, and next to no fill: what shows, shows by the pistol's glow
-            RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogColor = Color.black;
-            RenderSettings.fogDensity = 0.036f;
-            RenderSettings.skybox = null;
-            RenderSettings.sun = null;
-            RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.004f, 0.004f, 0.004f);   // neutral, just enough to tell a wall from the void
-            RenderSettings.defaultReflectionMode = DefaultReflectionMode.Custom;
-            RenderSettings.customReflectionTexture = null;
-            RenderSettings.reflectionIntensity = 0f;
+            GameLook.ApplyAtmosphere();
 
             LightingTestSceneBuilder.AddDust();
 
@@ -107,38 +97,6 @@ namespace BodycamHorror.EditorTools
             EditorSceneManager.SaveScene(scene);
             AssetDatabase.SaveAssets();
             Debug.Log("Dark room scene built: " + ScenePath);
-        }
-
-        /// <summary>The lighting test grade with its milky look taken out: that one lifts the blacks and tints
-        /// them cold on purpose, which in an unlit room reads as blue-grey murk. Here black stays black.</summary>
-        static VolumeProfile BuildGrade()
-        {
-            const string source = "Assets/Settings/ColdGrimeProfile.asset", path = "Assets/Settings/DarkRoomProfile.asset";
-            if (!AssetDatabase.LoadAssetAtPath<VolumeProfile>(source)) return null;
-            if (File.Exists(path))
-            {
-                File.Copy(source, path, true);   // written over the old file: scenes pointing at it keep their reference
-                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-            }
-            else AssetDatabase.CopyAsset(source, path);
-            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(path);
-
-            if (profile.TryGet(out LiftGammaGain lgg))
-            {
-                lgg.lift.Override(new Vector4(1f, 1f, 1f, 0f));   // not lifted, not crushed: black is black, the dark greys stay
-                lgg.gamma.Override(new Vector4(1f, 1f, 1f, 0f));
-            }
-            if (profile.TryGet(out SplitToning split)) split.shadows.Override(new Color(0.5f, 0.5f, 0.5f));   // neutral
-            if (profile.TryGet(out ColorAdjustments adjust))
-            {
-                adjust.postExposure.Override(0.25f);
-                adjust.contrast.Override(10f);
-            }
-            if (profile.TryGet(out FilmGrain grain)) grain.intensity.Override(0.07f);   // grain is the only thing left to see in the black
-
-            EditorUtility.SetDirty(profile);
-            AssetDatabase.SaveAssets();
-            return profile;
         }
 
         /// <summary>Puts the pickup scare into the scene that is open now: taking the gun switches the

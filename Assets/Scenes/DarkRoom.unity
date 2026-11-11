@@ -7318,8 +7318,8 @@ MonoBehaviour:
   vaultMaxHeight: 1.25
   vaultMaxThickness: 1
   vaultMinSpeed: 3.5
-  wallBumpMinSpeed: 4.5
-  stumbleMinSpeed: 4
+  wallBumpMinSpeed: 6.8
+  stumbleMinSpeed: 6.5
   stumbleMaxObstacleHeight: 0.65
   bumpStunTime: 0.6
   stumbleTime: 0.8

@@ -1,26 +1,32 @@
 using BodycamHorror.Environment;
+using BodycamHorror.Weapons;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace BodycamHorror.Player
 {
     /// <summary>
-    /// Lets the player use doors: stand close, look at one, and the key to press shows by its handle
-    /// (F / D-pad down). Doors add this to the player themselves, so nothing has to be set up per scene.
-    /// While a door is in reach the same key does not toggle the flashlight (see BodycamFlashlight).
+    /// Lets the player use doors and pick guns up: stand close, look at one, and the key to press shows
+    /// by its handle / over the gun (F / D-pad down). Doors and pickups add this to the player themselves,
+    /// so nothing has to be set up per scene. While something is in reach the same key does not toggle
+    /// the flashlight (see BodycamFlashlight).
     /// </summary>
     [DefaultExecutionOrder(-90)]
     public class PlayerInteractor : MonoBehaviour
     {
         public static PlayerInteractor Instance { get; private set; }
-        /// <summary>A door is in reach and looked at right now.</summary>
-        public static bool HasTarget => Instance && Instance.isActiveAndEnabled && Instance.Target;
+        /// <summary>A door or a pickup is in reach and looked at right now.</summary>
+        public static bool HasTarget => Instance && Instance.isActiveAndEnabled && (Instance.Target || Instance.Pickup);
 
         [Tooltip("How far the player can reach (m, from the camera).")]
         public float reach = 2.2f;
         [Tooltip("Looking this close to a handle counts even when the view ray misses the door itself (deg).")]
         public float lookAngle = 22f;
         public LayerMask mask = ~(1 << 2);   // not Ignore Raycast (the player)
+        [Tooltip("Reach for things lying about (m, from the camera: the floor is a long way down).")]
+        public float pickupReach = 2.6f;
+        [Tooltip("A pickup counts when looked at this closely (deg).")]
+        public float pickupLookAngle = 30f;
 
         [Header("Prompt")]
         [Tooltip("Key cap size in pixels at 1080p.")]
@@ -31,6 +37,7 @@ namespace BodycamHorror.Player
         public Color promptInk = new Color(0.92f, 0.94f, 0.9f, 1f);
 
         public Door Target { get; private set; }
+        public WeaponPickup Pickup { get; private set; }
 
         Camera cam;
         InputAction useAction;
@@ -76,13 +83,39 @@ namespace BodycamHorror.Player
                 if (!cam) cam = Camera.main;
             }
             Target = cam ? FindDoor(cam.transform.position, cam.transform.forward) : null;
+            Pickup = cam && !Target ? FindPickup(cam.transform.position, cam.transform.forward) : null;
 
             if (Target)
             {
                 promptPoint = Target.PromptPoint(cam.transform.position) + Vector3.up * promptLift;
                 if (useAction.WasPressedThisFrame()) Target.Toggle(cam.transform.position);
             }
-            promptAlpha = Mathf.MoveTowards(promptAlpha, Target ? 1f : 0f, Time.unscaledDeltaTime * 7f);
+            else if (Pickup)
+            {
+                promptPoint = Pickup.PromptPoint;
+                if (useAction.WasPressedThisFrame() && Pickup.Take(gameObject)) Pickup = null;
+            }
+            promptAlpha = Mathf.MoveTowards(promptAlpha, Target || Pickup ? 1f : 0f, Time.unscaledDeltaTime * 7f);
+        }
+
+        WeaponPickup FindPickup(Vector3 eye, Vector3 forward)
+        {
+            WeaponPickup best = null;
+            float bestAngle = pickupLookAngle;
+            foreach (WeaponPickup pickup in WeaponPickup.All)
+            {
+                Vector3 to = pickup.transform.position + Vector3.up * 0.05f - eye;
+                float distance = to.magnitude;
+                if (distance > pickupReach || distance < 0.01f) continue;
+                float a = Vector3.Angle(forward, to);
+                if (a >= bestAngle) continue;
+                // not through a wall or a crate
+                if (Physics.Raycast(eye, to / distance, out RaycastHit block, distance - 0.1f, mask, QueryTriggerInteraction.Ignore)
+                    && !block.collider.transform.IsChildOf(pickup.transform)) continue;
+                best = pickup;
+                bestAngle = a;
+            }
+            return best;
         }
 
         Door FindDoor(Vector3 eye, Vector3 forward)

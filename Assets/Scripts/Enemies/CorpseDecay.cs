@@ -35,6 +35,7 @@ namespace BodycamHorror.Enemies
 
         Rigidbody[] bodies;
         Renderer[] renderers;
+        UnityEngine.Rendering.Universal.DecalProjector[] wounds = System.Array.Empty<UnityEngine.Rendering.Universal.DecalProjector>();
         MaterialPropertyBlock block;
         float age, dissolve;
 
@@ -63,6 +64,8 @@ namespace BodycamHorror.Enemies
             if (dissolve >= 1f) { Destroy(gameObject); return; }
             block.SetFloat(DissolveId, dissolve);
             foreach (Renderer r in renderers) if (r) r.SetPropertyBlock(block);
+            // wounds are gone before the skin under them is
+            foreach (var wound in wounds) if (wound) wound.fadeFactor = Mathf.Clamp01(1f - dissolve * 2.5f);
         }
 
         bool AtRest()
@@ -104,6 +107,7 @@ namespace BodycamHorror.Enemies
             IsDissolving = true;
             block = new MaterialPropertyBlock();
             renderers = GetComponentsInChildren<Renderer>();
+            wounds = GetComponentsInChildren<UnityEngine.Rendering.Universal.DecalProjector>();
             foreach (Renderer r in renderers)
             {
                 if (r is ParticleSystemRenderer) continue;

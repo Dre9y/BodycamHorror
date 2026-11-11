@@ -397,6 +397,7 @@ namespace BodycamHorror.Enemies
             rb.angularVelocity = Random.onUnitSphere * Random.Range(4f, 12f);
 
             CorpseDecay.Begin(go, piecePhysicsTime, pieceLifetime, pieceDissolveTime);
+            WoundDecals.Move(bone, go.transform);   // the limb's wounds leave with it
             LoosePieces.Enqueue(go);
             while (LoosePieces.Count > MaxLoosePieces)
             {

@@ -22,8 +22,8 @@ namespace BodycamHorror.EditorTools
     {
         const string ScenePath = "Assets/Scenes/LightingTest.unity";
         const string SourceScenePath = "Assets/Scenes/SampleScene.unity";
-        const string TextureDir = "Assets/Textures/Environment";
-        const string MaterialDir = "Assets/Materials/Environment";
+        internal const string TextureDir = "Assets/Textures/Environment";
+        internal const string MaterialDir = "Assets/Materials/Environment";
         const string PrefabDir = "Assets/Prefabs/Environment";
         const string ProfilePath = "Assets/Settings/ColdGrimeProfile.asset";
 
@@ -45,7 +45,7 @@ namespace BodycamHorror.EditorTools
         const float LightRoomZ0 = 2f;
         static readonly Vector2 LightRoomCentre = new Vector2(CorridorHalfWidth + Wall + LightRoomSize * 0.5f, LightRoomZ0 + LightRoomSize * 0.5f);   // x, z
 
-        static Material wallPaint, wallPlaster;
+        internal static Material wallPaint, wallPlaster;
 
         [MenuItem("BodycamHorror/Build Lighting Test Scene")]
         public static void Build()
@@ -215,7 +215,7 @@ namespace BodycamHorror.EditorTools
         }
 
         /// <summary>Dust in the air around the camera: specks that only show where a light catches them.</summary>
-        static void AddDust()
+        internal static void AddDust()
         {
             const string path = MaterialDir + "/DustMote.mat";
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
@@ -369,7 +369,7 @@ namespace BodycamHorror.EditorTools
             return part;
         }
 
-        static Material SimpleMaterial(string name, Color color, float metallic, float smoothness)
+        internal static Material SimpleMaterial(string name, Color color, float metallic, float smoothness)
         {
             string path = MaterialDir + "/" + name + ".mat";
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
@@ -697,7 +697,7 @@ namespace BodycamHorror.EditorTools
         }
 
         /// <summary>A wall from floor to ceiling in two bands: paint up to PanelHeight, plaster above.</summary>
-        static void WallBox(string name, Transform parent, Vector3 min, Vector3 max)
+        internal static void WallBox(string name, Transform parent, Vector3 min, Vector3 max)
         {
             float split = min.y + PanelHeight;
             Box(name + "_Paint", parent, min, new Vector3(max.x, split, max.z), wallPaint, WallTile, WallTile);
@@ -707,7 +707,7 @@ namespace BodycamHorror.EditorTools
         /// <summary>A box between two world corners whose texture coordinates follow world position, so
         /// neighbouring pieces line up: the sides wrap every <paramref name="tileAcross"/> metres along the
         /// wall and <paramref name="tileUp"/> metres up it, top and bottom every tileAcross both ways.</summary>
-        static GameObject Box(string name, Transform parent, Vector3 min, Vector3 max, Material material, float tileAcross, float tileUp)
+        internal static GameObject Box(string name, Transform parent, Vector3 min, Vector3 max, Material material, float tileAcross, float tileUp)
         {
             Vector3 centre = (min + max) * 0.5f, e = (max - min) * 0.5f;
             var vertices = new Vector3[24];

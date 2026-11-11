@@ -136,3 +136,7 @@ crashlytics-build.properties
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# local only (1.1 GB monster model)
+/Assets/MonsterMutant 7/
+/Assets/MonsterMutant 7.meta

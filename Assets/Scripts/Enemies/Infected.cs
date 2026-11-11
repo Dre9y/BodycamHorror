@@ -159,6 +159,9 @@ namespace BodycamHorror.Enemies
         [Tooltip("Growls, shrieks and grunts (placeholder synth). Off for now.")]
         public bool voiceEnabled = false;
 
+        [Tooltip("Nothing hurts it and nothing wakes it: hits are ignored outright (apparitions, see PickupScare).")]
+        public bool invulnerable;
+
         const float StandingCapsuleHeight = 1.44f, CrawlCapsuleHeight = 0.6f;
 
         public static readonly List<Infected> All = new List<Infected>();
@@ -1023,6 +1026,7 @@ namespace BodycamHorror.Enemies
 
         public void TakeDamage(in DamageInfo info)
         {
+            if (invulnerable) return;
             bool head = !info.melee && body && body.IsHeadCollider(info.collider);
             float dmg = info.amount * (head ? headshotMultiplier : 1f);
             HumanBodyBones limb = default;

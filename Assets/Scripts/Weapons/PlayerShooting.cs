@@ -12,7 +12,8 @@ namespace BodycamHorror.Weapons
     /// gun in pivot space (ready, aimed, lowered while sprinting, tucked against walls, carried during
     /// parkour), adds recoil, breathing, bob and look inertia, switches weapons and does melee.
     /// The hands lead: <see cref="BodycamCameraRig"/> follows <see cref="AimOffset"/> a moment later.
-    /// Slots: 1..N = <see cref="weapons"/>, N+1 = bare hands. LMB / RT fire (punch with bare hands),
+    /// Slots: 1..N = <see cref="weapons"/>, N+1 = bare hands. With <see cref="startUnarmed"/> none of them is
+    /// there until picked up (<see cref="Give"/>). LMB / RT fire (punch with bare hands),
     /// RMB / LT aim, R / X reload, V / R3 melee, 1-3 / wheel / Y switch.
     /// </summary>
     [DefaultExecutionOrder(-100)]   // read input before the controller re-locks the cursor; pose before the camera rig
@@ -28,6 +29,8 @@ namespace BodycamHorror.Weapons
         [Tooltip("Guns in slot order (keys 1, 2, ...). The slot after the last gun is bare hands.")]
         public Firearm[] weapons = new Firearm[0];
         public int startSlot = 0;
+        [Tooltip("Start with nothing at all: no guns and no fists either. Each gun has to be picked up (WeaponPickup, F); the fists come with the first one.")]
+        public bool startUnarmed;
 
         [Header("Shared poses (pivot space; gun origin = right-hand grip)")]
         [Tooltip("The barrel points at this distance straight ahead of the eye when settled.")]
@@ -187,7 +190,7 @@ namespace BodycamHorror.Weapons
         public int Ammo => shown ? shown.Ammo : 0;
         public bool IsSwitching => switchPhase != SwitchPhase.None;
         /// <summary>Bare hands: how far up the fists are (0 = relaxed / running, 1 = guard).</summary>
-        public float GuardWeight => shown ? 0f : guardW * (1f - switchW);
+        public float GuardWeight => shown || !HasFists ? 0f : guardW * (1f - switchW);
         /// <summary>Hand throwing a strike right now: -1 left, +1 right, 0 none.</summary>
         public int PunchHand => meleeKind switch { MeleeKind.PunchLeft => -1, MeleeKind.Jab => -1, MeleeKind.PunchRight => 1, _ => 0 };
         /// <summary>0..1 extension of the current punch / jab.</summary>
@@ -199,7 +202,14 @@ namespace BodycamHorror.Weapons
         /// <summary>A melee strike was thrown (true if it connected).</summary>
         public event Action<bool> Meleed;
 
+        /// <summary>Nothing picked up yet: no gun, and the fists are not there to use either.</summary>
+        public bool IsUnarmed => !shown && !HasFists;
+        /// <summary>The bare-hands slot is there to use.</summary>
+        public bool HasFists => owned == null || owned[owned.Length - 1];
+
         Firearm Current => slot < (weapons?.Length ?? 0) ? weapons[slot] : null;
+
+        bool[] owned;   // per slot, the bare-hands slot last
 
         InputAction fireAction, aimAction, reloadAction, meleeAction, nextAction, scrollAction;
         InputAction[] slotActions;
@@ -249,7 +259,10 @@ namespace BodycamHorror.Weapons
             seed = Random.value * 100f;
             meleeChargesLeft = meleeCharges;
 
-            slot = Mathf.Clamp(startSlot, 0, SlotCount - 1);
+            owned = new bool[SlotCount];
+            for (int i = 0; i < owned.Length; i++) owned[i] = !startUnarmed;
+            // unarmed: sit in the bare-hands slot with the hands themselves hidden
+            slot = startUnarmed ? SlotCount - 1 : Mathf.Clamp(startSlot, 0, SlotCount - 1);
             for (int i = 0; i < weapons.Length; i++) if (weapons[i]) weapons[i].gameObject.SetActive(i == slot);
             shown = Current;
             if (shown) shown.transform.SetLocalPositionAndRotation(shown.readyPosition, AimAt(shown.readyPosition, shown.sightHeight));
@@ -257,7 +270,7 @@ namespace BodycamHorror.Weapons
             {
                 bareHands = Instantiate(bareHandsPrefab, transform, false);
                 bareHands.name = bareHandsPrefab.name;
-                bareHands.gameObject.SetActive(!shown);
+                bareHands.gameObject.SetActive(!shown && HasFists);
                 bareHands.Bind(player, this, gameObject.layer);
             }
 
@@ -332,12 +345,12 @@ namespace BodycamHorror.Weapons
 
             for (int i = 0; i < slotActions.Length; i++)
                 if (slotActions[i].WasPressedThisFrame()) RequestSlot(i);
-            if (nextAction.WasPressedThisFrame()) RequestSlot((TargetSlot + 1) % SlotCount);
+            if (nextAction.WasPressedThisFrame()) RequestSlot(StepSlot(TargetSlot, 1));
             float scroll = cursorFree ? 0f : scrollAction.ReadValue<float>();
             if (Mathf.Abs(scroll) > 0.01f && Time.time - lastScrollTime > 0.12f)
             {
                 lastScrollTime = Time.time;
-                RequestSlot((TargetSlot + (scroll < 0f ? 1 : SlotCount - 1)) % SlotCount);
+                RequestSlot(StepSlot(TargetSlot, scroll < 0f ? 1 : -1));
             }
 
             if (player)
@@ -349,13 +362,59 @@ namespace BodycamHorror.Weapons
 
         int TargetSlot => pendingSlot >= 0 ? pendingSlot : slot;
 
+        /// <summary>The next slot that way the player actually has (the same one if there is no other).</summary>
+        int StepSlot(int from, int direction)
+        {
+            int n = SlotCount;
+            for (int i = 1; i < n; i++)
+            {
+                int s = ((from + direction * i) % n + n) % n;
+                if (owned[s]) return s;
+            }
+            return from;
+        }
+
+        // ------------------------------------------------------------------ picking up
+
+        /// <summary>Whether the player has this gun.</summary>
+        public bool Owns(Firearm weapon)
+        {
+            int i = weapon ? Array.IndexOf(weapons, weapon) : -1;
+            return i >= 0 && owned[i];
+        }
+
+        /// <summary>The gun of this type among the ones the player can carry (owned or not).</summary>
+        public T FindWeapon<T>() where T : Firearm
+        {
+            foreach (Firearm w in weapons) if (w is T found) return found;
+            return null;
+        }
+
+        /// <summary>Hands the player one of the guns in <see cref="weapons"/> (and the use of their fists).
+        /// False if it is not one of them or they have it already.</summary>
+        public bool Give(Firearm weapon, bool equip = true)
+        {
+            int i = weapon ? Array.IndexOf(weapons, weapon) : -1;
+            if (i < 0 || owned[i]) return false;
+            bool wasUnarmed = IsUnarmed;
+            owned[i] = true;
+            owned[owned.Length - 1] = true;
+            if (equip)
+            {
+                RequestSlot(i);
+                // empty hands have nothing to put away first: straight to the draw
+                if (wasUnarmed && switchPhase == SwitchPhase.Lowering) switchTimer = LowerTime;
+            }
+            return true;
+        }
+
         // ------------------------------------------------------------------ switching
 
         /// <summary>Puts the current gun away and draws the one in <paramref name="newSlot"/>.</summary>
         public void RequestSlot(int newSlot)
         {
             newSlot = Mathf.Clamp(newSlot, 0, SlotCount - 1);
-            if (newSlot == TargetSlot) return;
+            if (newSlot == TargetSlot || !owned[newSlot]) return;
             pendingSlot = newSlot;
             CancelReload();
             if (switchPhase == SwitchPhase.None || switchPhase == SwitchPhase.Raising)
@@ -412,7 +471,8 @@ namespace BodycamHorror.Weapons
             if (IsReloading && BlocksReload(state)) CancelReload();
             UpdateReload(dt);
             UpdateMelee(dt);
-            if (bareHands && bareHands.gameObject.activeSelf != !shown) bareHands.gameObject.SetActive(!shown);
+            bool fistsOut = !shown && HasFists;
+            if (bareHands && bareHands.gameObject.activeSelf != fistsOut) bareHands.gameObject.SetActive(fistsOut);
 
             // wall tuck: something right in front of the chest pushes the gun up and back
             float tuckTarget = 0f;
@@ -693,6 +753,7 @@ namespace BodycamHorror.Weapons
         void TryStartMelee()
         {
             if (meleeKind != MeleeKind.None || carryW > 0.5f) return;
+            if (IsUnarmed) return;   // nothing picked up yet: no strikes either
             if (switchPhase == SwitchPhase.Lowering) return;
             if (meleeChargesLeft <= 0) return;   // out of breath: wait for the recharge
             meleeChargesLeft--;

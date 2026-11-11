@@ -266,6 +266,7 @@ namespace BodycamHorror.Weapons
             if (flesh)
             {
                 fx.Blood(hit.point, hit.normal, dir, impactMaterial, flesh.bloodColor, flesh.sprayAmount * Mathf.Max(impactFxScale, 0.5f));
+                WoundDecals.Add(hit.point, hit.normal, dir, hit.collider.transform, flesh.transform, Mathf.Min(1f + 0.2f * (pellets - 1), 1.7f));
                 return;
             }
             bool moving = hit.rigidbody || damageable != null;

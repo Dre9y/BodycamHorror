@@ -144,6 +144,83 @@ namespace BodycamHorror.Weapons
             return Finish(name, d, peak, 2.2f);
         }
 
+        /// <summary>Handle pressed, latch drawn back, then the hinges complain as the door swings.</summary>
+        public static AudioClip DoorOpen()
+        {
+            var d = new float[(int)(Rate * 1.05f)];
+            Latch(d, 0f, 850f, 0.7f, 11);
+            Latch(d, 0.075f, 1500f, 1f, 12);
+            Creak(d, 0.14f, 0.85f, 21, 60f, 125f, 1f);
+            return Finish("DoorOpen", d, 0.85f, 1.3f);
+        }
+
+        /// <summary>Hinges alone: a door starting to swing shut.</summary>
+        public static AudioClip DoorCreak()
+        {
+            var d = new float[(int)(Rate * 0.6f)];
+            Creak(d, 0f, 0.58f, 34, 110f, 70f, 1f);
+            return Finish("DoorCreak", d, 0.6f, 1.3f);
+        }
+
+        /// <summary>The door meeting its frame: a dull knock and the latch snapping home.</summary>
+        public static AudioClip DoorShut()
+        {
+            const float length = 0.4f;
+            int n = (int)(Rate * length);
+            var d = new float[n];
+            var rng = new System.Random(57);
+            float lp = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                lp += (noise - lp) * 0.08f;
+                float knock = Mathf.Sin(2f * Mathf.PI * (95f - 60f * t) * t) * Mathf.Exp(-t * 22f);
+                float panel = Mathf.Sin(2f * Mathf.PI * 230f * t) * Mathf.Exp(-t * 38f) * 0.35f;
+                d[i] = knock * 1.2f + panel + lp * Mathf.Exp(-t * 30f) * 2.2f + noise * Mathf.Exp(-t * 260f) * 0.35f;
+            }
+            Latch(d, 0.035f, 1300f, 0.9f, 58);
+            return Finish("DoorShut", d, 0.9f, 1.4f);
+        }
+
+        static void Latch(float[] d, float at, float freq, float gain, int seed)
+        {
+            var rng = new System.Random(seed);
+            int start = (int)(at * Rate);
+            int n = Mathf.Min((int)(0.06f * Rate), d.Length - start);
+            for (int i = 0; i < n; i++)
+                d[start + i] += ClickAt(i / (float)Rate, (float)(rng.NextDouble() * 2.0 - 1.0), freq) * gain;
+        }
+
+        /// <summary>Dry hinge: stick-slip pulses (rate sliding from one to the other, Hz) ringing through two resonances.</summary>
+        static void Creak(float[] d, float at, float length, int seed, float rateFrom, float rateTo, float gain)
+        {
+            var rng = new System.Random(seed);
+            int start = (int)(at * Rate);
+            int n = Mathf.Min((int)(length * Rate), d.Length - start);
+            float k1 = 2f * Mathf.Sin(Mathf.PI * 640f / Rate), k2 = 2f * Mathf.Sin(Mathf.PI * 1720f / Rate);
+            const float damp = 0.07f;
+            float low1 = 0f, band1 = 0f, low2 = 0f, band2 = 0f, phase = 0f, drift = 0.5f, driftTarget = 0.5f;
+            for (int i = 0; i < n; i++)
+            {
+                float p = i / (float)n;
+                if (i % 1800 == 0) driftTarget = (float)rng.NextDouble();   // the hinge catches and lets go unevenly
+                drift += (driftTarget - drift) * 0.0012f;
+                phase += Mathf.Lerp(rateFrom, rateTo, p) * (0.7f + 0.7f * drift) / Rate;
+                if (phase >= 1f) phase -= 1f;
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                float x = Mathf.Exp(-phase * 10f) * (0.8f + 0.2f * noise);
+
+                low1 += k1 * band1;
+                band1 += k1 * (x - low1 - damp * band1);
+                low2 += k2 * band2;
+                band2 += k2 * (x - low2 - damp * band2);
+
+                float env = Mathf.Clamp01(p / 0.1f) * Mathf.Clamp01((1f - p) / 0.3f) * (0.5f + 0.5f * drift);
+                d[start + i] += (band1 + band2 * 0.55f) * env * gain * 0.6f;
+            }
+        }
+
         public static AudioClip Click(float length, float freq, float amp) => Make("Click", length, 0f, freq, amp);
 
         public static AudioClip DoubleClick(float gap, float freq, float amp) => Make("DoubleClick", gap + 0.06f, gap, freq, amp);

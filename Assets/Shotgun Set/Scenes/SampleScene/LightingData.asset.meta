@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 603d345433babc248877952a8a2073c7
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 196408
+  packageName: Shotgun Set
+  packageVersion: 1.0.0
+  assetPath: Assets/Shotgun Set/Scenes/SampleScene/LightingData.asset
+  uploadId: 436301

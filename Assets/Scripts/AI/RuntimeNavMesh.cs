@@ -36,6 +36,11 @@ namespace BodycamHorror.AI
             foreach (var m in FindObjectsByType<MonsterBrain>(FindObjectsInactive.Include))
                 markups.Add(new NavMeshBuildMarkup { root = m.transform, overrideIgnore = true, ignoreFromBuild = true, applyToChildren = true });
 
+            // doors the monsters can open are not walls to them: the way through stays on the mesh
+            foreach (var d in FindObjectsByType<BodycamHorror.Environment.Door>(FindObjectsInactive.Include))
+                if (d.enemiesCanOpen && !d.locked)
+                    markups.Add(new NavMeshBuildMarkup { root = d.transform, overrideIgnore = true, ignoreFromBuild = true, applyToChildren = true });
+
             var sources = new List<NavMeshBuildSource>();
             NavMeshBuilder.CollectSources(bounds, layers, NavMeshCollectGeometry.PhysicsColliders, 0, markups, sources);
             // loose physics props would leave holes that move away

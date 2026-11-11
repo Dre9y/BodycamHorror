@@ -72,6 +72,7 @@ namespace BodycamHorror.AI
             audioSource.maxDistance = 22f;
             audioSource.rolloffMode = AudioRolloffMode.Logarithmic;
             audioSource.dopplerLevel = 0f;
+            Audio.SoundOcclusion.Attach(audioSource, transform, 1.1f);
         }
 
         void OnEnable() { if (brain) brain.Hurt += OnHurt; }

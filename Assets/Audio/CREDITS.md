@@ -12,3 +12,6 @@ All recordings are from freesound.org under Creative Commons 0 (public domain), 
 | Weapons/shotgun_shell_in.wav | "shell load.ogg" by CeebFrack - https://freesound.org/people/CeebFrack/sounds/108793/ |
 | Weapons/shotgun_dry.wav | "Shotgun Dryfire" by Bratish - https://freesound.org/people/Bratish/sounds/500295/ |
 | Flashlight/flashlight_on.wav, flashlight_off.wav | "Flashlight Switch" by Kinoton - https://freesound.org/people/Kinoton/sounds/352092/ |
+| Door/door_open.wav | Handle from "wood_door_close.wav" by j1987 - https://freesound.org/people/j1987/sounds/335764/ + creak from "Door Creak 02" by XPLOman - https://freesound.org/people/XPLOman/sounds/390123/ |
+| Door/door_close.wav | "WoodDoorSqueak.wav" by TampaJoey - https://freesound.org/people/TampaJoey/sounds/588509/ |
+| Door/door_shut.wav | "wood_door_close.wav" by j1987 - https://freesound.org/people/j1987/sounds/335764/ |

@@ -211,7 +211,8 @@ namespace BodycamHorror.Player
 
         void LateUpdate()
         {
-            if (toggleAction.WasPressedThisFrame()) SetOn(!IsOn);
+            // at a door the same key works the door instead
+            if (toggleAction.WasPressedThisFrame() && !PlayerInteractor.HasTarget) SetOn(!IsOn);
 
             Firearm gun = mountOnWeapon && shooting && shooting.isActiveAndEnabled ? shooting.CurrentWeapon : null;
             if (gun && gun.muzzle)

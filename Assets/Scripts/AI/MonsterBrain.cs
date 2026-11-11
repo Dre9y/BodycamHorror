@@ -182,6 +182,7 @@ namespace BodycamHorror.AI
                 voice.rolloffMode = AudioRolloffMode.Linear;
             }
             voice.playOnAwake = false;
+            Audio.SoundOcclusion.Attach(voice, transform, 1.2f);
             scratchPath = new NavMeshPath();
             health = maxHealth;
             agent.updateRotation = false;

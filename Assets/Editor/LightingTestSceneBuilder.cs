@@ -550,9 +550,100 @@ namespace BodycamHorror.EditorTools
                 Flicker(l, LightFlicker.Kind.Screen, 0.5f, new Vector2(0.06f, 0.5f), screen);
             }
 
+            PlaceLightRoomDoor(room);
+
             // something for the coloured shadows to fall across
             Box("Crate_E", room, new Vector3(x0 + 3.9f, 0f, z0 + 0.7f), new Vector3(x0 + 4.7f, 0.8f, z0 + 1.5f), crate, 1f, 1f).transform.Rotate(0f, 17f, 0f);
             Box("Crate_F", room, new Vector3(x0 + 4.6f, 0f, z1 - 1.5f), new Vector3(x0 + 5.5f, 0.9f, z1 - 0.6f), crate, 1f, 1f).transform.Rotate(0f, -12f, 0f);
+        }
+
+        // ------------------------------------------------------------------ door
+
+        const string DoorName = "Door_LightRoom";
+
+        /// <summary>Puts the door into the scene that is open now, without rebuilding the rest of it.</summary>
+        [MenuItem("BodycamHorror/Add Light Room Door")]
+        public static void AddLightRoomDoor()
+        {
+            var room = GameObject.Find("LightRoom");
+            if (!room)
+            {
+                Debug.LogWarning("No LightRoom in the open scene: build the lighting test scene first.");
+                return;
+            }
+            PlaceLightRoomDoor(room.transform);
+            EditorSceneManager.MarkSceneDirty(room.scene);
+            EditorSceneManager.SaveScene(room.scene);
+        }
+
+        /// <summary>The door between the corridor and the light room, hinged on the player's-end jamb.</summary>
+        static void PlaceLightRoomDoor(Transform room)
+        {
+            Transform old = room.Find(DoorName);
+            if (old) Object.DestroyImmediate(old.gameObject);
+
+            const float hingeGap = 0.03f, latchGap = 0.02f;
+            GameObject prefab = BuildDoorPrefab(DoorZ1 - DoorZ0 - hingeGap - latchGap, DoorHeight - 0.03f);
+            var door = (GameObject)PrefabUtility.InstantiatePrefab(prefab, room);
+            door.name = DoorName;
+            // in the middle of the wall's thickness, the leaf running along +Z, its front to the corridor
+            door.transform.SetPositionAndRotation(
+                new Vector3(CorridorHalfWidth + Wall * 0.5f, 0f, DoorZ0 + hingeGap), Quaternion.Euler(0f, -90f, 0f));
+        }
+
+        /// <summary>A plain painted door: the root stays on the hinge line, the leaf under it turns.
+        /// Lever handles on both sides; the key prompt shows at them.</summary>
+        static GameObject BuildDoorPrefab(float width, float height)
+        {
+            const string path = PrefabDir + "/Door.prefab";
+            const float thickness = 0.05f, floorGap = 0.01f, handleHeight = 1.02f;
+
+            Material paint = SimpleMaterial("DoorPaint", new Color(0.33f, 0.36f, 0.33f), 0f, 0.38f);
+            Material steel = SimpleMaterial("DoorHandle", new Color(0.32f, 0.32f, 0.31f), 0.85f, 0.55f);
+
+            var root = new GameObject("Door");
+            var leaf = new GameObject("Leaf");
+            leaf.transform.SetParent(root.transform, false);
+            var body = leaf.AddComponent<Rigidbody>();   // moved by script: lets it shove bodies aside
+            body.isKinematic = true;
+            body.useGravity = false;
+
+            GameObject panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            panel.name = "Panel";
+            panel.transform.SetParent(leaf.transform, false);
+            panel.transform.localPosition = new Vector3(width * 0.5f, floorGap + height * 0.5f, 0f);
+            panel.transform.localScale = new Vector3(width, height, thickness);
+            var panelRenderer = panel.GetComponent<MeshRenderer>();
+            panelRenderer.sharedMaterial = paint;
+            panelRenderer.shadowCastingMode = ShadowCastingMode.TwoSided;
+
+            var handles = new Transform[2];
+            for (int i = 0; i < 2; i++)
+            {
+                float side = i == 0 ? 1f : -1f;
+                var handle = new GameObject(i == 0 ? "Handle_Front" : "Handle_Back").transform;
+                handle.SetParent(leaf.transform, false);
+                handle.localPosition = new Vector3(width - 0.09f, handleHeight, side * thickness * 0.5f);
+                GameObject plate = Part(PrimitiveType.Cube, "Plate", handle, new Vector3(0f, -0.02f, side * 0.003f), new Vector3(0.04f, 0.16f, 0.006f), steel);
+                GameObject stem = Part(PrimitiveType.Cylinder, "Stem", handle, new Vector3(0f, 0f, side * 0.028f), new Vector3(0.018f, 0.025f, 0.018f), steel);
+                stem.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                Part(PrimitiveType.Cube, "Lever", handle, new Vector3(-0.05f, 0f, side * 0.05f), new Vector3(0.12f, 0.018f, 0.016f), steel);
+                plate.isStatic = false;
+                handles[i] = handle;
+            }
+
+            var component = root.AddComponent<Door>();
+            component.leaf = leaf.transform;
+            component.handles = handles;
+            // recordings (Assets/Audio/CREDITS.md); a missing one falls back to the generated sound
+            component.openClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_open.wav");
+            component.closeClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_close.wav");
+            component.shutClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_shut.wav");
+            component.openTime = 1f;   // the creak is a slow one: the door takes its time
+
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
+            Object.DestroyImmediate(root);
+            return prefab;
         }
 
         static Transform Fixture(string name, Transform parent, Vector3 position, Quaternion rotation)

@@ -17,7 +17,11 @@ namespace BodycamHorror.Enemies
         const int MaxLoosePieces = 40;
 
         public float stumpBleedTime = 1.4f;
-        public float pieceLifetime = 40f;
+        [Tooltip("A severed piece stays a physics object for this long, then freezes where it lies (s).")]
+        public float piecePhysicsTime = 8f;
+        [Tooltip("It starts to dissolve this long after coming off (s).")]
+        public float pieceLifetime = 15f;
+        public float pieceDissolveTime = 2.5f;
         public Color bloodColor = new Color(0.32f, 0.04f, 0.03f, 0.9f);
 
         static readonly Dictionary<Mesh, int[]> WeldCache = new Dictionary<Mesh, int[]>();
@@ -392,7 +396,7 @@ namespace BodycamHorror.Enemies
             rb.linearVelocity = inherited + throwDirection.normalized * throwSpeed + Vector3.up * 1.2f + Random.insideUnitSphere * 0.8f;
             rb.angularVelocity = Random.onUnitSphere * Random.Range(4f, 12f);
 
-            Destroy(go, pieceLifetime);
+            CorpseDecay.Begin(go, piecePhysicsTime, pieceLifetime, pieceDissolveTime);
             LoosePieces.Enqueue(go);
             while (LoosePieces.Count > MaxLoosePieces)
             {

@@ -31,7 +31,12 @@ namespace BodycamHorror.Enemies
         public float staggerDamage = 30f;
         [Tooltip("A single hit at least this strong knocks it down.")]
         public float knockdownDamage = 60f;
-        public float corpseLifetime = 40f;
+        [Tooltip("The body stays a physics object for this long after death, then freezes as it lies (s).")]
+        public float corpsePhysicsTime = 8f;
+        [Tooltip("The body starts to dissolve this long after death (s).")]
+        public float corpseLifetime = 15f;
+        [Tooltip("How long the dissolve takes (s).")]
+        public float corpseDissolveTime = 2.5f;
 
         [Header("Senses")]
         [Tooltip("How far it can see the player.")]
@@ -238,6 +243,7 @@ namespace BodycamHorror.Enemies
             voice.rolloffMode = AudioRolloffMode.Linear;
             voice.minDistance = 2f;
             voice.maxDistance = 35f;
+            Audio.SoundOcclusion.Attach(voice, transform, 1.4f);
             voiceVariant = Random.Range(0, 4);
 
             health = maxHealth;
@@ -694,6 +700,7 @@ namespace BodycamHorror.Enemies
             {
                 var col = Hits[i].collider;
                 if (col.attachedRigidbody == rb) continue;
+                if (BodycamHorror.Environment.Door.EnemyPassable(col)) continue;   // not a wall: the door opens as it gets there
                 var inf = col.GetComponentInParent<Infected>();
                 if (inf && !inf.IsDead) continue;
                 if (Hits[i].distance < bestD) { bestD = Hits[i].distance; best = Hits[i]; found = true; }
@@ -1110,7 +1117,7 @@ namespace BodycamHorror.Enemies
             voice.Stop();
             Say("growl", 0.8f, Random.Range(0.6f, 0.75f));   // last gurgle
             Died?.Invoke(this);
-            Destroy(gameObject, corpseLifetime);
+            CorpseDecay.Begin(gameObject, corpsePhysicsTime, corpseLifetime, corpseDissolveTime);   // freezes, later dissolves and goes
         }
 
         // ------------------------------------------------------------------ helpers

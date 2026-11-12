@@ -101,6 +101,8 @@ namespace BodycamHorror.Player
 
         /// <summary>Footstep phase in radians (one full cycle = left + right step).</summary>
         public float StepPhase { get; private set; }
+        /// <summary>A foot just came down, in step with the bob (0 walk .. 1 sprint). See PlayerFootsteps.</summary>
+        public event System.Action<float> Footstep;
         /// <summary>0..1 bob strength this frame.</summary>
         public float BobAmount { get; private set; }
         /// <summary>How far steps, landings and leaning have moved the camera off the pivot.</summary>
@@ -408,6 +410,7 @@ namespace BodycamHorror.Player
             if (step == lastFootfall) return;
             lastFootfall = step;
             if (state != MoveState.Grounded || BobAmount < 0.2f) return;
+            Footstep?.Invoke(sprint01);
             float k = Mathf.Lerp(walkStepWeight, 1f, sprint01);
             if (player.IsCrouching) k *= 0.6f;
             if (weapon && weapon.isActiveAndEnabled) k *= Mathf.Lerp(1f, aimStepWeight, weapon.AimWeight);

@@ -16,7 +16,7 @@ namespace BodycamHorror.Weapons
     public abstract class Firearm : MonoBehaviour
     {
         public enum ReloadStyle { Magazine, PerShell }
-        public enum Sfx { Shot, Dry, MagOut, MagIn, Rack, ShellIn }
+        public enum Sfx { Shot, Dry, MagOut, MagIn, Rack, ShellIn, Cycle }
 
         [Header("Ballistics")]
         [Tooltip("Damage per pellet (per bullet for single-shot guns).")]
@@ -86,6 +86,13 @@ namespace BodycamHorror.Weapons
         [Tooltip("How much of the always-on dark fill this gun and its hands get (BodycamFlashlight). Dark metal barely answers a faint light and needs several times more.")]
         public float darkFillScale = 1f;
 
+        [Header("Spent casings")]
+        public bool ejectsCasings = true;
+        [Tooltip("Ejection port, in weapon space relative to the muzzle (right side of the slide / receiver).")]
+        public Vector3 ejectionOffset = new Vector3(0.013f, 0.013f, -0.097f);
+        [Tooltip("How the casing is thrown (m/s), in weapon space: right, up, back.")]
+        public Vector3 ejectionVelocity = new Vector3(1.8f, 1.4f, -0.4f);
+
         [Header("Parts (built by Build Placeholder Model)")]
         public Transform muzzle;
         public Transform leftGrip;
@@ -116,6 +123,9 @@ namespace BodycamHorror.Weapons
         [Tooltip("Slide release / pump stroke.")]
         public AudioClip rackClip;
         public AudioClip shellInClip;
+        [Tooltip("The action cycling right after a shot (slide back and home). Empty = generated.")]
+        public AudioClip cycleClip;
+        [Range(0f, 1f)] public float cycleVolume = 0.85f;
 
         public int Ammo { get; set; }
         /// <summary>A weapon light is on this gun: the flashlight rides under its barrel while it is out.</summary>
@@ -311,7 +321,17 @@ namespace BodycamHorror.Weapons
             // a shot goes out through the space it is fired in; everything else is the gun in the hands
             if (sfx == Sfx.Shot && BodycamHorror.Audio.GunshotAcoustics.Play(clip, volume, pitch, pelletsPerShot > 1 ? 1.35f : 1f)) return;
             audioSource.pitch = pitch;
-            audioSource.PlayOneShot(clip, volume);
+            audioSource.PlayOneShot(clip, sfx == Sfx.Cycle ? cycleVolume : volume);
+        }
+
+        /// <summary>Throws a spent casing out of the ejection port, carrying the shooter's own speed.</summary>
+        protected void EjectCasing(Casings.Kind kind)
+        {
+            if (!ejectsCasings || !muzzle) return;
+            Transform g = VisualRoot;
+            Vector3 port = g.TransformPoint(muzzle.localPosition + ejectionOffset);
+            var cc = GetComponentInParent<CharacterController>();
+            Casings.Eject(kind, port, g.rotation, ejectionVelocity, cc ? cc.velocity : Vector3.zero, cc ? cc.transform : transform.root);
         }
 
         AudioClip Recorded(Sfx sfx)
@@ -324,6 +344,7 @@ namespace BodycamHorror.Weapons
                 case Sfx.MagIn: return magInClip;
                 case Sfx.Rack: return rackClip;
                 case Sfx.ShellIn: return shellInClip;
+                case Sfx.Cycle: return cycleClip;
                 default: return null;
             }
         }

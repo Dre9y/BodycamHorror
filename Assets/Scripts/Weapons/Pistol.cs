@@ -92,7 +92,12 @@ namespace BodycamHorror.Weapons
             slide.localPosition = slideRest + Vector3.back * (slideTravel * slideOffset);
         }
 
-        protected override void OnShot() => slideOffset = 1f;
+        protected override void OnShot()
+        {
+            slideOffset = 1f;
+            Play(Sfx.Cycle, Random.Range(0.96f, 1.04f));
+            EjectCasing(Casings.Kind.Pistol);
+        }
 
         protected override AudioClip CreateClip(Sfx sfx) => sfx switch
         {
@@ -101,6 +106,7 @@ namespace BodycamHorror.Weapons
             Sfx.MagOut => ProceduralAudio.Click(0.05f, 1400f, 0.6f),
             Sfx.MagIn => ProceduralAudio.DoubleClick(0.07f, 1800f, 0.8f),
             Sfx.Rack => ProceduralAudio.DoubleClick(0.12f, 2400f, 0.9f),
+            Sfx.Cycle => ProceduralAudio.ActionCycle(),
             _ => ProceduralAudio.Click(0.04f, 1600f, 0.6f),
         };
 

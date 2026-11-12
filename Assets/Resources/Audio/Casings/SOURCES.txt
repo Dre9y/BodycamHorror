@@ -1,0 +1,12 @@
+Spent casing sounds. All CC0 (public domain): free for any use, no credit required.
+
+Brass/casing_*  - Freesound pack "Small Bullet Casing" by BlondPanda
+                  https://freesound.org/people/BlondPanda/packs/42478/
+                  hard    = Small_Bullet_Hard_Hit_01..05        (#777924-777928)
+                  medium  = Small_Bullet_Medium_Hit_01..05      (#777945-777949)
+                  soft    = Small_Bullet_Soft_Hit_01..05        (#778001-778005)
+                  verysoft= Small_Bullet_Very_Soft_Hit_01..05   (#778022-778026)
+Shell/shell_12ga_drop - Freesound "12 Gauge Shell drop" by rammbostein
+                  https://freesound.org/people/rammbostein/sounds/436070/
+
+Files are Freesound's high-quality MP3 previews.

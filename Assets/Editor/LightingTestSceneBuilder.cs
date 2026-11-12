@@ -117,6 +117,7 @@ namespace BodycamHorror.EditorTools
                 EditorUtility.SetDirty(exposure);
             }
             AddDust();
+            AmbienceBuilder.Build();   // drips, creaks, lamp hum and the bed under it all
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);

@@ -2131,6 +2131,40 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 159497542}
   m_Mesh: {fileID: 42546312}
+--- !u!1 &168059965
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 168059966}
+  m_Layer: 0
+  m_Name: Drips
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &168059966
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 168059965}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1262838798}
+  - {fileID: 418756672}
+  - {fileID: 1415766004}
+  m_Father: {fileID: 507249050}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &168252291
 GameObject:
   m_ObjectHideFlags: 0
@@ -2295,6 +2329,62 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
+--- !u!1 &168274690
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 168274691}
+  - component: {fileID: 168274692}
+  m_Layer: 0
+  m_Name: Hum
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &168274691
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 168274690}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -0.1, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1621627048}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &168274692
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 168274690}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 0
+  clips:
+  - {fileID: 8300000, guid: fa5fd448a9c5532469c0fd7285390bb5, type: 3}
+  volume: 0.22
+  volumeJitter: 0.3
+  pitch: {x: 0.97, y: 1.03}
+  interval: {x: 4, y: 12}
+  radius: 0
+  spatialBlend: 1
+  minDistance: 0.5
+  maxDistance: 7
+  occlusion: 1
 --- !u!1 &181014043
 GameObject:
   m_ObjectHideFlags: 0
@@ -2531,6 +2621,66 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 198870916}
   m_Mesh: {fileID: 1272624459}
+--- !u!1 &216536678
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 216536679}
+  - component: {fileID: 216536680}
+  m_Layer: 0
+  m_Name: Creaks_EndRoom
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &216536679
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 216536678}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 2.4, z: 30}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 294261058}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &216536680
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 216536678}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 1
+  clips:
+  - {fileID: 8300000, guid: b1da5621484bd5d4392dbd7dfccafc29, type: 3}
+  - {fileID: 8300000, guid: 66681cda2aa78bc4382ba50c2215061c, type: 3}
+  - {fileID: 8300000, guid: 423a87819ab214d4fb95d155e76e0690, type: 3}
+  - {fileID: 8300000, guid: 55de27abd9d12424ebb2e8e8ee697d00, type: 3}
+  - {fileID: 8300000, guid: 600fcfd47af6d6942a00a3aaac9f12cf, type: 3}
+  volume: 0.35
+  volumeJitter: 0.3
+  pitch: {x: 0.92, y: 1.06}
+  interval: {x: 18, y: 45}
+  radius: 4
+  spatialBlend: 1
+  minDistance: 2
+  maxDistance: 30
+  occlusion: 1
 --- !u!1 &234364589
 GameObject:
   m_ObjectHideFlags: 0
@@ -2996,6 +3146,42 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 294130347}
   m_Mesh: {fileID: -8126535997912153522, guid: 7e7b80c2d20e66c4fade2ccee8ab5df1, type: 3}
+--- !u!1 &294261057
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 294261058}
+  m_Layer: 0
+  m_Name: Building
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &294261058
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 294261057}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1787247761}
+  - {fileID: 216536679}
+  - {fileID: 1923543395}
+  - {fileID: 1543831112}
+  - {fileID: 970717786}
+  m_Father: {fileID: 507249050}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!43 &317247013
 Mesh:
   m_ObjectHideFlags: 0
@@ -4161,6 +4347,80 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 417695416}
   m_Mesh: {fileID: 8438288638930290342, guid: 7e7b80c2d20e66c4fade2ccee8ab5df1, type: 3}
+--- !u!1 &418756671
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 418756672}
+  - component: {fileID: 418756673}
+  m_Layer: 0
+  m_Name: Drip_EndRoom
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &418756672
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 418756671}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 3.6, y: 2.8, z: 31.5}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 168059966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &418756673
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 418756671}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 1
+  clips:
+  - {fileID: 8300000, guid: 9db509edfaf614e448d62b46628ea10a, type: 3}
+  - {fileID: 8300000, guid: e1d2d09e04050b440875032419e9f3d7, type: 3}
+  - {fileID: 8300000, guid: b3b700e8db651fe4093474dcd89c7acf, type: 3}
+  - {fileID: 8300000, guid: 64b26d24c475bf749a64ec6ec51ce4f8, type: 3}
+  - {fileID: 8300000, guid: a151fc38f880c3a4fb50967575d2acc7, type: 3}
+  - {fileID: 8300000, guid: 14d47b06062b7d34f8b4e73298343dab, type: 3}
+  - {fileID: 8300000, guid: c45c9a328fbac5e4cb9d54049da788a5, type: 3}
+  - {fileID: 8300000, guid: df5fa92d8f812644289c8341101121b9, type: 3}
+  - {fileID: 8300000, guid: 090232cd267e05e40b9271bd48f430bb, type: 3}
+  - {fileID: 8300000, guid: 93235ba26136d634c85c21c349a2c5de, type: 3}
+  - {fileID: 8300000, guid: 6a399b25a2036974ca219a0aac08b9c4, type: 3}
+  - {fileID: 8300000, guid: 01fd755830fe73c40b302052151a1b54, type: 3}
+  - {fileID: 8300000, guid: 9a45e2a23dc94f04dbea4ee64d970cf0, type: 3}
+  - {fileID: 8300000, guid: 1daeeccc93b3b8541a53f5757ba2aa15, type: 3}
+  - {fileID: 8300000, guid: 4e4d63b4425a22c4494b69b3202ff8cc, type: 3}
+  - {fileID: 8300000, guid: 50581b106431a1c4ea57bcf4d9b0c2bc, type: 3}
+  - {fileID: 8300000, guid: 119cfb40fc89b014eaf07aacaf1e72c4, type: 3}
+  - {fileID: 8300000, guid: 2e46a2111c571124a88b59ba074362aa, type: 3}
+  - {fileID: 8300000, guid: 3af106a7a584da446ae5ffc561e27dc6, type: 3}
+  volume: 0.4
+  volumeJitter: 0.3
+  pitch: {x: 0.92, y: 1.06}
+  interval: {x: 0.7, y: 2.6}
+  radius: 0
+  spatialBlend: 1
+  minDistance: 1
+  maxDistance: 16
+  occlusion: 1
 --- !u!43 &420435410
 Mesh:
   m_ObjectHideFlags: 0
@@ -4925,6 +5185,62 @@ MonoBehaviour:
   onClip: {fileID: 8300000, guid: 876799d44fda71041bec5dc32980a148, type: 3}
   offClip: {fileID: 8300000, guid: ec777f4252f943a4690ec2457903d7bf, type: 3}
   clickVolume: 0.8
+--- !u!1 &492807175
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 492807176}
+  - component: {fileID: 492807177}
+  m_Layer: 0
+  m_Name: Hum
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &492807176
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 492807175}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0, y: -0.6, z: -0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 681573401}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &492807177
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 492807175}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 0
+  clips:
+  - {fileID: 8300000, guid: 3af5f789c5674c443806cf8520492631, type: 3}
+  volume: 0.18
+  volumeJitter: 0.3
+  pitch: {x: 0.97, y: 1.03}
+  interval: {x: 4, y: 12}
+  radius: 0
+  spatialBlend: 1
+  minDistance: 0.4
+  maxDistance: 5
+  occlusion: 1
 --- !u!1 &493566834
 GameObject:
   m_ObjectHideFlags: 0
@@ -5037,6 +5353,41 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 493566834}
   m_Mesh: {fileID: 1227245340}
+--- !u!1 &507249049
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 507249050}
+  m_Layer: 0
+  m_Name: Ambience
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &507249050
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 507249049}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 2111492798}
+  - {fileID: 1213968330}
+  - {fileID: 168059966}
+  - {fileID: 294261058}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &510896777
 GameObject:
   m_ObjectHideFlags: 0
@@ -5768,6 +6119,62 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1958781739}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &560192169
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 560192170}
+  - component: {fileID: 560192171}
+  m_Layer: 0
+  m_Name: Hum
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &560192170
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 560192169}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1887640399}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &560192171
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 560192169}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 0
+  clips:
+  - {fileID: 8300000, guid: 3af5f789c5674c443806cf8520492631, type: 3}
+  volume: 0.1
+  volumeJitter: 0.3
+  pitch: {x: 0.97, y: 1.03}
+  interval: {x: 4, y: 12}
+  radius: 0
+  spatialBlend: 1
+  minDistance: 0.3
+  maxDistance: 4
+  occlusion: 1
 --- !u!1 &568399165
 GameObject:
   m_ObjectHideFlags: 0
@@ -7342,7 +7749,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 787312759225018027, guid: 97352db57df07a142ae3d5c1d98ae350, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 492807176}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 97352db57df07a142ae3d5c1d98ae350, type: 3}
 --- !u!4 &681573401 stripped
@@ -9590,6 +10000,62 @@ Mesh:
       - serializedVersion: 1
         m_IndexStart: 0
         m_IndexCount: 0
+--- !u!1 &886246941
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 886246942}
+  - component: {fileID: 886246943}
+  m_Layer: 0
+  m_Name: Hum
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &886246942
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 886246941}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0, y: -0.6, z: -0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1015989401}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &886246943
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 886246941}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 0
+  clips:
+  - {fileID: 8300000, guid: 3af5f789c5674c443806cf8520492631, type: 3}
+  volume: 0.18
+  volumeJitter: 0.3
+  pitch: {x: 0.97, y: 1.03}
+  interval: {x: 4, y: 12}
+  radius: 0
+  spatialBlend: 1
+  minDistance: 0.4
+  maxDistance: 5
+  occlusion: 1
 --- !u!1 &890074389
 GameObject:
   m_ObjectHideFlags: 0
@@ -10856,6 +11322,70 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &970717785
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 970717786}
+  - component: {fileID: 970717787}
+  m_Layer: 0
+  m_Name: Knocks_Pipes
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &970717786
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 970717785}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 5, y: 3.4, z: 20}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 294261058}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &970717787
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 970717785}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 1
+  clips:
+  - {fileID: 8300000, guid: 5de0fa1b4ab100448976a373944e5a96, type: 3}
+  - {fileID: 8300000, guid: edb02dc369937b9449d7f390472324bc, type: 3}
+  - {fileID: 8300000, guid: 3d8d35ef68c48d440b7ffe784451a63a, type: 3}
+  - {fileID: 8300000, guid: e4efa1c5cdaa7af4ea942211985daead, type: 3}
+  - {fileID: 8300000, guid: b2a374c824a4d0b4b8052abe384c48f9, type: 3}
+  - {fileID: 8300000, guid: 5916f0e441f44b04181a2bcd40663284, type: 3}
+  - {fileID: 8300000, guid: 476c27e7bc2ffb54e8f93760c9ea1581, type: 3}
+  - {fileID: 8300000, guid: a3b9583b9ad8e534caff4c2e694c9f92, type: 3}
+  - {fileID: 8300000, guid: 7647a34fd7b94ff478595830000bb631, type: 3}
+  volume: 0.4
+  volumeJitter: 0.3
+  pitch: {x: 0.92, y: 1.06}
+  interval: {x: 16, y: 45}
+  radius: 8
+  spatialBlend: 1
+  minDistance: 3
+  maxDistance: 45
+  occlusion: 1
 --- !u!1 &972922682
 GameObject:
   m_ObjectHideFlags: 0
@@ -11201,7 +11731,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 787312759225018027, guid: 97352db57df07a142ae3d5c1d98ae350, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 886246942}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 97352db57df07a142ae3d5c1d98ae350, type: 3}
 --- !u!4 &1015989401 stripped
@@ -11750,6 +12283,9 @@ MonoBehaviour:
   flashlightOffset: {x: 0, y: -0.026, z: -0.06}
   startWithLight: 1
   darkFillScale: 8
+  ejectsCasings: 1
+  ejectionOffset: {x: 0.02, y: 0, z: -0.66}
+  ejectionVelocity: {x: 2, y: 1.1, z: -0.2}
   muzzle: {fileID: 1895004561}
   leftGrip: {fileID: 61662650}
   flashMesh: {fileID: 193881108}
@@ -11771,6 +12307,8 @@ MonoBehaviour:
   magInClip: {fileID: 8300000, guid: 5968d521fdc1e4641a547acfc8b68df2, type: 3}
   rackClip: {fileID: 8300000, guid: b87ce90516c69f543b6b513e894ab345, type: 3}
   shellInClip: {fileID: 8300000, guid: 5968d521fdc1e4641a547acfc8b68df2, type: 3}
+  cycleClip: {fileID: 0}
+  cycleVolume: 0.85
   pump: {fileID: 1399486683}
   pumpTravel: 0.09
   pumpDelay: 0.16
@@ -12729,6 +13267,62 @@ Transform:
   - {fileID: 577351664}
   m_Father: {fileID: 1863863702}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1213968329
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1213968330}
+  - component: {fileID: 1213968331}
+  m_Layer: 0
+  m_Name: Bed_Hum
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1213968330
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1213968329}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 507249050}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1213968331
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1213968329}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 0
+  clips:
+  - {fileID: 8300000, guid: 8ef0c4eca920735489cc5a5da4fc272f, type: 3}
+  volume: 0.07
+  volumeJitter: 0.3
+  pitch: {x: 0.97, y: 1.03}
+  interval: {x: 4, y: 12}
+  radius: 0
+  spatialBlend: 0
+  minDistance: 1
+  maxDistance: 25
+  occlusion: 0
 --- !u!1 &1220026184
 GameObject:
   m_ObjectHideFlags: 0
@@ -13200,6 +13794,80 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1241801481}
   m_Mesh: {fileID: 1790604674}
+--- !u!1 &1262838797
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1262838798}
+  - component: {fileID: 1262838799}
+  m_Layer: 0
+  m_Name: Drip_Corridor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1262838798
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1262838797}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1, y: 2.8, z: 9}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 168059966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1262838799
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1262838797}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 1
+  clips:
+  - {fileID: 8300000, guid: 9db509edfaf614e448d62b46628ea10a, type: 3}
+  - {fileID: 8300000, guid: e1d2d09e04050b440875032419e9f3d7, type: 3}
+  - {fileID: 8300000, guid: b3b700e8db651fe4093474dcd89c7acf, type: 3}
+  - {fileID: 8300000, guid: 64b26d24c475bf749a64ec6ec51ce4f8, type: 3}
+  - {fileID: 8300000, guid: a151fc38f880c3a4fb50967575d2acc7, type: 3}
+  - {fileID: 8300000, guid: 14d47b06062b7d34f8b4e73298343dab, type: 3}
+  - {fileID: 8300000, guid: c45c9a328fbac5e4cb9d54049da788a5, type: 3}
+  - {fileID: 8300000, guid: df5fa92d8f812644289c8341101121b9, type: 3}
+  - {fileID: 8300000, guid: 090232cd267e05e40b9271bd48f430bb, type: 3}
+  - {fileID: 8300000, guid: 93235ba26136d634c85c21c349a2c5de, type: 3}
+  - {fileID: 8300000, guid: 6a399b25a2036974ca219a0aac08b9c4, type: 3}
+  - {fileID: 8300000, guid: 01fd755830fe73c40b302052151a1b54, type: 3}
+  - {fileID: 8300000, guid: 9a45e2a23dc94f04dbea4ee64d970cf0, type: 3}
+  - {fileID: 8300000, guid: 1daeeccc93b3b8541a53f5757ba2aa15, type: 3}
+  - {fileID: 8300000, guid: 4e4d63b4425a22c4494b69b3202ff8cc, type: 3}
+  - {fileID: 8300000, guid: 50581b106431a1c4ea57bcf4d9b0c2bc, type: 3}
+  - {fileID: 8300000, guid: 119cfb40fc89b014eaf07aacaf1e72c4, type: 3}
+  - {fileID: 8300000, guid: 2e46a2111c571124a88b59ba074362aa, type: 3}
+  - {fileID: 8300000, guid: 3af106a7a584da446ae5ffc561e27dc6, type: 3}
+  volume: 0.35
+  volumeJitter: 0.3
+  pitch: {x: 0.92, y: 1.06}
+  interval: {x: 1.2, y: 4.5}
+  radius: 0
+  spatialBlend: 1
+  minDistance: 1
+  maxDistance: 14
+  occlusion: 1
 --- !u!1 &1265045240
 GameObject:
   m_ObjectHideFlags: 0
@@ -14254,8 +14922,11 @@ MonoBehaviour:
   meleeDamage: 25
   meleeForce: 5
   flashlightOffset: {x: 0, y: -0.047, z: -0.035}
-  startWithLight: 0
+  startWithLight: 1
   darkFillScale: 1
+  ejectsCasings: 1
+  ejectionOffset: {x: 0.013, y: 0.013, z: -0.097}
+  ejectionVelocity: {x: 1.8, y: 1.4, z: -0.4}
   muzzle: {fileID: 1656965312}
   leftGrip: {fileID: 608398441}
   flashMesh: {fileID: 34740882}
@@ -14277,6 +14948,8 @@ MonoBehaviour:
   magInClip: {fileID: 8300000, guid: fc7e7ac8f4ba86d419c103d4d0b1b900, type: 3}
   rackClip: {fileID: 8300000, guid: 8b3061ef480b39e4097883e201062fc2, type: 3}
   shellInClip: {fileID: 0}
+  cycleClip: {fileID: 0}
+  cycleVolume: 0.85
   slide: {fileID: 2062401074}
   slideTravel: 0.028
   modelPrefab: {fileID: 919132149155446097, guid: 7e7b80c2d20e66c4fade2ccee8ab5df1, type: 3}
@@ -16398,6 +17071,80 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1410955867}
   m_Mesh: {fileID: 877450657}
+--- !u!1 &1415766003
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1415766004}
+  - component: {fileID: 1415766005}
+  m_Layer: 0
+  m_Name: Drip_LightRoom
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1415766004
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1415766003}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 7.6, y: 2.8, z: 8}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 168059966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1415766005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1415766003}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 1
+  clips:
+  - {fileID: 8300000, guid: 9db509edfaf614e448d62b46628ea10a, type: 3}
+  - {fileID: 8300000, guid: e1d2d09e04050b440875032419e9f3d7, type: 3}
+  - {fileID: 8300000, guid: b3b700e8db651fe4093474dcd89c7acf, type: 3}
+  - {fileID: 8300000, guid: 64b26d24c475bf749a64ec6ec51ce4f8, type: 3}
+  - {fileID: 8300000, guid: a151fc38f880c3a4fb50967575d2acc7, type: 3}
+  - {fileID: 8300000, guid: 14d47b06062b7d34f8b4e73298343dab, type: 3}
+  - {fileID: 8300000, guid: c45c9a328fbac5e4cb9d54049da788a5, type: 3}
+  - {fileID: 8300000, guid: df5fa92d8f812644289c8341101121b9, type: 3}
+  - {fileID: 8300000, guid: 090232cd267e05e40b9271bd48f430bb, type: 3}
+  - {fileID: 8300000, guid: 93235ba26136d634c85c21c349a2c5de, type: 3}
+  - {fileID: 8300000, guid: 6a399b25a2036974ca219a0aac08b9c4, type: 3}
+  - {fileID: 8300000, guid: 01fd755830fe73c40b302052151a1b54, type: 3}
+  - {fileID: 8300000, guid: 9a45e2a23dc94f04dbea4ee64d970cf0, type: 3}
+  - {fileID: 8300000, guid: 1daeeccc93b3b8541a53f5757ba2aa15, type: 3}
+  - {fileID: 8300000, guid: 4e4d63b4425a22c4494b69b3202ff8cc, type: 3}
+  - {fileID: 8300000, guid: 50581b106431a1c4ea57bcf4d9b0c2bc, type: 3}
+  - {fileID: 8300000, guid: 119cfb40fc89b014eaf07aacaf1e72c4, type: 3}
+  - {fileID: 8300000, guid: 2e46a2111c571124a88b59ba074362aa, type: 3}
+  - {fileID: 8300000, guid: 3af106a7a584da446ae5ffc561e27dc6, type: 3}
+  volume: 0.28
+  volumeJitter: 0.3
+  pitch: {x: 0.92, y: 1.06}
+  interval: {x: 2.5, y: 7}
+  radius: 0
+  spatialBlend: 1
+  minDistance: 1
+  maxDistance: 12
+  occlusion: 1
 --- !u!1 &1422648356
 GameObject:
   m_ObjectHideFlags: 0
@@ -17150,6 +17897,64 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
+--- !u!1 &1543831111
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1543831112}
+  - component: {fileID: 1543831113}
+  m_Layer: 0
+  m_Name: Scrapes_BehindLeftWall
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1543831112
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1543831111}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -6, y: 1.2, z: 12}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 294261058}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1543831113
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1543831111}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 1
+  clips:
+  - {fileID: 8300000, guid: 57e33f23cb5fd114198f61b10fcb3efd, type: 3}
+  - {fileID: 8300000, guid: d83f66590495c0c43a9a6f6d6d9ec275, type: 3}
+  - {fileID: 8300000, guid: 22a9e4bfe90047b4ebe0c56e181b19df, type: 3}
+  volume: 0.45
+  volumeJitter: 0.3
+  pitch: {x: 0.92, y: 1.06}
+  interval: {x: 30, y: 70}
+  radius: 6
+  spatialBlend: 1
+  minDistance: 3
+  maxDistance: 40
+  occlusion: 1
 --- !u!43 &1547555577
 Mesh:
   m_ObjectHideFlags: 0
@@ -18131,6 +18936,7 @@ Transform:
   - {fileID: 135865218}
   - {fileID: 1348939281}
   - {fileID: 168252292}
+  - {fileID: 168274691}
   m_Father: {fileID: 1350818939}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1631400673
@@ -20045,6 +20851,66 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1783588249}
   m_Mesh: {fileID: 956060844}
+--- !u!1 &1787247760
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1787247761}
+  - component: {fileID: 1787247762}
+  m_Layer: 0
+  m_Name: Creaks_Ceiling
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1787247761
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1787247760}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 3.5, z: 18}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 294261058}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1787247762
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1787247760}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 1
+  clips:
+  - {fileID: 8300000, guid: b1da5621484bd5d4392dbd7dfccafc29, type: 3}
+  - {fileID: 8300000, guid: 66681cda2aa78bc4382ba50c2215061c, type: 3}
+  - {fileID: 8300000, guid: 423a87819ab214d4fb95d155e76e0690, type: 3}
+  - {fileID: 8300000, guid: 55de27abd9d12424ebb2e8e8ee697d00, type: 3}
+  - {fileID: 8300000, guid: 600fcfd47af6d6942a00a3aaac9f12cf, type: 3}
+  volume: 0.4
+  volumeJitter: 0.3
+  pitch: {x: 0.92, y: 1.06}
+  interval: {x: 14, y: 34}
+  radius: 9
+  spatialBlend: 1
+  minDistance: 2
+  maxDistance: 35
+  occlusion: 1
 --- !u!43 &1790604674
 Mesh:
   m_ObjectHideFlags: 0
@@ -21283,6 +22149,7 @@ Transform:
   - {fileID: 27996579}
   - {fileID: 181014044}
   - {fileID: 318570614}
+  - {fileID: 560192170}
   m_Father: {fileID: 1350818939}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1895004560
@@ -21902,6 +22769,64 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1921932264}
   m_Mesh: {fileID: -7841220636043900775, guid: 7e7b80c2d20e66c4fade2ccee8ab5df1, type: 3}
+--- !u!1 &1923543394
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1923543395}
+  - component: {fileID: 1923543396}
+  m_Layer: 0
+  m_Name: Scrapes_BeyondFarWall
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1923543395
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1923543394}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.2, z: 38}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 294261058}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1923543396
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1923543394}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 1
+  clips:
+  - {fileID: 8300000, guid: 57e33f23cb5fd114198f61b10fcb3efd, type: 3}
+  - {fileID: 8300000, guid: d83f66590495c0c43a9a6f6d6d9ec275, type: 3}
+  - {fileID: 8300000, guid: 22a9e4bfe90047b4ebe0c56e181b19df, type: 3}
+  volume: 0.55
+  volumeJitter: 0.3
+  pitch: {x: 0.92, y: 1.06}
+  interval: {x: 25, y: 60}
+  radius: 5
+  spatialBlend: 1
+  minDistance: 3
+  maxDistance: 45
+  occlusion: 1
 --- !u!1 &1924001169
 GameObject:
   m_ObjectHideFlags: 0
@@ -23150,6 +24075,62 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2107269019}
   m_Mesh: {fileID: -850781379039967264, guid: 7e7b80c2d20e66c4fade2ccee8ab5df1, type: 3}
+--- !u!1 &2111492797
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2111492798}
+  - component: {fileID: 2111492799}
+  m_Layer: 0
+  m_Name: Bed_Drone
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2111492798
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2111492797}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 507249050}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2111492799
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2111492797}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e0ac21b29f35d498757fb881deb4a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Audio.AmbientSound
+  mode: 0
+  clips:
+  - {fileID: 8300000, guid: a035d129a8a1e494fa2f82101dbf0426, type: 3}
+  volume: 0.22
+  volumeJitter: 0.3
+  pitch: {x: 0.97, y: 1.03}
+  interval: {x: 4, y: 12}
+  radius: 0
+  spatialBlend: 0
+  minDistance: 1
+  maxDistance: 25
+  occlusion: 0
 --- !u!1 &2113800692
 GameObject:
   m_ObjectHideFlags: 0
@@ -23635,3 +24616,4 @@ SceneRoots:
   - {fileID: 959564845}
   - {fileID: 1847165646}
   - {fileID: 395520399}
+  - {fileID: 507249050}

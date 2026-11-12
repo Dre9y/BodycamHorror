@@ -1,0 +1,21 @@
+Ambience and environment sounds. All CC0 (public domain) from Freesound: free for any use, no credit required.
+The files here are Freesound's high-quality MP3 previews; Prepared/ holds the game-ready clips cut and
+levelled from them (BodycamHorror > Prepare Ambience Sounds).
+
+bed_basement_drone     "Abandoned Basement Drone" by Ixwolf                   https://freesound.org/s/803970/
+bed_facility_hum       "Facility Hum Ambience Loopable" by aSuperiorPotato    https://freesound.org/s/619320/
+drip_single            "Drop - Water" by mattfinarelli                        https://freesound.org/s/533146/
+drip_on_water          "Water Dripping on Water.aif" by ftpalad               https://freesound.org/s/119938/
+drip_cave              "Droplets in a cave" by iampagan                       https://freesound.org/s/177031/
+creak_metallic_groan   "Metallic Groan" by hinchinbrook                       https://freesound.org/s/496836/
+creak_crank_groan      "metal crank groan.flac" by kyles                      https://freesound.org/s/453333/
+creak_bending_metal    "Bending Metal" by NachtmahrTV                         https://freesound.org/s/556714/
+creak_moaning_chair    "Moaning Chair.aif" by Housed1J                        https://freesound.org/s/175410/
+creak_truck_squeaks    "Old_Truck_Metal_Squeaks-Creaks..." by dilsun          https://freesound.org/s/508281/
+scrape_stone           "Scraping Stone" by dslrguide                          https://freesound.org/s/321488/
+scrape_pipe            "Metal Pressure Meter Scraped.aif" by RutgerMuller     https://freesound.org/s/104362/
+scrape_lever           "Mechanical2.wav" by BMacZero                          https://freesound.org/s/94121/
+bang_pipe_concrete     "Metal pipe on concrete.wav" (deleted user)            https://freesound.org/s/164572/
+bang_pipe_hammer       "Hitting a Pipe with a Hammer" by brittmosel           https://freesound.org/s/530216/
+hum_fluorescent        "Fluorescent Lightbulb Hum.aif" by ftpalad             https://freesound.org/s/119910/
+hum_bulb_buzz          "Foley_Mechanism_Light_Buzz_Short_Loop..." by Nox_Sound https://freesound.org/s/553075/

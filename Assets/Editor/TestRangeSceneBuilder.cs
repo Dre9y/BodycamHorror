@@ -135,13 +135,31 @@ namespace BodycamHorror.EditorTools
         {
             var color = new Color(0.06f, 0.06f, 0.065f);
             Material body = LightingTestSceneBuilder.SimpleMaterial("WeaponLightBody", color, 0.6f, 0.45f);
-            Material lens = LightingTestSceneBuilder.SimpleMaterial("WeaponLightLens", new Color(0.2f, 0.2f, 0.2f), 0f, 0.95f);
+            // left switched on: the lens glows and it throws its beam along the floor
+            var beamColor = new Color(1f, 0.94f, 0.82f);
+            Material lens = LightingTestSceneBuilder.EmissiveMaterial("WeaponLightLensLit", beamColor, 4f);
             var model = new GameObject("Model");
             BodycamFlashlight.BuildLightBody(model.transform, body, lens);
             model.transform.localScale = Vector3.one * 1.25f;   // a touch bigger, so it reads on the floor from standing height
             var pickup = DarkRoomSceneBuilder.PlacePickup("Pickup_PistolLight", WeaponPickup.Kind.PistolLight, model, floorPoint,
                                                           Quaternion.Euler(0f, 64f, 0f));
             pickup.promptHeight = 0.15f;
+
+            var beam = new GameObject("Beam").AddComponent<Light>();
+            beam.transform.SetParent(pickup.transform.Find("Model"), false);
+            beam.transform.localPosition = new Vector3(0f, 0f, 0.04f);   // just in front of the lens, along the body
+            beam.type = LightType.Spot;
+            beam.color = beamColor;
+            beam.intensity = 18f;
+            beam.range = 12f;
+            beam.spotAngle = 50f;
+            beam.innerSpotAngle = 18f;
+            beam.shadows = LightShadows.Soft;
+            beam.shadowNearPlane = 0.05f;
+            var haze = beam.gameObject.AddComponent<BodycamHorror.Environment.LightHaze>();   // the beam shows in the dusty air
+            haze.material = AssetDatabase.LoadAssetAtPath<Material>(LightingTestSceneBuilder.MaterialDir + "/LightHaze.mat");
+            haze.density = 0.004f;
+            haze.wisps = 0.5f;
             return pickup;
         }
 

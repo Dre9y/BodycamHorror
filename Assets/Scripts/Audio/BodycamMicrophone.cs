@@ -30,19 +30,19 @@ namespace BodycamHorror.Audio
 
         [Header("Auto gain")]
         [Tooltip("Sounds louder than this get turned down (dB).")]
-        [Range(-40f, 0f)] public float threshold = -22f;
+        [Range(-40f, 0f)] public float threshold = -14f;
         [Tooltip("How hard loud sounds are turned down.")]
-        [Range(1f, 20f)] public float ratio = 6f;
+        [Range(1f, 20f)] public float ratio = 3f;
         [Tooltip("How fast the gain drops on a loud sound (ms). Slower lets more of a gunshot overload.")]
         [Range(0.5f, 50f)] public float attack = 5f;
         [Tooltip("How long the gain takes to come back after a loud sound (ms): the 'pumping' after a shot.")]
-        [Range(50f, 3000f)] public float release = 700f;
+        [Range(50f, 3000f)] public float release = 450f;
         [Tooltip("Everything is raised by this (dB), so quiet sounds are close and loud ones squashed.")]
-        [Range(0f, 18f)] public float makeup = 8f;
+        [Range(0f, 18f)] public float makeup = 4f;
 
         [Header("Overload")]
         [Tooltip("Level at which the microphone clips (0-1). Lower = dirtier gunshots.")]
-        [Range(0.2f, 1f)] public float ceiling = 0.75f;
+        [Range(0.2f, 1f)] public float ceiling = 0.92f;
 
         [Header("Character")]
         [Tooltip("Microphone hiss (dB). -90 and below is silent.")]
@@ -59,6 +59,7 @@ namespace BodycamHorror.Audio
         const int MaxChannels = 8;
 
         AudioReverbFilter reverb;
+        float spaceEnclosure = 1f, spaceSize = 3f;   // the space the listener is in right now (GunshotAcoustics)
         float labelTimer;
 
         // read on the audio thread
@@ -66,7 +67,7 @@ namespace BodycamHorror.Audio
         float hpB0, hpB1, hpB2, hpA1, hpA2;
         float lpB0, lpB1, lpB2, lpA1, lpA2;
         float attackCoef, releaseCoef, thresholdLin, slope, makeupLin, noiseLin;
-        float ceilingNow = 0.75f, widthNow = 0.6f, mixNow = 1f;
+        float ceilingNow = 0.92f, widthNow = 0.6f, mixNow = 1f;
 
         // audio thread state
         readonly float[] hpX1 = new float[MaxChannels], hpX2 = new float[MaxChannels], hpY1 = new float[MaxChannels], hpY2 = new float[MaxChannels];
@@ -119,6 +120,18 @@ namespace BodycamHorror.Audio
             if (labelTimer > 0f) labelTimer -= Time.unscaledDeltaTime;
         }
 
+        /// <summary>Shapes the room sound to the space the listener is in, so every sound that goes through
+        /// the microphone carries it: next to none in the open, a short hard slap in a corridor, a long
+        /// dull roll in a hall. <paramref name="enclosure"/>: 0 open air .. 1 shut in;
+        /// <paramref name="size"/>: typical distance to the walls (m). The inspector's Room values are the
+        /// sound of a small room, and are stretched from there.</summary>
+        public void SetSpace(float enclosure, float size)
+        {
+            spaceEnclosure = Mathf.Clamp01(enclosure);
+            spaceSize = Mathf.Clamp(size, 0.8f, 40f);
+            Refresh();
+        }
+
         /// <summary>Recomputes the filters from the inspector values (main thread).</summary>
         public void Refresh()
         {
@@ -140,18 +153,20 @@ namespace BodycamHorror.Audio
 
             if (reverb)
             {
-                reverb.enabled = !bypass && room > 0.001f;
+                float size01 = Mathf.InverseLerp(1.5f, 25f, spaceSize);
+                float roomNow = room * Mathf.Lerp(0.12f, 1f, spaceEnclosure);
+                reverb.enabled = !bypass && roomNow > 0.001f;
                 reverb.reverbPreset = AudioReverbPreset.User;
                 reverb.dryLevel = 0f;
-                reverb.room = Mathf.Lerp(-3000f, -300f, Mathf.Sqrt(room));   // mB
-                reverb.roomHF = -700f;
+                reverb.room = Mathf.Lerp(-3000f, -300f, Mathf.Sqrt(roomNow));   // mB
+                reverb.roomHF = Mathf.Lerp(-600f, -1100f, size01);   // big places answer darker
                 reverb.roomLF = -300f;
-                reverb.decayTime = roomDecay;
-                reverb.decayHFRatio = 0.55f;
-                reverb.reflectionsLevel = -350f;
-                reverb.reflectionsDelay = 0.006f;
+                reverb.decayTime = Mathf.Clamp(roomDecay * Mathf.Clamp((0.5f + 0.2f * spaceSize) / 1.1f, 0.6f, 4.5f), 0.1f, 6f);
+                reverb.decayHFRatio = Mathf.Lerp(0.6f, 0.4f, size01);
+                reverb.reflectionsLevel = Mathf.Lerp(-200f, -900f, size01);
+                reverb.reflectionsDelay = Mathf.Clamp(spaceSize / 343f, 0.003f, 0.1f);
                 reverb.reverbLevel = 150f;
-                reverb.reverbDelay = 0.012f;
+                reverb.reverbDelay = Mathf.Clamp(2f * spaceSize / 343f, 0.006f, 0.1f);
                 reverb.diffusion = 100f;
                 reverb.density = 100f;
             }

@@ -153,7 +153,8 @@ namespace BodycamHorror.Enemies
 
         void Play(AudioClip clip, Vector3 at)
         {
-            if (clip) AudioSource.PlayClipAtPoint(clip, at, volume);
+            // a staged moment, not part of the place: played as made, whatever room the player is in
+            BodycamHorror.Audio.ScriptedSound.PlayAt(clip, at, volume);
         }
     }
 }

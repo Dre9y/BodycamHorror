@@ -29,6 +29,8 @@ namespace BodycamHorror.Environment
 
         ParticleSystem motes;
         ParticleSystem.Particle[] buffer;
+        Vector3 wrappedAt;
+        float wrapTimer;
 
         void Awake()
         {
@@ -95,7 +97,14 @@ namespace BodycamHorror.Environment
         void LateUpdate()
         {
             Follow();
-            Wrap();
+            // copying every speck out and back is only worth it once the box has moved, or now and then for the drift
+            wrapTimer -= Time.deltaTime;
+            if (wrapTimer <= 0f || (motes.transform.position - wrappedAt).sqrMagnitude > 0.04f)
+            {
+                wrapTimer = 0.5f;
+                wrappedAt = motes.transform.position;
+                Wrap();
+            }
         }
 
         void Follow()

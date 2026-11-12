@@ -1,5 +1,8 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.RenderGraphModule;
+using UnityEngine.Rendering.Universal;
 
 namespace BodycamHorror.Environment
 {
@@ -7,6 +10,8 @@ namespace BodycamHorror.Environment
     /// Makes the air around a point or spot light glow, as if it hung in dust or thin smoke: the
     /// "Light Haze" shader is drawn in a box around the light's range. Follows the light's colour,
     /// intensity, range and cone, so flicker and swinging carry over on their own.
+    /// All the lamps in view are drawn together into one half-size buffer, which is then laid over
+    /// the picture: haze is soft, and marching it for every full-size pixel was most of the frame.
     /// </summary>
     [ExecuteAlways]
     [RequireComponent(typeof(Light))]
@@ -29,21 +34,41 @@ namespace BodycamHorror.Environment
         static readonly int DirId = Shader.PropertyToID("_HazeDir");
         static readonly int ConeId = Shader.PropertyToID("_HazeCone");
         static readonly int ColorId = Shader.PropertyToID("_HazeColor");
+        static readonly int TargetId = Shader.PropertyToID("_HazeTarget");
 
+        static readonly List<LightHaze> Active = new List<LightHaze>();
         static Mesh box;
+        static HazePass pass;
+        static bool hooked;
+
         Light source;
         MaterialPropertyBlock block;
+        Matrix4x4 matrix;
+        Bounds bounds;
+        bool drawn;
 
         void OnEnable()
         {
             source = GetComponent<Light>();
+            if (!Active.Contains(this)) Active.Add(this);
+            if (!hooked)
+            {
+                hooked = true;
+                RenderPipelineManager.beginCameraRendering += OnBeginCamera;
+            }
+        }
+
+        void OnDisable()
+        {
+            Active.Remove(this);
+            drawn = false;
         }
 
         void LateUpdate()
         {
+            drawn = false;
             if (!material || !source || !source.enabled || source.intensity <= 0f || density <= 0f) return;
             if (source.type != LightType.Point && source.type != LightType.Spot) return;
-            if (!box) box = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
             block ??= new MaterialPropertyBlock();
 
             Vector3 pos = transform.position;
@@ -67,15 +92,107 @@ namespace BodycamHorror.Environment
             block.SetVector(ColorId, color);
 
             float size = range * 2f;
-            var rp = new RenderParams(material)
+            matrix = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * size);
+            bounds = new Bounds(pos, Vector3.one * size);
+            drawn = true;
+        }
+
+        static void OnBeginCamera(ScriptableRenderContext context, Camera camera)
+        {
+            if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView) return;
+            Material shared = null;
+            for (int i = 0; i < Active.Count; i++)
+                if (Active[i] && Active[i].drawn) { shared = Active[i].material; break; }
+            if (!shared) return;
+            if (!box) box = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
+            pass ??= new HazePass();
+            pass.composite = shared;
+            camera.GetUniversalAdditionalCameraData().scriptableRenderer.EnqueuePass(pass);
+        }
+
+        /// <summary>Every lamp's haze into a half-size buffer, then that buffer over the picture.</summary>
+        class HazePass : ScriptableRenderPass
+        {
+            public Material composite;
+
+            readonly Plane[] frustum = new Plane[6];
+
+            class DrawData
             {
-                matProps = block,
-                worldBounds = new Bounds(pos, Vector3.one * size),
-                shadowCastingMode = ShadowCastingMode.Off,
-                receiveShadows = false,
-                layer = gameObject.layer,
-            };
-            Graphics.RenderMesh(rp, box, 0, Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * size));
+                public readonly List<LightHaze> items = new List<LightHaze>();
+                public Vector4 target;
+            }
+
+            class CompositeData
+            {
+                public TextureHandle source;
+                public Material material;
+                public Vector4 target;
+            }
+
+            public HazePass()
+            {
+                renderPassEvent = RenderPassEvent.AfterRenderingTransparents;
+                ConfigureInput(ScriptableRenderPassInput.Depth);
+            }
+
+            public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
+            {
+                var resources = frameData.Get<UniversalResourceData>();
+                var cameraData = frameData.Get<UniversalCameraData>();
+                if (resources.isActiveTargetBackBuffer || !composite) return;
+
+                TextureDesc desc = renderGraph.GetTextureDesc(resources.activeColorTexture);
+                desc.width = Mathf.Max(1, desc.width / 2);
+                desc.height = Mathf.Max(1, desc.height / 2);
+                desc.depthBufferBits = 0;
+                desc.msaaSamples = MSAASamples.None;
+                desc.clearBuffer = true;
+                desc.clearColor = Color.clear;
+                desc.name = "LightHaze";
+                TextureHandle haze = renderGraph.CreateTexture(desc);
+                var target = new Vector4(desc.width, desc.height, 1f / desc.width, 1f / desc.height);
+
+                using (var builder = renderGraph.AddRasterRenderPass<DrawData>("Light Haze", out var data))
+                {
+                    // only the lamps whose reach is in view at all
+                    GeometryUtility.CalculateFrustumPlanes(cameraData.camera, frustum);
+                    data.items.Clear();
+                    for (int i = 0; i < Active.Count; i++)
+                    {
+                        LightHaze h = Active[i];
+                        if (h && h.drawn && GeometryUtility.TestPlanesAABB(frustum, h.bounds)) data.items.Add(h);
+                    }
+                    data.target = target;
+                    builder.SetRenderAttachment(haze, 0);
+                    builder.UseAllGlobalTextures(true);   // scene depth and the lights' shadow maps
+                    builder.AllowGlobalStateModification(true);
+                    builder.SetRenderFunc((DrawData d, RasterGraphContext context) =>
+                    {
+                        context.cmd.SetGlobalVector(TargetId, d.target);
+                        for (int i = 0; i < d.items.Count; i++)
+                        {
+                            LightHaze h = d.items[i];
+                            if (h && h.material) context.cmd.DrawMesh(box, h.matrix, h.material, 0, 0, h.block);
+                        }
+                    });
+                }
+
+                using (var builder = renderGraph.AddRasterRenderPass<CompositeData>("Light Haze Composite", out var data))
+                {
+                    data.source = haze;
+                    data.material = composite;
+                    data.target = target;
+                    builder.UseTexture(haze);
+                    builder.SetRenderAttachment(resources.activeColorTexture, 0);
+                    builder.AllowGlobalStateModification(true);
+                    builder.SetRenderFunc((CompositeData d, RasterGraphContext context) =>
+                    {
+                        context.cmd.SetGlobalVector(TargetId, d.target);
+                        Blitter.BlitTexture(context.cmd, d.source, new Vector4(1f, 1f, 0f, 0f), d.material, 1);
+                    });
+                }
+            }
         }
     }
 }

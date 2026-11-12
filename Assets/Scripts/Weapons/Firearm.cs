@@ -308,6 +308,8 @@ namespace BodycamHorror.Weapons
             AudioClip clip = Recorded(sfx);
             if (!clip && (!clips.TryGetValue(sfx, out clip) || !clip)) clips[sfx] = clip = CreateClip(sfx);
             if (!clip) return;
+            // a shot goes out through the space it is fired in; everything else is the gun in the hands
+            if (sfx == Sfx.Shot && BodycamHorror.Audio.GunshotAcoustics.Play(clip, volume, pitch, pelletsPerShot > 1 ? 1.35f : 1f)) return;
             audioSource.pitch = pitch;
             audioSource.PlayOneShot(clip, volume);
         }

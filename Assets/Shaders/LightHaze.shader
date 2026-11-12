@@ -2,6 +2,8 @@
 // way through dusty air. Drawn as a box around the light's range (LightHaze feeds it the numbers), marched
 // along the view ray up to whatever the depth buffer says is in the way, and shadowed by the light's own
 // shadow map, so a body under the lamp cuts a dark shaft into the glow.
+// It is by far the dearest thing in the frame per pixel, and it is soft, so LightHaze draws all the lamps
+// into a half-size buffer (pass 0) and lays that over the picture (pass 1).
 Shader "BodycamHorror/Light Haze"
 {
     SubShader
@@ -26,12 +28,13 @@ Shader "BodycamHorror/Light Haze"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
-            #define HAZE_STEPS 24
+            #define HAZE_STEPS 16
 
             float4 _HazePos;      // xyz: light position, w: range
             float4 _HazeDir;      // xyz: spot direction, w: how wispy the air is
             float4 _HazeCone;     // x: cos outer, y: cos inner (both below -1 = point light), z: shadows on, w: source size
             float4 _HazeColor;    // rgb: light colour x intensity x density
+            float4 _HazeTarget;   // zw: 1 / size of the buffer being drawn into
 
             struct Attributes
             {
@@ -62,7 +65,7 @@ Shader "BodycamHorror/Light Haze"
             float Wisps(float3 p)
             {
                 float3 drift = float3(0.06, -0.035, 0.045) * _Time.y;
-                return HazeNoise(p * 1.4 + drift) * 0.65 + HazeNoise(p * 3.3 - drift * 1.8) * 0.35;
+                return HazeNoise(p * 1.7 + drift);
             }
 
             Varyings Vert(Attributes input)
@@ -85,7 +88,7 @@ Shader "BodycamHorror/Light Haze"
 
             float4 Frag(Varyings input) : SV_Target
             {
-                float2 uv = input.positionCS.xy / _ScaledScreenParams.xy;
+                float2 uv = input.positionCS.xy * _HazeTarget.zw;
                 float rawDepth = SampleSceneDepth(uv);
             #if !UNITY_REVERSED_Z
                 rawDepth = lerp(UNITY_NEAR_CLIP_VALUE, 1.0, rawDepth);
@@ -130,7 +133,7 @@ Shader "BodycamHorror/Light Haze"
                     if (_HazeCone.z > 0.5 && input.lightIndex >= 0.0 && g > 0.0)
                         g *= AdditionalLightRealtimeShadow((int)input.lightIndex, p, -dir);
                 #endif
-                    if (_HazeDir.w > 0.0 && g > 0.0) g *= lerp(1.0, saturate(Wisps(p) * 2.2 - 0.35), _HazeDir.w);
+                    if (_HazeDir.w > 0.0 && g > 0.0) g *= lerp(1.0, saturate(Wisps(p) * 2.0 - 0.3), _HazeDir.w);
                     sum += g;
                 }
 
@@ -139,5 +142,36 @@ Shader "BodycamHorror/Light Haze"
             }
             ENDHLSL
         }
+
+        Pass
+        {
+            Name "Light Haze Composite"
+            Blend One One
+            ZWrite Off
+            ZTest Always
+            Cull Off
+
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+
+            float4 _HazeTarget;   // zw: 1 / size of the half-size buffer
+
+            float4 Frag(Varyings input) : SV_Target
+            {
+                // four taps half a texel out: the half-size buffer's steps and its dither both melt away
+                float2 o = _HazeTarget.zw * 0.5;
+                float3 haze = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, input.texcoord + float2(o.x, o.y)).rgb
+                            + SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, input.texcoord + float2(-o.x, o.y)).rgb
+                            + SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, input.texcoord + float2(o.x, -o.y)).rgb
+                            + SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, input.texcoord + float2(-o.x, -o.y)).rgb;
+                return float4(haze * 0.25, 0.0);
+            }
+            ENDHLSL
+        }
+
     }
 }

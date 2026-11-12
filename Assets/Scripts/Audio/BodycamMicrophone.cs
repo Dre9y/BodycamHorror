@@ -6,7 +6,7 @@ namespace BodycamHorror.Audio
 {
     /// <summary>
     /// Makes everything the player hears sound as if recorded by the body camera's own microphone:
-    /// a narrow band (no deep lows, no airy highs), automatic gain that ducks hard after a loud sound
+    /// a band without deep lows and with the very top rolled off, automatic gain that ducks hard after a loud sound
     /// and creeps back, overload on gunshots, a little hiss and a narrowed stereo image. A short
     /// small-room reverb in front of it glues dry library recordings into the same space.
     /// Installs itself on the scene's AudioListener, so nothing has to be set up per scene.
@@ -25,8 +25,8 @@ namespace BodycamHorror.Audio
         [Header("Band")]
         [Tooltip("Lows below this are cut (Hz): a small microphone has no bass.")]
         [Range(20f, 500f)] public float lowCut = 140f;
-        [Tooltip("Highs above this are cut (Hz).")]
-        [Range(2000f, 16000f)] public float highCut = 7500f;
+        [Tooltip("Highs above this are cut (Hz). Much lower than ~10 kHz and gunshots lose their ring.")]
+        [Range(2000f, 16000f)] public float highCut = 12500f;
 
         [Header("Auto gain")]
         [Tooltip("Sounds louder than this get turned down (dB).")]
@@ -34,7 +34,7 @@ namespace BodycamHorror.Audio
         [Tooltip("How hard loud sounds are turned down.")]
         [Range(1f, 20f)] public float ratio = 3f;
         [Tooltip("How fast the gain drops on a loud sound (ms). Slower lets more of a gunshot overload.")]
-        [Range(0.5f, 50f)] public float attack = 5f;
+        [Range(0.5f, 50f)] public float attack = 14f;
         [Tooltip("How long the gain takes to come back after a loud sound (ms): the 'pumping' after a shot.")]
         [Range(50f, 3000f)] public float release = 450f;
         [Tooltip("Everything is raised by this (dB), so quiet sounds are close and loud ones squashed.")]

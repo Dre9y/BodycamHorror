@@ -42,8 +42,15 @@ namespace BodycamHorror.Weapons
 
         float pumpStart = -10f;
         Vector3 pumpRest;
-        bool pumpRestSet, pumpSoundPlayed;
+        bool pumpRestSet, pumpSoundPlayed, spentInChamber;
         ShotgunHands hands;
+
+        // scenes saved before these fields existed get the shotgun's own port, not the pistol's
+        public Shotgun()
+        {
+            ejectionOffset = new Vector3(0.02f, 0f, -0.66f);
+            ejectionVelocity = new Vector3(2f, 1.1f, -0.2f);
+        }
 
         void Reset() => ApplyShotgunDefaults();
 
@@ -67,6 +74,8 @@ namespace BodycamHorror.Weapons
             meleeWithWeapon = true; meleeDamage = 45f; meleeForce = 12f;
             flashIntensity = 14f; flashDuration = 0.07f; bulletHoleSize = 0.05f; impactFxScale = 0.35f;
             flashlightOffset = new Vector3(0f, -0.026f, -0.06f);   // under the barrel, ahead of the magazine tube
+            ejectionOffset = new Vector3(0.02f, 0f, -0.66f);       // the port on the right of the receiver
+            ejectionVelocity = new Vector3(2f, 1.1f, -0.2f);       // the pump flings it out, slower than a slide
         }
 
         protected override void Awake()
@@ -160,9 +169,15 @@ namespace BodycamHorror.Weapons
             float back = t >= 0f && t <= 1f ? Mathf.Sin(t * Mathf.PI) : 0f;
             pump.localPosition = pumpRest + Vector3.back * (pumpTravel * back);
             if (t >= 0f && t < 1f && !pumpSoundPlayed) { pumpSoundPlayed = true; Play(Sfx.Rack); }
+            // the fore-end all the way back throws the spent shell out
+            if (spentInChamber && t >= 0.45f && t < 1.5f) { spentInChamber = false; EjectCasing(Casings.Kind.Shotgun); }
         }
 
-        protected override void OnShot() => StartPump(pumpDelay);
+        protected override void OnShot()
+        {
+            spentInChamber = true;
+            StartPump(pumpDelay);
+        }
 
         public override void Rack()
         {

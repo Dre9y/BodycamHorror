@@ -10,12 +10,12 @@ namespace BodycamHorror.Audio
     /// the space around the listener with rays (how closed in it is, how far the walls are, what
     /// stands far off) and every shot is then built from layers shaped by that:
     ///   - the crack: the recording itself, at full level;
+    ///   - the snap: the top of the recording on its own, laid over it: the ring and sizzle of the shot;
     ///   - the body: the same recording slowed down and muffled, the thump in the chest;
     ///   - the room: what the walls throw back. Tight corridors slap back at once, loud and bright;
     ///     rooms ring for a second; halls roll on for several; in the open there is next to none;
     ///   - echoes: the shot coming back off far walls and buildings, late, dull and quiet.
-    /// Everything is kept dark and heavy: the shot is pitched down a little, and what comes back off
-    /// the walls is dull, not bright.
+    /// The shot itself is bright and hard; only what comes back from far off is dull.
     /// The same reading shapes the body camera microphone's own room sound, so every other sound
     /// the player hears sits in the same space as the shots (see BodycamMicrophone.SetSpace).
     /// Installs itself on the scene's AudioListener; guns call <see cref="Play"/>.
@@ -38,12 +38,16 @@ namespace BodycamHorror.Audio
         [Header("Loudness")]
         [Tooltip("The recording itself.")]
         [Range(0f, 1f)] public float crack = 1f;
-        [Tooltip("The slowed, muffled copy under it: weight.")]
-        [Range(0f, 1f)] public float body = 0.9f;
+        [Tooltip("The highs of the recording laid over it once more: how sharp and ringing the shot is.")]
+        [Range(0f, 1f)] public float snap = 0.55f;
+        [Tooltip("Where the snap layer starts (Hz).")]
+        [Range(1000f, 8000f)] public float snapFrom = 3200f;
+        [Tooltip("The slowed, muffled copy under it: weight. Too much and it smothers the crack.")]
+        [Range(0f, 1f)] public float body = 0.5f;
         [Tooltip("How far down the body copy is pitched.")]
         [Range(0.3f, 1f)] public float bodyPitch = 0.5f;
-        [Tooltip("The whole shot is played this much lower than recorded: bigger, slower, meaner.")]
-        [Range(0.7f, 1f)] public float shotPitch = 0.93f;
+        [Tooltip("The whole shot is played this much lower than recorded: bigger, but duller. 1 = as recorded.")]
+        [Range(0.7f, 1f)] public float shotPitch = 1f;
         [Tooltip("What the surroundings throw back.")]
         [Range(0f, 1.5f)] public float room = 1f;
         [Tooltip("Late echoes off far walls.")]
@@ -80,7 +84,8 @@ namespace BodycamHorror.Audio
         readonly List<float> far = new List<float>(Directions.Length);
         readonly float[] echoDistance = new float[EchoVoices];
 
-        AudioSource direct, bodySource;
+        AudioSource direct, snapSource, bodySource;
+        AudioHighPassFilter snapFilter;
         AudioSource[] wet, echo;
         AudioReverbFilter[] wetReverb;
         AudioLowPassFilter[] wetLowPass, echoLowPass;
@@ -132,6 +137,9 @@ namespace BodycamHorror.Audio
             for (int i = 0; i < Directions.Length; i++) Weights[i] = 1f + Directions[i].y * 2f;   // what is overhead counts most
 
             direct = Voice("Shot_Crack");
+            snapSource = Voice("Shot_Snap");
+            snapFilter = snapSource.gameObject.AddComponent<AudioHighPassFilter>();
+            snapFilter.highpassResonanceQ = 1.2f;   // a slight lift right at the edge: ring, not hiss
             bodySource = Voice("Shot_Body");
             bodySource.gameObject.AddComponent<AudioLowPassFilter>().cutoffFrequency = 700f;
 
@@ -282,6 +290,9 @@ namespace BodycamHorror.Audio
             // the crack and the body: louder shut in, where there is nowhere for it to go
             direct.pitch = pitch;
             direct.PlayOneShot(dry, Mathf.Clamp01(volume * crack * Mathf.Lerp(0.85f, 1f, e)));
+            snapFilter.cutoffFrequency = snapFrom;
+            snapSource.pitch = pitch;
+            snapSource.PlayOneShot(dry, Mathf.Clamp01(volume * snap * Mathf.Lerp(0.85f, 1f, e)));
             bodySource.pitch = pitch * bodyPitch;
             bodySource.PlayOneShot(dry, Mathf.Clamp01(volume * body * power * Mathf.Lerp(0.7f, 1f, e)));
 
@@ -291,9 +302,9 @@ namespace BodycamHorror.Audio
             AudioReverbFilter r = wetReverb[v];
             // closed in: the length follows the size. In the open: a long, thin, dull roll.
             r.decayTime = Mathf.Lerp(Mathf.Lerp(1.6f, 2.8f, size01), Mathf.Clamp(0.6f + 0.24f * size, 0.7f, 5f), e);
-            r.decayHFRatio = Mathf.Lerp(0.35f, Mathf.Lerp(0.8f, 0.5f, size01), e);
+            r.decayHFRatio = Mathf.Lerp(0.4f, Mathf.Lerp(1f, 0.6f, size01), e);
             r.room = Mathf.Lerp(-2200f, -150f - 250f * size01, e);
-            r.roomHF = Mathf.Lerp(-2500f, -900f, e);   // what comes back is dull
+            r.roomHF = Mathf.Lerp(-1800f, Mathf.Lerp(-150f, -700f, size01), e);   // hard walls close by answer bright; far and big ones duller
             r.roomLF = -100f;
             r.reflectionsLevel = Mathf.Clamp(Mathf.Lerp(-3000f, 600f - 60f * size, e), -3000f, 1000f);   // tight: a hard slap straight back
             r.reflectionsDelay = Mathf.Clamp(size / SpeedOfSound, 0.002f, 0.3f);
@@ -301,7 +312,7 @@ namespace BodycamHorror.Audio
             r.reverbDelay = Mathf.Clamp(2f * size / SpeedOfSound, 0.005f, 0.1f);
             r.diffusion = Mathf.Lerp(60f, 100f, e);
             r.density = Mathf.Lerp(40f, 100f, e);
-            wetLowPass[v].cutoffFrequency = Mathf.Lerp(2200f, 5200f, e);
+            wetLowPass[v].cutoffFrequency = Mathf.Lerp(3500f, Mathf.Lerp(12000f, 6500f, size01), e);
             wet[v].Stop();
             wet[v].clip = tailed;
             wet[v].pitch = pitch;

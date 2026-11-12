@@ -221,6 +221,63 @@ namespace BodycamHorror.Weapons
             }
         }
 
+        /// <summary>The action cycling right after a shot: slide (or bolt) slamming back and then home,
+        /// two hard metallic clacks a few hundredths of a second apart.</summary>
+        public static AudioClip ActionCycle()
+        {
+            const float length = 0.12f, second = 0.038f;
+            int n = (int)(Rate * length);
+            var d = new float[n];
+            var rng = new System.Random(777);
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                d[i] = Clack(t, noise, 1f) * 0.8f;
+                if (t >= second) d[i] += Clack(t - second, noise, 0.87f);
+            }
+            return Finish("ActionCycle", d, 0.9f, 1.3f);
+        }
+
+        // steel on steel: a burst of noise and a few inharmonic partials that die within milliseconds
+        static float Clack(float t, float noise, float tune)
+        {
+            float ring = Mathf.Sin(2f * Mathf.PI * 2350f * tune * t) * 0.55f
+                       + Mathf.Sin(2f * Mathf.PI * 4170f * tune * t) * 0.45f
+                       + Mathf.Sin(2f * Mathf.PI * 6830f * tune * t) * 0.3f;
+            return noise * Mathf.Exp(-t * 700f) * 1.2f + ring * Mathf.Exp(-t * 160f);
+        }
+
+        /// <summary>A spent casing hitting something hard. Brass rings high and clear for a moment;
+        /// a shotgun shell (plastic hull, brass head) gives a dull, hollow tock. <paramref name="seed"/>
+        /// varies it, so a few clips make a natural spread.</summary>
+        public static AudioClip CasingHit(bool shotgunShell, int seed)
+        {
+            float length = shotgunShell ? 0.18f : 0.32f;
+            int n = (int)(Rate * length);
+            var d = new float[n];
+            var rng = new System.Random(seed * 7919 + (shotgunShell ? 1 : 0));
+            float v = 1f + ((float)rng.NextDouble() - 0.5f) * 0.12f;   // each clip a slightly different piece of metal
+            // brass: thin tube modes; the shell: a hollow plastic knock with a little of its metal head
+            float[] freq = shotgunShell ? new[] { 820f, 1530f, 2650f, 5200f } : new[] { 3900f, 6150f, 8650f, 11800f };
+            float[] amp = shotgunShell ? new[] { 1f, 0.6f, 0.35f, 0.15f } : new[] { 1f, 0.75f, 0.5f, 0.3f };
+            float[] decay = shotgunShell ? new[] { 55f, 70f, 95f, 140f } : new[] { 13f, 18f, 26f, 38f };
+            float[] phase = new float[4];
+            for (int k = 0; k < 4; k++) phase[k] = (float)rng.NextDouble() * 6.283f;
+            float lp = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                lp += (noise - lp) * (shotgunShell ? 0.25f : 0.7f);
+                float s = lp * Mathf.Exp(-t * (shotgunShell ? 260f : 900f)) * (shotgunShell ? 1.4f : 0.8f);
+                for (int k = 0; k < 4; k++)
+                    s += Mathf.Sin(2f * Mathf.PI * freq[k] * v * t + phase[k]) * amp[k] * Mathf.Exp(-t * decay[k]) * 0.5f;
+                d[i] = s * Mathf.Clamp01(t / 0.0004f);
+            }
+            return Finish(shotgunShell ? "ShellHit" : "CasingHit", d, 0.85f, 1.1f);
+        }
+
         public static AudioClip Click(float length, float freq, float amp) => Make("Click", length, 0f, freq, amp);
 
         public static AudioClip DoubleClick(float gap, float freq, float amp) => Make("DoubleClick", gap + 0.06f, gap, freq, amp);

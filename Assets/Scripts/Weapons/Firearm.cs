@@ -81,6 +81,8 @@ namespace BodycamHorror.Weapons
         [Header("Accessories")]
         [Tooltip("Weapon light position, in weapon space relative to the muzzle (under the barrel).")]
         public Vector3 flashlightOffset = new Vector3(0f, -0.047f, -0.035f);
+        [Tooltip("A weapon light is fitted from the start. Off: the flashlight stays on the chest while this gun is out, until a light is picked up for it (WeaponPickup, Kind Pistol Light).")]
+        public bool startWithLight = true;
         [Tooltip("How much of the always-on dark fill this gun and its hands get (BodycamFlashlight). Dark metal barely answers a faint light and needs several times more.")]
         public float darkFillScale = 1f;
 
@@ -116,6 +118,8 @@ namespace BodycamHorror.Weapons
         public AudioClip shellInClip;
 
         public int Ammo { get; set; }
+        /// <summary>A weapon light is on this gun: the flashlight rides under its barrel while it is out.</summary>
+        public bool HasLight { get; set; }
         public bool CanFire => Time.time >= nextFireTime;
         /// <summary>Clips pose the gun while running, so <see cref="PlayerShooting"/> does not lower it.</summary>
         public bool ClipsDriveRun { get; protected set; }
@@ -166,6 +170,7 @@ namespace BodycamHorror.Weapons
         {
             if (!muzzle) BuildPlaceholderModel();
             Ammo = magazineSize;
+            HasLight = startWithLight;
             ViewModelLighting.MarkViewModel(gameObject);                        // keep the flashlight beam off the gun
             if (flashLight) ViewModelLighting.AlsoLightViewModel(flashLight);   // the muzzle flash lights hands and world
             if (flashMesh) flashMesh.gameObject.SetActive(false);

@@ -6,13 +6,14 @@ using UnityEngine;
 namespace BodycamHorror.Weapons
 {
     /// <summary>
-    /// A gun lying in the world. The player walks up, looks at it and presses the use key
-    /// (PlayerInteractor, F / D-pad down): the gun goes into their hands (<see cref="PlayerShooting.Give"/>)
-    /// and this object, with its model and its glow, is gone. Needs no collider.
+    /// A gun, or a weapon light for one, lying in the world. The player walks up, looks at it and presses
+    /// the use key (PlayerInteractor, E / D-pad down): a gun goes into their hands (<see cref="PlayerShooting.Give"/>),
+    /// a light is fitted to its gun (<see cref="Firearm.HasLight"/>, even one not picked up yet), and this
+    /// object, with its model and its glow, is gone. Needs no collider.
     /// </summary>
     public class WeaponPickup : MonoBehaviour
     {
-        public enum Kind { Pistol, Shotgun }
+        public enum Kind { Pistol, Shotgun, PistolLight }
 
         public static readonly List<WeaponPickup> All = new List<WeaponPickup>();
         static AudioClip generatedClip;
@@ -20,7 +21,7 @@ namespace BodycamHorror.Weapons
         public static event Action<WeaponPickup, GameObject> Taken;
 
         public Kind weapon = Kind.Pistol;
-        [Tooltip("Draw it straight away.")]
+        [Tooltip("Draw it straight away (guns only).")]
         public bool equip = true;
         [Tooltip("Taking it switches the player's flashlight off.")]
         public bool flashlightOff;
@@ -64,8 +65,17 @@ namespace BodycamHorror.Weapons
         {
             var shooting = player ? player.GetComponentInChildren<PlayerShooting>(true) : null;
             if (!shooting) return false;
-            Firearm gun = weapon == Kind.Pistol ? shooting.FindWeapon<Pistol>() : (Firearm)shooting.FindWeapon<Shotgun>();
-            if (!gun || !shooting.Give(gun, equip)) return false;
+            Firearm gun = weapon == Kind.Shotgun ? shooting.FindWeapon<Shotgun>() : (Firearm)shooting.FindWeapon<Pistol>();
+            if (weapon == Kind.PistolLight)
+            {
+                // the flashlight itself: the player has one from now on, and it fits under the pistol
+                var light = player.GetComponentInChildren<BodycamFlashlight>(true);
+                bool hadLight = light && light.owned, fitted = gun && gun.HasLight;
+                if (hadLight && (fitted || !gun)) return false;
+                if (light) light.owned = true;
+                if (gun) gun.HasLight = true;
+            }
+            else if (!gun || !shooting.Give(gun, equip)) return false;
 
             AudioClip clip = pickupClip ? pickupClip
                 : generatedClip ? generatedClip : (generatedClip = ProceduralAudio.DoubleClick(0.09f, 1500f, 0.6f));

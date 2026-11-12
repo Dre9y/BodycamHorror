@@ -8,7 +8,8 @@ using UnityEngine.Rendering;
 namespace BodycamHorror.Player
 {
     /// <summary>
-    /// Flashlight. With a gun in hand it is a weapon light under the barrel: the beam goes exactly where
+    /// Flashlight. With a gun in hand that has a light fitted (Firearm.HasLight; the pistol's is a pickup of
+    /// its own) it is a weapon light under the barrel: the beam goes exactly where
     /// the gun points and follows its recoil, sway and switching (a small light body is put on each gun).
     /// Bare-handed it sits on the chest next to the body camera and swings a touch behind the view.
     /// Flickers when the body takes a knock, F / D-pad up toggles it. Builds its own beam + spill lights.
@@ -17,6 +18,8 @@ namespace BodycamHorror.Player
     public class BodycamFlashlight : MonoBehaviour
     {
         public BodycamPlayerController player;
+        [Tooltip("The player has the flashlight. Off: it stays dark and F does nothing until a light is picked up (WeaponPickup, Kind Pistol Light).")]
+        public bool owned = true;
         public bool startOn = true;
 
         [Header("Beam")]
@@ -67,7 +70,7 @@ namespace BodycamHorror.Player
         public float knockFlickerTime = 0.45f;
 
         [Header("Weapon light")]
-        [Tooltip("Ride on the gun in hand (Firearm.flashlightOffset); back on the chest with bare hands.")]
+        [Tooltip("Ride on the gun in hand (Firearm.flashlightOffset) when it has a light fitted (Firearm.HasLight); back on the chest with bare hands or a gun without one.")]
         public bool mountOnWeapon = true;
         [Tooltip("Found automatically.")]
         public PlayerShooting shooting;
@@ -110,7 +113,7 @@ namespace BodycamHorror.Player
             audioSource = gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake = false;
             audioSource.spatialBlend = 0f;
-            SetOn(startOn, false);
+            SetOn(startOn && owned, false);
         }
 
         /// <summary>A whisper of light by the camera that reaches only the hands and gun (their rendering layer).
@@ -196,6 +199,7 @@ namespace BodycamHorror.Player
 
         public void SetOn(bool on, bool click = true)
         {
+            on &= owned;   // nothing to switch on without one
             IsOn = on;
             beam.enabled = on;
             spill.enabled = on;
@@ -212,10 +216,10 @@ namespace BodycamHorror.Player
         void LateUpdate()
         {
             // at a door the same key works the door instead
-            if (toggleAction.WasPressedThisFrame() && !PlayerInteractor.HasTarget) SetOn(!IsOn);
+            if (toggleAction.WasPressedThisFrame() && !PlayerInteractor.HasTarget && owned) SetOn(!IsOn);
 
             Firearm gun = mountOnWeapon && shooting && shooting.isActiveAndEnabled ? shooting.CurrentWeapon : null;
-            if (gun && gun.muzzle)
+            if (gun && gun.muzzle && gun.HasLight)
             {
                 // weapon light: rigid on the gun, no trailing
                 if (gun != MountedOn) { EnsureLightBody(gun); MountedOn = gun; }
@@ -315,19 +319,27 @@ namespace BodycamHorror.Player
             root.SetParent(gun.VisualRoot, false);
             root.localPosition = gun.muzzle.localPosition + gun.flashlightOffset;
             root.gameObject.layer = gun.gameObject.layer;
-            // body (along +Z), a clamp up to the gun, and the lens at the front
-            Part(root, PrimitiveType.Cylinder, Vector3.zero, new Vector3(90f, 0f, 0f), new Vector3(0.026f, 0.03f, 0.026f), bodyMat);
-            Part(root, PrimitiveType.Cylinder, new Vector3(0f, 0f, 0.028f), new Vector3(90f, 0f, 0f), new Vector3(0.031f, 0.006f, 0.031f), bodyMat);
-            Part(root, PrimitiveType.Cube, new Vector3(0f, 0.016f, -0.004f), Vector3.zero, new Vector3(0.012f, 0.012f, 0.032f), bodyMat);
-            var lens = Part(root, PrimitiveType.Cylinder, new Vector3(0f, 0f, 0.0345f), new Vector3(90f, 0f, 0f), new Vector3(0.026f, 0.0015f, 0.026f), IsOn ? lensOnMat : lensOffMat);
+            var lens = BuildLightBody(root, bodyMat, IsOn ? lensOnMat : lensOffMat);
             ViewModelLighting.MarkViewModel(root.gameObject);
             lenses[gun] = lens;
+        }
+
+        /// <summary>The weapon light itself, under <paramref name="root"/>: body along +Z, a clamp up to the
+        /// gun (+Y) and the lens at the front. Returns the lens. Also used for the light lying in the world
+        /// (works in the editor too).</summary>
+        public static Renderer BuildLightBody(Transform root, Material body, Material lens)
+        {
+            Part(root, PrimitiveType.Cylinder, Vector3.zero, new Vector3(90f, 0f, 0f), new Vector3(0.026f, 0.03f, 0.026f), body);
+            Part(root, PrimitiveType.Cylinder, new Vector3(0f, 0f, 0.028f), new Vector3(90f, 0f, 0f), new Vector3(0.031f, 0.006f, 0.031f), body);
+            Part(root, PrimitiveType.Cube, new Vector3(0f, 0.016f, -0.004f), Vector3.zero, new Vector3(0.012f, 0.012f, 0.032f), body);
+            return Part(root, PrimitiveType.Cylinder, new Vector3(0f, 0f, 0.0345f), new Vector3(90f, 0f, 0f), new Vector3(0.026f, 0.0015f, 0.026f), lens);
         }
 
         static Renderer Part(Transform parent, PrimitiveType type, Vector3 pos, Vector3 euler, Vector3 scale, Material mat)
         {
             var go = GameObject.CreatePrimitive(type);
-            Destroy(go.GetComponent<Collider>());
+            if (Application.isPlaying) Destroy(go.GetComponent<Collider>());
+            else DestroyImmediate(go.GetComponent<Collider>());
             go.layer = parent.gameObject.layer;
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;

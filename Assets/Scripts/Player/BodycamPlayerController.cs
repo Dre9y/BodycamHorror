@@ -96,13 +96,17 @@ namespace BodycamHorror.Player
 
         [Header("Slipping past corners")]
         [Tooltip("Catching the corner of an obstacle with up to this much of the body (m) eases you round it instead of stopping you. 0 = off.")]
-        public float cornerSlipWidth = 0.3f;
-        [Tooltip("How fast the body is eased sideways round the corner (m/s).")]
-        public float cornerSlipSpeed = 3.5f;
+        public float cornerSlipWidth = 0.35f;
+        [Tooltip("How far ahead corners are looked for, in seconds of travel at the current speed: the sidestep has to be done before the shoulder gets there.")]
+        public float cornerSlipLookAhead = 0.25f;
+        [Tooltip("Slowest sideways ease round a corner (m/s); faster when the corner is close and fast coming.")]
+        public float cornerSlipSpeed = 2f;
+        [Tooltip("Fastest sideways ease round a corner (m/s).")]
+        public float cornerSlipMaxSpeed = 7f;
 
         [Header("Impacts")]
-        [Tooltip("Slowest head-on run into a wall that stuns you: close to top sprint, so a sprint that has only just started does not.")]
-        public float wallBumpMinSpeed = 6.8f;
+        [Tooltip("Slowest head-on run into a wall that stuns you (speed into the wall, m/s): a full sprint nearly square-on. Anything less, or more glancing, just stops you or slides you along.")]
+        public float wallBumpMinSpeed = 7.2f;
         [Tooltip("Slowest run into a low obstacle that trips you.")]
         public float stumbleMinSpeed = 6.5f;
         [Tooltip("Obstacles up to this height (above the feet) trip you instead of stopping you.")]
@@ -112,6 +116,8 @@ namespace BodycamHorror.Player
         [Tooltip("Hitting a wall closer to straight-on than this (deg) is a head-on impact (bump or brace); "
                  + "a shallower contact only scrapes along it.")]
         public float headOnMaxAngle = 40f;
+        [Tooltip("Contact further than this share of the body radius off to the side of the run is a shoulder catching an edge: a scrape, never a stun or a trip.")]
+        [Range(0f, 1f)] public float shoulderClipShare = 0.6f;
         [Tooltip("Slowest sideways contact that counts as a scrape (otherwise you just slide along).")]
         public float scrapeMinSpeed = 1.5f;
         [Tooltip("Share of speed lost when a scrape starts (continuous rubbing does not stack it).")]
@@ -510,9 +516,10 @@ namespace BodycamHorror.Player
         }
 
         /// <summary>Clipping the corner of a crate or a door frame with a shoulder should not stop a run.
-        /// If something is in the way just ahead, but the way is clear a little to the side away from it,
-        /// the body is eased over to that side and carries on. A wall met square-on has no clear side
-        /// and is left alone.</summary>
+        /// If something is in the way ahead (up to <see cref="cornerSlipLookAhead"/> seconds of travel), but the
+        /// way is clear a little to the side away from it, the body is eased over by the smallest step that
+        /// clears it, fast enough to be done before it gets there, and carries on. A wall met square-on has
+        /// no clear side and is left alone.</summary>
         void CornerSlip(float dt)
         {
             cornerSlipping = false;
@@ -526,22 +533,34 @@ namespace BodycamHorror.Player
             float half = Mathf.Max(cc.height * 0.5f - cc.radius, 0f);
             Vector3 top = centre + Vector3.up * half;
             Vector3 bottom = centre + Vector3.up * Mathf.Min(-half + cc.stepOffset + 0.05f, half);
-            float reach = speed * dt + 0.15f;
-            Vector3 back = -dir * 0.05f;   // start a touch behind, so something already touching still counts
+            float reach = speed * Mathf.Max(cornerSlipLookAhead, dt) + 0.1f;
+            const float backOff = 0.05f;
+            Vector3 back = -dir * backOff;   // start a touch behind, so something already touching still counts
 
-            if (!Physics.CapsuleCast(bottom + back, top + back, radius, dir, out RaycastHit hit, reach + 0.05f,
+            if (!Physics.CapsuleCast(bottom + back, top + back, radius, dir, out RaycastHit hit, reach + backOff,
                     environmentMask, QueryTriggerInteraction.Ignore)) return;
 
-            // step to the side away from what is in the way: there must be room to stand and a clear run ahead
+            // the side away from what is in the way; the smallest step to it with room to stand and a clear run ahead
             Vector3 side = Vector3.Cross(Vector3.up, dir);
             float sign = Vector3.Dot(hit.point - centre, side) > 0f ? -1f : 1f;
-            Vector3 shift = side * (sign * cornerSlipWidth);
-            if (Physics.CheckCapsule(bottom + shift, top + shift, radius, environmentMask, QueryTriggerInteraction.Ignore)) return;
-            if (Physics.CapsuleCast(bottom + shift + back, top + shift + back, radius, dir, reach + 0.35f,
-                    environmentMask, QueryTriggerInteraction.Ignore)) return;
+            const float step = 0.05f;
+            float needed = -1f;
+            for (float s = step; s <= cornerSlipWidth + 0.001f; s += step)
+            {
+                Vector3 shift = side * (sign * s);
+                if (Physics.CheckCapsule(bottom + shift, top + shift, radius, environmentMask, QueryTriggerInteraction.Ignore)) break;   // no room that way
+                if (Physics.CapsuleCast(bottom + shift + back, top + shift + back, radius, dir, reach + backOff + 0.3f,
+                        environmentMask, QueryTriggerInteraction.Ignore)) continue;   // still in the way: a bit further
+                needed = s;
+                break;
+            }
+            if (needed < 0f) return;
 
+            // be over before the shoulder gets there
+            float timeToContact = Mathf.Max(hit.distance - backOff, 0f) / speed;
+            float lateral = Mathf.Clamp(needed / Mathf.Max(timeToContact, dt), cornerSlipSpeed, cornerSlipMaxSpeed);
             cornerSlipping = true;
-            cc.Move(side * (sign * Mathf.Min(cornerSlipSpeed * dt, cornerSlipWidth)));
+            cc.Move(side * (sign * Mathf.Min(lateral * dt, needed)));
         }
 
         /// <summary>Applies gravity, moves the controller and tracks landing. Returns grounded.</summary>
@@ -957,7 +976,13 @@ namespace BodycamHorror.Player
 
             bool freeMove = State == MoveState.Grounded || State == MoveState.Airborne || State == MoveState.Sliding;
             // Straight-on vs. glancing: cosine of the angle between the run and the wall normal.
-            bool headOn = into / Mathf.Max(hVel.magnitude, 0.001f) >= Mathf.Cos(headOnMaxAngle * Mathf.Deg2Rad);
+            float speed = Mathf.Max(hVel.magnitude, 0.001f);
+            bool headOn = into / speed >= Mathf.Cos(headOnMaxAngle * Mathf.Deg2Rad);
+            // a shoulder catching an edge (contact well off to the side of the run) is never head-on:
+            // the corner's normal can point straight back at you, but the body only grazed it
+            Vector3 runSide = Vector3.Cross(Vector3.up, hVel / speed);
+            float offAxis = Mathf.Abs(Vector3.Dot(hit.point - (transform.position + cc.center), runSide));
+            if (offAxis > cc.radius * shoulderClipShare) headOn = false;
 
             if (freeMove && headOn && impactCooldown <= 0f)
             {

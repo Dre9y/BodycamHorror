@@ -28,6 +28,9 @@ namespace BodycamHorror.Weapons
         [Tooltip("Rig with arms, gun and clips. Replaces the shared arms while this gun is out.")]
         public AnimatedHands handsPrefab;
 
+        // the pistol comes bare: its light is a separate pickup (scenes saved before the field existed get this too)
+        public Pistol() => startWithLight = false;
+
         float slideOffset;
         Vector3 slideRest;
         AnimatedHands hands;

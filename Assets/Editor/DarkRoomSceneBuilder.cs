@@ -148,18 +148,17 @@ namespace BodycamHorror.EditorTools
         }
 
         /// <summary>The pistol on the floor, lying on its side, with a small light of its own over it.</summary>
-        static void PlacePistol(Pistol pistol, Vector3 floorPoint)
-        {
-            var root = new GameObject("Pickup_Pistol");
-            root.transform.position = floorPoint;
-            var pickup = root.AddComponent<WeaponPickup>();
-            pickup.weapon = WeaponPickup.Kind.Pistol;
+        static void PlacePistol(Pistol pistol, Vector3 floorPoint) =>
+            PlaceGunPickup(pistol, WeaponPickup.Kind.Pistol, floorPoint, Quaternion.Euler(0f, 38f, 90f));
 
-            // the look of the gun the player will end up holding: its built model, or the imported one
+        /// <summary>A gun on the floor, wearing the look of the one the player will end up holding (its
+        /// built model, or the imported one), with a small glow over it.</summary>
+        internal static WeaponPickup PlaceGunPickup(Firearm gun, WeaponPickup.Kind kind, Vector3 floorPoint, Quaternion lying)
+        {
             GameObject model = null;
-            Transform built = pistol ? pistol.transform.Find("Model") : null;
+            Transform built = gun ? gun.transform.Find("Model") : null;
             if (built) model = Object.Instantiate(built.gameObject);
-            else if (pistol && pistol.modelPrefab)
+            else if (gun is Pistol pistol && pistol.modelPrefab)
             {
                 model = Object.Instantiate(pistol.modelPrefab);
                 model.transform.localScale = Vector3.one * pistol.modelScale;
@@ -169,11 +168,24 @@ namespace BodycamHorror.EditorTools
                 model = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 model.transform.localScale = new Vector3(0.03f, 0.13f, 0.19f);
             }
+            return PlacePickup("Pickup_" + kind, kind, model, floorPoint, lying);
+        }
+
+        /// <summary>Lays <paramref name="model"/> flat on the floor at <paramref name="floorPoint"/> as a
+        /// pickup of this kind, lit by a faint breathing glow (the look of the dark room's pistol).</summary>
+        internal static WeaponPickup PlacePickup(string name, WeaponPickup.Kind kind, GameObject model, Vector3 floorPoint, Quaternion lying,
+                                                 float glowIntensity = 0.3f, float glowRange = 1.9f)
+        {
+            var root = new GameObject(name);
+            root.transform.position = floorPoint;
+            var pickup = root.AddComponent<WeaponPickup>();
+            pickup.weapon = kind;
+
             model.name = "Model";
             model.SetActive(true);
             model.transform.SetParent(root.transform, false);
             model.transform.localPosition = Vector3.zero;
-            model.transform.localRotation = Quaternion.Euler(0f, 38f, 90f);   // on its side, askew
+            model.transform.localRotation = lying;
             foreach (Collider c in model.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(c);
             foreach (Transform t in model.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = 0;
 
@@ -191,15 +203,15 @@ namespace BodycamHorror.EditorTools
                 model.transform.position += new Vector3(floorPoint.x - bounds.center.x, floorPoint.y + 0.004f - bounds.min.y, floorPoint.z - bounds.center.z);
             }
 
-            // the glow: low over the gun, a pool of cold light about a metre across on the tiles
+            // the glow: low over the item, a pool of cold light about a metre across on the tiles
             var glowObject = new GameObject("Glow");
             glowObject.transform.SetParent(root.transform, false);
             glowObject.transform.localPosition = new Vector3(0f, 0.4f, 0f);
             var glow = glowObject.AddComponent<Light>();
             glow.type = LightType.Point;
             glow.color = new Color(0.72f, 0.86f, 1f);
-            glow.intensity = 0.3f;
-            glow.range = 1.9f;
+            glow.intensity = glowIntensity;
+            glow.range = glowRange;
             glow.shadows = LightShadows.Soft;
             glow.shadowNearPlane = 0.05f;
             ViewModelLighting.AlsoLightViewModel(glow);
@@ -208,6 +220,7 @@ namespace BodycamHorror.EditorTools
             haze.density = 0.012f;
             haze.wisps = 0.3f;
             pickup.glow = glow;
+            return pickup;
         }
     }
 }

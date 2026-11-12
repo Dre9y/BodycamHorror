@@ -4889,6 +4889,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.BodycamFlashlight
   player: {fileID: 0}
+  owned: 1
   startOn: 1
   intensity: 70
   range: 26
@@ -9841,14 +9842,9 @@ MonoBehaviour:
   proneAcceleration: 14
   proneYawLimit: 85
   proneStandUpTime: 0.4
-  walkAcceleration: 10
-  sprintAcceleration: 4.5
-  brakeDeceleration: 16
-  stopFriction: 9
-  turnRateWalk: 600
-  turnRateSprint: 80
-  sharpTurnAngle: 65
-  airControl: 0.2
+  acceleration: 60
+  deceleration: 70
+  airAcceleration: 14
   jumpHeight: 1.1
   gravity: -22
   coyoteTime: 0.12
@@ -9873,12 +9869,17 @@ MonoBehaviour:
   vaultMaxHeight: 1.25
   vaultMaxThickness: 1
   vaultMinSpeed: 3.5
-  wallBumpMinSpeed: 6.8
+  cornerSlipWidth: 0.35
+  cornerSlipLookAhead: 0.25
+  cornerSlipSpeed: 2
+  cornerSlipMaxSpeed: 7
+  wallBumpMinSpeed: 7.2
   stumbleMinSpeed: 6.5
   stumbleMaxObstacleHeight: 0.65
   bumpStunTime: 0.6
   stumbleTime: 0.8
   headOnMaxAngle: 40
+  shoulderClipShare: 0.6
   scrapeMinSpeed: 1.5
   scrapeSpeedLoss: 0.08
   braceWindow: 0.4
@@ -11747,6 +11748,7 @@ MonoBehaviour:
   meleeDamage: 45
   meleeForce: 12
   flashlightOffset: {x: 0, y: -0.026, z: -0.06}
+  startWithLight: 1
   darkFillScale: 8
   muzzle: {fileID: 1895004561}
   leftGrip: {fileID: 61662650}
@@ -14252,6 +14254,7 @@ MonoBehaviour:
   meleeDamage: 25
   meleeForce: 5
   flashlightOffset: {x: 0, y: -0.047, z: -0.035}
+  startWithLight: 0
   darkFillScale: 1
   muzzle: {fileID: 1656965312}
   leftGrip: {fileID: 608398441}
@@ -15032,7 +15035,6 @@ MonoBehaviour:
   maxLag: 6
   aimFov: 60
   strafeRoll: 1.2
-  brakePitch: 5
   slideRoll: 7
   posStiffness: 140
   posDamping: 16
@@ -20691,6 +20693,7 @@ MonoBehaviour:
   leadArm: 0.3
   aimLeadScale: 0.6
   freeAimRadius: 6
+  freeAimHorizontalRadius: 12
   stress: {fileID: 0}
   stressTremorAngle: 1.6
   stressTremorPosition: 0.005

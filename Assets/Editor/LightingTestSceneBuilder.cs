@@ -599,7 +599,7 @@ namespace BodycamHorror.EditorTools
             flicker.glow = glow.GetComponent<Renderer>();
         }
 
-        static Material EmissiveMaterial(string name, Color color, float emission)
+        internal static Material EmissiveMaterial(string name, Color color, float emission)
         {
             Material material = SimpleMaterial(name, color, 0f, 0.7f);
             material.EnableKeyword("_EMISSION");

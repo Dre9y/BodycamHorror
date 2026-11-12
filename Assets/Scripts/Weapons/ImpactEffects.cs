@@ -5,15 +5,19 @@ namespace BodycamHorror.Weapons
 {
     /// <summary>
     /// Shared bullet holes and impact dust/sparks for every weapon (and melee). Created on first use;
-    /// holes on moving or damageable things follow them around.
+    /// holes on moving or damageable things follow them around. A hole lasts <see cref="HoleLifetime"/>
+    /// seconds, shrinking away over its last half second.
     /// </summary>
     public class ImpactEffects : MonoBehaviour
     {
         const int MaxHoles = 96;
+        /// <summary>Seconds a bullet or pellet hole stays.</summary>
+        public const float HoleLifetime = 10f;
+        const float HoleFade = 0.5f;
 
         static ImpactEffects instance;
 
-        struct Hole { public Transform t; public Transform follow; public bool hasFollow; public Vector3 localPoint; public Quaternion localRot; }
+        struct Hole { public Transform t; public Transform follow; public bool hasFollow; public Vector3 localPoint; public Quaternion localRot; public float born, size; }
         readonly Hole[] holes = new Hole[MaxHoles];
         int nextHole;
         ParticleSystem fx;
@@ -47,7 +51,9 @@ namespace BodycamHorror.Weapons
             Quaternion rot = Quaternion.LookRotation(-hit.normal) * Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
             Vector3 pos = hit.point + hit.normal * 0.004f;
             h.t.SetPositionAndRotation(pos, rot);
-            h.t.localScale = Vector3.one * (size * Random.Range(0.8f, 1.2f));
+            h.size = size * Random.Range(0.8f, 1.2f);
+            h.t.localScale = Vector3.one * h.size;
+            h.born = Time.time;
             h.follow = follow;
             h.hasFollow = follow;
             if (follow)
@@ -124,7 +130,11 @@ namespace BodycamHorror.Weapons
             for (int i = 0; i < holes.Length; i++)
             {
                 ref Hole h = ref holes[i];
-                if (!h.hasFollow || !h.t || !h.t.gameObject.activeSelf) continue;
+                if (!h.t || !h.t.gameObject.activeSelf) continue;
+                float age = Time.time - h.born;
+                if (age >= HoleLifetime) { h.t.gameObject.SetActive(false); continue; }
+                if (age > HoleLifetime - HoleFade) h.t.localScale = Vector3.one * (h.size * (HoleLifetime - age) / HoleFade);
+                if (!h.hasFollow) continue;
                 if (h.follow) h.t.SetPositionAndRotation(h.follow.TransformPoint(h.localPoint), h.follow.rotation * h.localRot);
                 else h.t.gameObject.SetActive(false);   // followed object was destroyed
             }

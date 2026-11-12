@@ -18,7 +18,7 @@ namespace BodycamHorror.Weapons
         public enum Kind { Pistol, Shotgun }
 
         const int MaxAlive = 40;
-        const float Lifetime = 45f;
+        const float Lifetime = 10f;   // seconds a casing stays on the floor
         const int ClipVariants = 4;
 
         static readonly Queue<GameObject> alive = new Queue<GameObject>();
@@ -71,7 +71,9 @@ namespace BodycamHorror.Weapons
             if (shell && shellDrop) { casing.drop = shellDrop; casing.dropStart = shellDropStart; }
             else if (!shell && brassTiers != null) casing.tiers = brassTiers;
             else casing.hits = shell ? ShellHits() : BrassHits();
-            casing.loudness = shell ? 0.9f : 0.8f;
+            casing.loudness = shell ? 0.81f : 1f;
+            // brass is small and lands a metre or two away: heard as if close
+            go.GetComponent<AudioSource>().minDistance = shell ? 0.35f : 1f;
             Object.Destroy(go, Lifetime);
             alive.Enqueue(go);
         }

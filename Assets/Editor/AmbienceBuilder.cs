@@ -74,7 +74,7 @@ namespace BodycamHorror.EditorTools
         }
 
         /// <summary>Names (no extension) of the prepared clips that start with this.</summary>
-        static string[] Named(string prefix)
+        internal static string[] Named(string prefix)
         {
             var list = new System.Collections.Generic.List<string>();
             foreach (string guid in AssetDatabase.FindAssets("t:AudioClip", new[] { Dir.TrimEnd('/') }))
@@ -286,14 +286,14 @@ namespace BodycamHorror.EditorTools
             return list;
         }
 
-        static Transform Group(Transform parent, string name)
+        internal static Transform Group(Transform parent, string name)
         {
             var t = new GameObject(name).transform;
             t.SetParent(parent, false);
             return t;
         }
 
-        static void Loop(Transform parent, string name, Vector3 localPosition, float volume, float spatial, float minDistance, float maxDistance, string clip)
+        internal static void Loop(Transform parent, string name, Vector3 localPosition, float volume, float spatial, float minDistance, float maxDistance, string clip)
         {
             var a = Make(parent, name, localPosition, clip);
             if (!a) return;
@@ -305,7 +305,7 @@ namespace BodycamHorror.EditorTools
             a.occlusion = spatial > 0f;
         }
 
-        static void Shots(Transform parent, string name, Vector3 position, float volume, Vector2 interval, float radius,
+        internal static void Shots(Transform parent, string name, Vector3 position, float volume, Vector2 interval, float radius,
                           float minDistance, float maxDistance, params string[] clips)
         {
             var a = Make(parent, name, position, clips);
@@ -339,7 +339,7 @@ namespace BodycamHorror.EditorTools
 
         /// <summary>Beds stream (long), the rest sit decompressed in memory (short, played often);
         /// everything heard from a point is made mono, so it places properly.</summary>
-        static void ImportSettings()
+        internal static void ImportSettings()
         {
             foreach (string guid in AssetDatabase.FindAssets("t:AudioClip", new[] { Dir.TrimEnd('/') }))
             {

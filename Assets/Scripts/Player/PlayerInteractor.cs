@@ -77,6 +77,7 @@ namespace BodycamHorror.Player
 
         void Update()
         {
+            if (UI.PauseMenu.IsOpen) return;
             if (!cam || !cam.isActiveAndEnabled)
             {
                 cam = GetComponentInChildren<Camera>();

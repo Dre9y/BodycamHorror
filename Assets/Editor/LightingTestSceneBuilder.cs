@@ -163,7 +163,7 @@ namespace BodycamHorror.EditorTools
 
         // ------------------------------------------------------------------ lamps
 
-        static void PlaceLamp(GameObject prefab, Transform parent, string name, Vector3 ceilingPoint, bool swinging)
+        internal static void PlaceLamp(GameObject prefab, Transform parent, string name, Vector3 ceilingPoint, bool swinging)
         {
             var lamp = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
             lamp.name = name;
@@ -173,7 +173,7 @@ namespace BodycamHorror.EditorTools
 
         /// <summary>Small hanging lamp: ceiling rose, cord, enamel shade, bare bulb. Everything below the
         /// rose hangs on a pivot that SwingingLamp rocks (off in the prefab; switch it on per lamp).</summary>
-        static GameObject BuildLampPrefab()
+        internal static GameObject BuildLampPrefab()
         {
             const string path = PrefabDir + "/HangingLamp.prefab";
             const float drop = 0.45f;   // ceiling to bulb: short, so the bulb is not right on top of a head

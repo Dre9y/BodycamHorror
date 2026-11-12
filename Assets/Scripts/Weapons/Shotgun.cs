@@ -50,6 +50,7 @@ namespace BodycamHorror.Weapons
         {
             ejectionOffset = new Vector3(0.02f, 0f, -0.66f);
             ejectionVelocity = new Vector3(2f, 1.1f, -0.2f);
+            handlingVolume = 0.45f;   // loading shells and pumping sit well under the shot
         }
 
         void Reset() => ApplyShotgunDefaults();
@@ -73,6 +74,7 @@ namespace BodycamHorror.Weapons
             cameraTrauma = 0.38f; cameraTremor = 1.1f; cameraKickPitch = 260f; cameraKickRoll = 120f; cameraKickBack = 0.7f;
             meleeWithWeapon = true; meleeDamage = 45f; meleeForce = 12f;
             flashIntensity = 14f; flashDuration = 0.07f; bulletHoleSize = 0.05f; impactFxScale = 0.35f;
+            handlingVolume = 0.45f;
             flashlightOffset = new Vector3(0f, -0.026f, -0.06f);   // under the barrel, ahead of the magazine tube
             ejectionOffset = new Vector3(0.02f, 0f, -0.66f);       // the port on the right of the receiver
             ejectionVelocity = new Vector3(2f, 1.1f, -0.2f);       // the pump flings it out, slower than a slide

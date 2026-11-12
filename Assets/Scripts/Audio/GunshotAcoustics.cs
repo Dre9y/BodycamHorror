@@ -272,7 +272,8 @@ namespace BodycamHorror.Audio
             return best < float.MaxValue;
         }
 
-        /// <summary>Fires a shot through the space the listener is in. <paramref name="power"/>: 1 = a pistol, more for bigger guns.</summary>
+        /// <summary>Fires a shot through the space the listener is in. <paramref name="power"/>: 1 = a pistol, more for
+        /// bigger guns: a harder snap and more room, and only a little more of the muffled body under it.</summary>
         public static bool Play(AudioClip clip, float volume, float pitch, float power)
         {
             if (!Instance || !clip) return false;
@@ -292,9 +293,10 @@ namespace BodycamHorror.Audio
             direct.PlayOneShot(dry, Mathf.Clamp01(volume * crack * Mathf.Lerp(0.85f, 1f, e)));
             snapFilter.cutoffFrequency = snapFrom;
             snapSource.pitch = pitch;
-            snapSource.PlayOneShot(dry, Mathf.Clamp01(volume * snap * Mathf.Lerp(0.85f, 1f, e)));
+            // a bigger gun is a harder, brighter crack, not just more boom
+            snapSource.PlayOneShot(dry, Mathf.Clamp01(volume * snap * power * Mathf.Lerp(0.85f, 1f, e)));
             bodySource.pitch = pitch * bodyPitch;
-            bodySource.PlayOneShot(dry, Mathf.Clamp01(volume * body * power * Mathf.Lerp(0.7f, 1f, e)));
+            bodySource.PlayOneShot(dry, Mathf.Clamp01(volume * body * Mathf.Sqrt(power) * Mathf.Lerp(0.7f, 1f, e)));
 
             // the room
             int v = nextWet;

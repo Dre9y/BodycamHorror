@@ -123,9 +123,15 @@ namespace BodycamHorror.Weapons
         [Tooltip("Slide release / pump stroke.")]
         public AudioClip rackClip;
         public AudioClip shellInClip;
+        [Tooltip("Several takes of loading one shell; one picked at random each time (overrides Shell In Clip).")]
+        public AudioClip[] shellInClips;
+        [Tooltip("Several takes of the rack / pump; one picked at random each time (overrides Rack Clip).")]
+        public AudioClip[] rackClips;
         [Tooltip("The action cycling right after a shot (slide back and home). Empty = generated.")]
         public AudioClip cycleClip;
         [Range(0f, 1f)] public float cycleVolume = 0.85f;
+        [Tooltip("Loudness of reloading and handling (magazine, shells, rack / pump) as a share of Volume. These play dry and close, and the body camera microphone lifts quiet sounds, so they need to sit well under the shots.")]
+        [Range(0f, 1f)] public float handlingVolume = 1f;
 
         public int Ammo { get; set; }
         /// <summary>A weapon light is on this gun: the flashlight rides under its barrel while it is out.</summary>
@@ -321,7 +327,10 @@ namespace BodycamHorror.Weapons
             // a shot goes out through the space it is fired in; everything else is the gun in the hands
             if (sfx == Sfx.Shot && BodycamHorror.Audio.GunshotAcoustics.Play(clip, volume, pitch, pelletsPerShot > 1 ? 1.35f : 1f)) return;
             audioSource.pitch = pitch;
-            audioSource.PlayOneShot(clip, sfx == Sfx.Cycle ? cycleVolume : volume);
+            float level = sfx == Sfx.Cycle ? cycleVolume
+                : sfx == Sfx.MagOut || sfx == Sfx.MagIn || sfx == Sfx.ShellIn || sfx == Sfx.Rack ? volume * handlingVolume
+                : volume;
+            audioSource.PlayOneShot(clip, level);
         }
 
         /// <summary>Throws a spent casing out of the ejection port, carrying the shooter's own speed.</summary>
@@ -334,6 +343,13 @@ namespace BodycamHorror.Weapons
             Casings.Eject(kind, port, g.rotation, ejectionVelocity, cc ? cc.velocity : Vector3.zero, cc ? cc.transform : transform.root);
         }
 
+        static AudioClip Any(AudioClip[] clips)
+        {
+            if (clips == null || clips.Length == 0) return null;
+            var clip = clips[Random.Range(0, clips.Length)];
+            return clip ? clip : null;
+        }
+
         AudioClip Recorded(Sfx sfx)
         {
             switch (sfx)
@@ -342,8 +358,8 @@ namespace BodycamHorror.Weapons
                 case Sfx.Dry: return dryClip;
                 case Sfx.MagOut: return magOutClip;
                 case Sfx.MagIn: return magInClip;
-                case Sfx.Rack: return rackClip;
-                case Sfx.ShellIn: return shellInClip;
+                case Sfx.Rack: return Any(rackClips) ?? rackClip;
+                case Sfx.ShellIn: return Any(shellInClips) ?? shellInClip;
                 case Sfx.Cycle: return cycleClip;
                 default: return null;
             }

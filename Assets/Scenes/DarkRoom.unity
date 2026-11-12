@@ -8446,6 +8446,9 @@ MonoBehaviour:
   flashlightOffset: {x: 0, y: -0.026, z: -0.06}
   startWithLight: 1
   darkFillScale: 8
+  ejectsCasings: 1
+  ejectionOffset: {x: 0.02, y: 0, z: -0.66}
+  ejectionVelocity: {x: 2, y: 1.1, z: -0.2}
   muzzle: {fileID: 1895004561}
   leftGrip: {fileID: 61662650}
   flashMesh: {fileID: 193881108}
@@ -8467,6 +8470,16 @@ MonoBehaviour:
   magInClip: {fileID: 8300000, guid: 5968d521fdc1e4641a547acfc8b68df2, type: 3}
   rackClip: {fileID: 8300000, guid: b87ce90516c69f543b6b513e894ab345, type: 3}
   shellInClip: {fileID: 8300000, guid: 5968d521fdc1e4641a547acfc8b68df2, type: 3}
+  shellInClips:
+  - {fileID: 8300000, guid: 4df247781ec76f64a95b03ae7199976c, type: 3}
+  - {fileID: 8300000, guid: 186d23eb54ab4d14bbd98685e4a34e6a, type: 3}
+  rackClips:
+  - {fileID: 8300000, guid: b6cf78d68dba96448bddf10d6c8b65fb, type: 3}
+  - {fileID: 8300000, guid: e91e1d4c6696f1d46a88ab5be40d3b05, type: 3}
+  - {fileID: 8300000, guid: 0517823f98f71084ea8dda17dcd4be01, type: 3}
+  - {fileID: 8300000, guid: e36b8f7d551058a418fb333dd87d7d62, type: 3}
+  cycleClip: {fileID: 0}
+  cycleVolume: 0.85
   pump: {fileID: 1399486683}
   pumpTravel: 0.09
   pumpDelay: 0.16
@@ -10080,6 +10093,9 @@ MonoBehaviour:
   flashlightOffset: {x: 0, y: -0.047, z: -0.035}
   startWithLight: 0
   darkFillScale: 1
+  ejectsCasings: 1
+  ejectionOffset: {x: 0.013, y: 0.013, z: -0.097}
+  ejectionVelocity: {x: 1.8, y: 1.4, z: -0.4}
   muzzle: {fileID: 1656965312}
   leftGrip: {fileID: 608398441}
   flashMesh: {fileID: 34740882}
@@ -10101,6 +10117,10 @@ MonoBehaviour:
   magInClip: {fileID: 8300000, guid: fc7e7ac8f4ba86d419c103d4d0b1b900, type: 3}
   rackClip: {fileID: 8300000, guid: 8b3061ef480b39e4097883e201062fc2, type: 3}
   shellInClip: {fileID: 0}
+  shellInClips: []
+  rackClips: []
+  cycleClip: {fileID: 0}
+  cycleVolume: 0.85
   slide: {fileID: 2062401074}
   slideTravel: 0.028
   modelPrefab: {fileID: 919132149155446097, guid: 7e7b80c2d20e66c4fade2ccee8ab5df1, type: 3}

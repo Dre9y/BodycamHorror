@@ -356,14 +356,10 @@ namespace BodycamHorror.Player
 
         void HandleCursor()
         {
-            var kb = Keyboard.current;
+            // Escape opens the pause menu, which frees the cursor itself (UI.PauseMenu)
+            if (UI.PauseMenu.IsOpen) return;
             var mouse = Mouse.current;
-            if (kb != null && kb.escapeKey.wasPressedThisFrame)
-            {
-                Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
-            }
-            else if (mouse != null && mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked)
+            if (mouse != null && mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked)
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;

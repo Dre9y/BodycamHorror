@@ -327,6 +327,7 @@ namespace BodycamHorror.Weapons
 
         void Update()
         {
+            if (UI.PauseMenu.IsOpen) return;   // paused: no firing, aiming or switching
             bool cursorFree = Cursor.lockState != CursorLockMode.Locked;
             bool mouseFire = Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
             // The first click into the game window only grabs the cursor.

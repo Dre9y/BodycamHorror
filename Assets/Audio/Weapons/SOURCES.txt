@@ -1,0 +1,9 @@
+Shotgun reload sounds. CC0 (public domain) from Freesound: free for any use, no credit required.
+Cut and levelled from Freesound's high-quality MP3 previews.
+
+shotgun_shell_in_01..02  one shell pushed into the tube; two takes cut from
+                         "load_gun_slow.ogg" by mchrpt          https://freesound.org/s/660975/
+shotgun_rack_01..04      pump back and forward; each built from two single strokes of
+                         "Remington870_Pump" by Stoniac         https://freesound.org/s/842736/
+
+The other files here (pistol_*, shotgun_dry/pump/shell_in/shot) came with the project before these.

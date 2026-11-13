@@ -13,7 +13,7 @@ namespace BodycamHorror.EditorTools
     /// Builds Assets/Scenes/TestRange.unity: a long closed hall to try things out in. The player starts
     /// empty-handed and without a flashlight (F does nothing); on the floor in front of them lie a pistol, the pistol's weapon light and a shotgun,
     /// each marked by its own faint glow (WeaponPickup). Down range stand pop-up targets at 6, 10, 15 and
-    /// 21 m, each under a dim lamp. A copy of the lighting test scene: the player and the grade come along.
+    /// 21 m, each under a dim lamp. On the left wall by the start runs a pipe with a burst joint blowing steam (it kills) and the valve that shuts it off. A copy of the lighting test scene: the player and the grade come along.
     /// Menu: BodycamHorror > Build Test Range Scene.
     /// </summary>
     public static class TestRangeSceneBuilder
@@ -107,6 +107,8 @@ namespace BodycamHorror.EditorTools
             PlaceTarget(targets, new Vector3(3f, 0f, 21f));
             PlaceTarget(targets, new Vector3(-3.5f, 0f, 21f));
 
+            PlaceValve();
+
             GameLook.ApplyAtmosphere();
             PlaceLamps(targets);
             LightingTestSceneBuilder.AddDust();
@@ -115,6 +117,32 @@ namespace BodycamHorror.EditorTools
             EditorSceneManager.SaveScene(scene);
             AssetDatabase.SaveAssets();
             Debug.Log("Test range scene built: " + ScenePath);
+        }
+
+        /// <summary>A pipe with a hand-wheel valve on the left wall, a few steps from the start (Valve). Its far
+        /// joint has burst: a jet of steam blows across the floor there until the valve is shut (SteamLeak).
+        /// A dim lamp over it, so the steam can be seen before it is walked into.</summary>
+        public static GameObject PlaceValve()
+        {
+            var group = new GameObject("SteamPipe").transform;
+            GameObject valve = ValveBuilder.Place(new Vector3(-Width * 0.5f, 1.15f, ItemsZ + 0.6f), Vector3.right, group);
+            valve.name = "PipeValve";
+            GameObject steam = ValveBuilder.PlaceSteam(valve, -1, group);   // the joint further down the hall
+
+            Vector3 aim = steam.transform.position + Vector3.right * 0.8f;
+            Vector3 from = new Vector3(aim.x + 1.6f, Height - 0.05f, aim.z - 0.8f);
+            var lamp = new GameObject("Lamp_SteamPipe");
+            lamp.transform.SetParent(group, false);
+            lamp.transform.SetPositionAndRotation(from, Quaternion.LookRotation(aim - from));
+            var light = lamp.AddComponent<Light>();
+            light.type = LightType.Spot;
+            light.color = new Color(1f, 0.86f, 0.68f);
+            light.intensity = 3f;
+            light.range = 6f;
+            light.spotAngle = 80f;
+            light.innerSpotAngle = 35f;
+            light.shadows = LightShadows.Soft;
+            return group.gameObject;
         }
 
         static void BuildHall(Material floor, Material ceiling)

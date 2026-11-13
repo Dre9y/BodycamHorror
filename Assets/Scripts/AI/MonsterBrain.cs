@@ -146,6 +146,8 @@ namespace BodycamHorror.AI
 
         static MonsterBrain attacker;                    // attack token
         static readonly List<MonsterBrain> all = new List<MonsterBrain>();
+        /// <summary>Every active monster in the scene.</summary>
+        public static IReadOnlyList<MonsterBrain> All => all;
 
         NavMeshAgent agent;
         MonsterSenses senses;

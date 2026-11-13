@@ -6,8 +6,8 @@ using UnityEngine.InputSystem;
 namespace BodycamHorror.Player
 {
     /// <summary>
-    /// Lets the player use doors and pick guns up: stand close, look at one, and the key to press shows
-    /// by its handle / over the gun (F / D-pad down). Doors and pickups add this to the player themselves,
+    /// Lets the player use doors, turn valves and pick guns up: stand close, look at one, and the key to
+    /// press shows by its handle / on the wheel / over the gun (E / D-pad down). Doors and pickups add this to the player themselves,
     /// so nothing has to be set up per scene. While something is in reach the same key does not toggle
     /// the flashlight (see BodycamFlashlight).
     /// </summary>
@@ -16,7 +16,7 @@ namespace BodycamHorror.Player
     {
         public static PlayerInteractor Instance { get; private set; }
         /// <summary>A door or a pickup is in reach and looked at right now.</summary>
-        public static bool HasTarget => Instance && Instance.isActiveAndEnabled && (Instance.Target || Instance.Pickup);
+        public static bool HasTarget => Instance && Instance.isActiveAndEnabled && (Instance.Target || Instance.Pickup || Instance.Valve);
 
         [Tooltip("How far the player can reach (m, from the camera).")]
         public float reach = 2.2f;
@@ -38,6 +38,7 @@ namespace BodycamHorror.Player
 
         public Door Target { get; private set; }
         public WeaponPickup Pickup { get; private set; }
+        public Valve Valve { get; private set; }
 
         Camera cam;
         InputAction useAction;
@@ -85,6 +86,7 @@ namespace BodycamHorror.Player
             }
             Target = cam ? FindDoor(cam.transform.position, cam.transform.forward) : null;
             Pickup = cam && !Target ? FindPickup(cam.transform.position, cam.transform.forward) : null;
+            Valve = cam && !Target && !Pickup ? FindValve(cam.transform.position, cam.transform.forward) : null;
 
             if (Target)
             {
@@ -96,7 +98,33 @@ namespace BodycamHorror.Player
                 promptPoint = Pickup.PromptPoint;
                 if (useAction.WasPressedThisFrame() && Pickup.Take(gameObject)) Pickup = null;
             }
-            promptAlpha = Mathf.MoveTowards(promptAlpha, Target || Pickup ? 1f : 0f, Time.unscaledDeltaTime * 7f);
+            else if (Valve)
+            {
+                promptPoint = Valve.PromptPoint;
+                if (useAction.IsPressed()) Valve.Use(useAction.WasPressedThisFrame());
+            }
+            promptAlpha = Mathf.MoveTowards(promptAlpha, Target || Pickup || Valve ? 1f : 0f, Time.unscaledDeltaTime * 7f);
+        }
+
+        Valve FindValve(Vector3 eye, Vector3 forward)
+        {
+            Valve best = null;
+            float bestAngle = pickupLookAngle;
+            foreach (Valve valve in Valve.All)
+            {
+                if (!valve.CanUse) continue;
+                Vector3 to = valve.PromptPoint - eye;
+                float distance = to.magnitude;
+                if (distance > reach || distance < 0.01f) continue;
+                float a = Vector3.Angle(forward, to);
+                if (a >= bestAngle) continue;
+                // not through a wall
+                if (Physics.Raycast(eye, to / distance, out RaycastHit block, distance - 0.05f, mask, QueryTriggerInteraction.Ignore)
+                    && !block.collider.transform.IsChildOf(valve.transform)) continue;
+                best = valve;
+                bestAngle = a;
+            }
+            return best;
         }
 
         WeaponPickup FindPickup(Vector3 eye, Vector3 forward)

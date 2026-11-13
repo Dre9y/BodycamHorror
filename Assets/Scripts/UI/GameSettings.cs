@@ -11,6 +11,7 @@ namespace BodycamHorror.UI
         const string VSyncKey = "settings.vsync";
         const string FpsCapKey = "settings.fpsCap";
         const string ShowFpsKey = "settings.showFps";
+        const string EarRingingKey = "settings.earRinging";
 
         /// <summary>The frame counter in the top right corner (FpsCounter).</summary>
         public static bool ShowFps
@@ -19,6 +20,14 @@ namespace BodycamHorror.UI
             set { showFps = value; PlayerPrefs.SetInt(ShowFpsKey, value ? 1 : 0); PlayerPrefs.Save(); }
         }
         static bool? showFps;
+
+        /// <summary>The ringing in the ears at high fear (PlayerFearAudio). Off for players it bothers.</summary>
+        public static bool EarRinging
+        {
+            get => earRinging ??= PlayerPrefs.GetInt(EarRingingKey, 1) != 0;   // read every frame: cached
+            set { earRinging = value; PlayerPrefs.SetInt(EarRingingKey, value ? 1 : 0); PlayerPrefs.Save(); }
+        }
+        static bool? earRinging;
 
         /// <summary>Frame caps offered while V-Sync is off; 0 = none.</summary>
         public static readonly int[] FpsCaps = { 0, 60, 120, 144, 165, 240 };

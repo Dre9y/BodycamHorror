@@ -14,4 +14,6 @@ All recordings are from freesound.org under Creative Commons 0 (public domain), 
 | Flashlight/flashlight_on.wav, flashlight_off.wav | "Flashlight Switch" by Kinoton - https://freesound.org/people/Kinoton/sounds/352092/ |
 | Door/door_open.wav | Handle from "wood_door_close.wav" by j1987 - https://freesound.org/people/j1987/sounds/335764/ + creak from "Door Creak 02" by XPLOman - https://freesound.org/people/XPLOman/sounds/390123/ |
 | Door/door_close.wav | "WoodDoorSqueak.wav" by TampaJoey - https://freesound.org/people/TampaJoey/sounds/588509/ |
+| Valve/valve_turn.wav | Seamless 9.3 s loop, mono, levelled: "Foley_Mechanism_Wheel_Moderate_Rusty_Loop_Mono.wav" - https://freesound.org/s/559470/ |
+| Valve/steam_hiss.wav | Seamless 15.5 s loop, mono, levelled: "Compressed Air Pressure Release Valve Loop (Synthetic)" - https://freesound.org/s/861613/ |
 | Door/door_shut.wav | "wood_door_close.wav" by j1987 - https://freesound.org/people/j1987/sounds/335764/ |

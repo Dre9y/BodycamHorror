@@ -1,0 +1,9 @@
+Fear sounds (see PlayerFearAudio). All CC0 (public domain) from Freesound: free for any use, no credit required.
+Cut from Freesound's high-quality MP3 previews.
+
+heartbeat    - one beat (lub-dub), played once per heartbeat so the pulse can speed up without changing pitch.
+               "Single Heartbeat HQ_BeatSmith.wav" by BeatSmith   https://freesound.org/s/22417/
+ear_ringing  - one steady mono tone, seamless 18 s loop (40 ms seam), raised 8 dB.
+               "tinnitus.wav"                                     https://freesound.org/s/377205/
+
+To swap a sound, replace the file and keep the name (any format Unity imports).

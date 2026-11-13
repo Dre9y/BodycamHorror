@@ -31,6 +31,14 @@ namespace BodycamHorror.Audio
         /// <summary>0 = clear line to the listener, 1 = fully behind something.</summary>
         public float Blocked { get; private set; }
 
+        /// <summary>The source's own loudness before muffling. This component writes AudioSource.volume every
+        /// frame, so a sound that fades or swells must set its level here, not on the source.</summary>
+        public float Volume
+        {
+            get => baseVolume;
+            set => baseVolume = Mathf.Clamp01(value);
+        }
+
         const float OpenCutoff = 22000f;
 
         static AudioListener listener;

@@ -515,7 +515,7 @@ namespace BodycamHorror.Weapons
             Vector3 sway = new Vector3(Noise(seed, Time.time * 0.35f), Noise(seed + 3f, Time.time * 0.28f), 0f) * breath;
 
             // --- stress tremor: fine, fast shake of the hands
-            float tremor01 = stress ? stress.Tremor : 0f;
+            float tremor01 = (stress ? stress.Tremor : 0f) * UI.DebugMenu.FearTremorScale;
             Vector3 tremor = Vector3.zero, tremorPos = Vector3.zero;
             if (tremor01 > 0.001f)
             {
@@ -693,7 +693,8 @@ namespace BodycamHorror.Weapons
 
             if (!w.Fire(transform.position, spread, player.gameObject)) return;
 
-            float k = Mathf.Lerp(1f, aimRecoilScale, aimW) * Mathf.Lerp(oneHandRecoilScale, 1f, twoHandW);
+            float k = Mathf.Lerp(1f, aimRecoilScale, aimW) * Mathf.Lerp(oneHandRecoilScale, 1f, twoHandW)
+                      * UI.DebugMenu.RecoilScale;
             recoilRotVel += new Vector3(-w.kickPitch * Random.Range(0.85f, 1.15f),
                                         Random.Range(-w.kickYaw, w.kickYaw),
                                         Random.Range(-w.kickRoll, w.kickRoll)) * k;

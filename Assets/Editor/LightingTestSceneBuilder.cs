@@ -24,7 +24,7 @@ namespace BodycamHorror.EditorTools
         const string SourceScenePath = "Assets/Scenes/SampleScene.unity";
         internal const string TextureDir = "Assets/Textures/Environment";
         internal const string MaterialDir = "Assets/Materials/Environment";
-        const string PrefabDir = "Assets/Prefabs/Environment";
+        internal const string PrefabDir = "Assets/Prefabs/Environment";
 
         // layout, metres. The corridor runs along +Z from the player's back wall into the room.
         const float Height = 3f;

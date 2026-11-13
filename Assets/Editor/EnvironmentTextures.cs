@@ -12,7 +12,7 @@ namespace BodycamHorror.EditorTools
     {
         /// <summary>
         /// Material for the set in <c>textureDir/id</c>: Color, NormalGL and a mask packed here from the
-        /// set's Roughness and AmbientOcclusion maps, which are deleted once packed.
+        /// set's Roughness, AmbientOcclusion and (for metals) Metalness maps, which are deleted once packed.
         /// </summary>
         public static Material ScannedMaterial(string id, string materialDir, string textureDir, Color tint, float bumpScale)
         {
@@ -22,12 +22,15 @@ namespace BodycamHorror.EditorTools
             string maskPath = $"{folder}/{id}_Mask.png";
             string roughnessPath = $"{folder}/{id}_Roughness.jpg";
             string occlusionPath = $"{folder}/{id}_AmbientOcclusion.jpg";
+            string metalnessPath = $"{folder}/{id}_Metalness.jpg";
 
             if (!File.Exists(maskPath) && File.Exists(roughnessPath))
             {
-                PackMask(roughnessPath, File.Exists(occlusionPath) ? occlusionPath : null, maskPath);
+                PackMask(roughnessPath, File.Exists(occlusionPath) ? occlusionPath : null,
+                         File.Exists(metalnessPath) ? metalnessPath : null, maskPath);
                 AssetDatabase.DeleteAsset(roughnessPath);
                 AssetDatabase.DeleteAsset(occlusionPath);
+                AssetDatabase.DeleteAsset(metalnessPath);
                 AssetDatabase.Refresh();
             }
             Import(colorPath, TextureImporterType.Default, true);
@@ -58,8 +61,8 @@ namespace BodycamHorror.EditorTools
             return material;
         }
 
-        /// <summary>URP Lit layout: metallic in R (none here), occlusion in G, smoothness in A.</summary>
-        static void PackMask(string roughnessPath, string occlusionPath, string maskPath)
+        /// <summary>URP Lit layout: metallic in R (0 without a metalness map), occlusion in G, smoothness in A.</summary>
+        static void PackMask(string roughnessPath, string occlusionPath, string metalnessPath, string maskPath)
         {
             var roughness = new Texture2D(2, 2);
             roughness.LoadImage(File.ReadAllBytes(roughnessPath));
@@ -73,9 +76,18 @@ namespace BodycamHorror.EditorTools
                 Object.DestroyImmediate(ao);
             }
 
+            Color32[] metal = null;
+            if (metalnessPath != null)
+            {
+                var m = new Texture2D(2, 2);
+                m.LoadImage(File.ReadAllBytes(metalnessPath));
+                if (m.width == roughness.width && m.height == roughness.height) metal = m.GetPixels32();
+                Object.DestroyImmediate(m);
+            }
+
             var packed = new Color32[rough.Length];
             for (int i = 0; i < rough.Length; i++)
-                packed[i] = new Color32(0, occlusion != null ? occlusion[i].g : (byte)255, 0, (byte)(255 - rough[i].r));
+                packed[i] = new Color32(metal != null ? metal[i].r : (byte)0, occlusion != null ? occlusion[i].g : (byte)255, 0, (byte)(255 - rough[i].r));
 
             var mask = new Texture2D(roughness.width, roughness.height, TextureFormat.RGBA32, false);
             mask.SetPixels32(packed);

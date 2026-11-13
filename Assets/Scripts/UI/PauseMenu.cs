@@ -7,7 +7,7 @@ namespace BodycamHorror.UI
     /// Escape (or Start on a gamepad) pauses the game and opens this menu: Continue, Settings, Quit.
     /// While it is open time stands still, the sound is paused and the cursor is free; the player's own
     /// input is ignored (see <see cref="IsOpen"/>). Settings: V-Sync, and a frame cap for when it is off
-    /// (<see cref="GameSettings"/>). Drawn with IMGUI like the rest of the game's prompts and installed
+    /// (<see cref="GameSettings"/>), the frame counter and the ear ringing. Drawn with IMGUI like the rest of the game's prompts and installed
     /// automatically, so nothing has to be set up per scene.
     /// </summary>
     [DefaultExecutionOrder(-1000)]   // before anything reads input this frame
@@ -16,8 +16,10 @@ namespace BodycamHorror.UI
         enum Page { Main, Settings }
 
         public static PauseMenu Instance { get; private set; }
-        /// <summary>The menu is up: the game is paused and gameplay input must be ignored.</summary>
-        public static bool IsOpen => Instance && Instance.open;
+        /// <summary>A menu is up (this one, or the debug panel with its free cursor): gameplay input must be ignored.</summary>
+        public static bool IsOpen => IsPaused || DebugMenu.IsOpen;
+        /// <summary>The pause menu itself is up: the game is paused.</summary>
+        public static bool IsPaused => Instance && Instance.open;
 
         bool open;
         Page page;
@@ -86,6 +88,7 @@ namespace BodycamHorror.UI
             open = false;
             Time.timeScale = timeScaleBefore > 0f ? timeScaleBefore : 1f;
             AudioListener.pause = false;
+            if (DebugMenu.IsOpen) return;   // its sliders still need the cursor
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -109,7 +112,7 @@ namespace BodycamHorror.UI
             GUI.depth = -1000;
 
             Fill(new Rect(0f, 0f, Screen.width, Screen.height), Shade);
-            float w = 660f * k, h = (page == Page.Main ? 420f : 520f) * k;
+            float w = 660f * k, h = (page == Page.Main ? 420f : 580f) * k;
             var panel = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
             Fill(panel, Panel);
             Frame(panel, Edge, Mathf.Max(1f, Mathf.Round(2f * k)));
@@ -148,6 +151,9 @@ namespace BodycamHorror.UI
 
             bool fps = GameSettings.ShowFps;
             if (Row("Счётчик кадров", fps ? "Вкл" : "Выкл", true, k)) GameSettings.ShowFps = !fps;
+
+            bool ringing = GameSettings.EarRinging;
+            if (Row("Писк в ушах при страхе", ringing ? "Вкл" : "Выкл", true, k)) GameSettings.EarRinging = !ringing;
 
             GUILayout.FlexibleSpace();
             if (Button("Назад", k)) page = Page.Main;

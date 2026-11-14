@@ -34,7 +34,7 @@ namespace BodycamHorror.EditorTools
         const float RoomSize = 9f;
         const float Wall = 0.3f;
         const float PanelHeight = 1.45f;   // oil paint up to here, bare plaster above
-        const float WallTile = 2f;         // metres one repeat of each texture covers
+        internal const float WallTile = 2f;         // metres one repeat of each texture covers
         const float FloorTile = 2f;
         const float CeilingTile = 2.5f;
 

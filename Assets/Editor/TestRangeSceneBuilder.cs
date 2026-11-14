@@ -13,7 +13,8 @@ namespace BodycamHorror.EditorTools
     /// Builds Assets/Scenes/TestRange.unity: a long closed hall to try things out in. The player starts
     /// empty-handed and without a flashlight (F does nothing); on the floor in front of them lie a pistol, the pistol's weapon light and a shotgun,
     /// each marked by its own faint glow (WeaponPickup). Down range stand pop-up targets at 6, 10, 15 and
-    /// 21 m, each under a dim lamp. On the left wall by the start runs a pipe with a burst joint blowing steam (it kills) and the valve that shuts it off. A copy of the lighting test scene: the player and the grade come along.
+    /// 21 m, each under a dim lamp. On the left wall by the start runs a pipe with a burst joint blowing steam (it kills) and the valve that shuts it off.
+    /// Against the right wall stand two closets behind metal doors, one of them padlocked. A copy of the lighting test scene: the player and the grade come along.
     /// Menu: BodycamHorror > Build Test Range Scene.
     /// </summary>
     public static class TestRangeSceneBuilder
@@ -108,6 +109,7 @@ namespace BodycamHorror.EditorTools
             PlaceTarget(targets, new Vector3(-3.5f, 0f, 21f));
 
             PlaceValve();
+            PlaceDoorRooms();
 
             GameLook.ApplyAtmosphere();
             PlaceLamps(targets);
@@ -143,6 +145,64 @@ namespace BodycamHorror.EditorTools
             light.innerSpotAngle = 35f;
             light.shadows = LightShadows.Soft;
             return group.gameObject;
+        }
+
+        /// <summary>Two closets against the right wall, each behind a metal door (DoorBuilder): the nearer one
+        /// just opens, the further one is padlocked and the lock has to be shot off (DoorLock).</summary>
+        public static GameObject PlaceDoorRooms()
+        {
+            const string mats = LightingTestSceneBuilder.MaterialDir, tex = LightingTestSceneBuilder.TextureDir;
+            if (!LightingTestSceneBuilder.wallPaint)
+                LightingTestSceneBuilder.wallPaint = EnvironmentTextures.ScannedMaterial("PaintedPlaster011", mats, tex, new Color(0.62f, 0.7f, 0.68f), 1.2f);
+            if (!LightingTestSceneBuilder.wallPlaster)
+                LightingTestSceneBuilder.wallPlaster = EnvironmentTextures.ScannedMaterial("PaintedPlaster015", mats, tex, new Color(0.72f, 0.72f, 0.68f), 1.2f);
+
+            const float thick = 0.2f, depth = 2.4f, z0 = 4.4f, zMid = 6.8f, z1 = 9.2f;
+            float xIn = Width * 0.5f, xFront = xIn - depth - thick, xRoom = xIn - depth;   // the doors' wall runs along Z at xFront..xRoom
+            float ow = DoorBuilder.OpeningWidth, oh = DoorBuilder.OpeningHeight;
+            float doorA = z0 + 0.65f, doorB = zMid + 0.65f;
+
+            var group = new GameObject("DoorRooms").transform;
+            LightingTestSceneBuilder.WallBox("Closet_South", group, new Vector3(xFront, 0f, z0 - thick), new Vector3(xIn, Height, z0));
+            LightingTestSceneBuilder.WallBox("Closet_North", group, new Vector3(xFront, 0f, z1), new Vector3(xIn, Height, z1 + thick));
+            LightingTestSceneBuilder.WallBox("Closet_Partition", group, new Vector3(xRoom, 0f, zMid - thick * 0.5f), new Vector3(xIn, Height, zMid + thick * 0.5f));
+            // the front wall, with a hole for each door and plaster over it
+            float[] cuts = { z0, doorA, doorA + ow, doorB, doorB + ow, z1 };
+            for (int i = 0; i < cuts.Length - 1; i++)
+            {
+                var min = new Vector3(xFront, 0f, cuts[i]);
+                var max = new Vector3(xRoom, Height, cuts[i + 1]);
+                if (i % 2 == 0) LightingTestSceneBuilder.WallBox("Closet_Front_" + i, group, min, max);
+                else LightingTestSceneBuilder.Box("Closet_Lintel_" + i, group, new Vector3(min.x, oh, min.z), max,
+                         LightingTestSceneBuilder.wallPlaster, LightingTestSceneBuilder.WallTile, LightingTestSceneBuilder.WallTile);
+            }
+
+            // hinged at the near jamb, fronts to the hall
+            float xMid = xFront + thick * 0.5f;
+            DoorBuilder.Place(new Vector3(xMid, 0f, doorA), Vector3.forward, false, group).name = "Door_Open";
+            DoorBuilder.Place(new Vector3(xMid, 0f, doorB), Vector3.forward, true, group).name = "Door_Locked";
+
+            // a bulb in each closet, and one outside so the doors and the padlock can be seen
+            ClosetLamp(group, "Lamp_Closet_A", new Vector3(xRoom + depth * 0.5f, Height - 0.05f, (z0 + zMid) * 0.5f), Vector3.down, 2.2f, 110f);
+            ClosetLamp(group, "Lamp_Closet_B", new Vector3(xRoom + depth * 0.5f, Height - 0.05f, (zMid + z1) * 0.5f), Vector3.down, 2.2f, 110f);
+            Vector3 from = new Vector3(xFront - 1.8f, Height - 0.05f, zMid);
+            ClosetLamp(group, "Lamp_Doors", from, new Vector3(xFront, 1.2f, zMid) - from, 3f, 95f);
+            return group.gameObject;
+        }
+
+        static void ClosetLamp(Transform parent, string name, Vector3 position, Vector3 direction, float intensity, float angle)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.SetPositionAndRotation(position, Quaternion.LookRotation(direction, Vector3.forward));
+            var light = go.AddComponent<Light>();
+            light.type = LightType.Spot;
+            light.color = new Color(1f, 0.86f, 0.68f);
+            light.intensity = intensity;
+            light.range = 6f;
+            light.spotAngle = angle;
+            light.innerSpotAngle = angle * 0.45f;
+            light.shadows = LightShadows.Soft;
         }
 
         static void BuildHall(Material floor, Material ceiling)

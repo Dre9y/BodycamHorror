@@ -14,6 +14,7 @@ namespace BodycamHorror.UI
     {
         const string RecoilKey = "debug.recoilScale";
         const string TremorKey = "debug.fearTremorScale";
+        const string FlashlightKey = "debug.flashlightSize";
         const float Min = 0f, Max = 3f, Step = 0.05f;
 
         /// <summary>The panel is up and has the cursor.</summary>
@@ -23,8 +24,10 @@ namespace BodycamHorror.UI
         public static float RecoilScale { get; private set; } = 1f;
         /// <summary>Multiplier on the hand tremor from fear; 1 = as tuned.</summary>
         public static float FearTremorScale { get; private set; } = 1f;
+        /// <summary>Multiplier on the size of the flashlight's lit spot; 1 = as tuned.</summary>
+        public static float FlashlightSize { get; private set; } = 1f;
 
-        static readonly string[] Names = { "Отдача оружия", "Тряска оружия от страха" };
+        static readonly string[] Names = { "Отдача оружия", "Тряска оружия от страха", "Размер пятна фонаря" };
 
         bool open;
         GUIStyle head, line, value, hint, reset;
@@ -36,6 +39,7 @@ namespace BodycamHorror.UI
         {
             RecoilScale = Mathf.Clamp(PlayerPrefs.GetFloat(RecoilKey, 1f), Min, Max);
             FearTremorScale = Mathf.Clamp(PlayerPrefs.GetFloat(TremorKey, 1f), Min, Max);
+            FlashlightSize = Mathf.Clamp(PlayerPrefs.GetFloat(FlashlightKey, 1f), Min, Max);
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -47,18 +51,21 @@ namespace BodycamHorror.UI
             go.AddComponent<DebugMenu>();
         }
 
-        static float Get(int i) => i == 0 ? RecoilScale : FearTremorScale;
+        static float Get(int i) => i == 0 ? RecoilScale : i == 1 ? FearTremorScale : FlashlightSize;
 
         static void Set(int i, float v)
         {
             v = Mathf.Clamp(Mathf.Round(v * 100f) / 100f, Min, Max);
-            if (i == 0) RecoilScale = v; else FearTremorScale = v;
+            if (i == 0) RecoilScale = v;
+            else if (i == 1) FearTremorScale = v;
+            else FlashlightSize = Mathf.Max(v, 0.2f);   // a beam of no width is no beam
         }
 
         static void Save()
         {
             PlayerPrefs.SetFloat(RecoilKey, RecoilScale);
             PlayerPrefs.SetFloat(TremorKey, FearTremorScale);
+            PlayerPrefs.SetFloat(FlashlightKey, FlashlightSize);
             PlayerPrefs.Save();
         }
 

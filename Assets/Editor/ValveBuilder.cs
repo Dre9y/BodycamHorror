@@ -143,7 +143,7 @@ namespace BodycamHorror.EditorTools
 
         static Mesh PipeMesh()
         {
-            var m = new Shape();
+            var m = new MeshShape();
             Vector3 x = Vector3.right, z = Vector3.forward;
 
             // the run of pipe, and a fatter valve body in the middle of it
@@ -189,7 +189,7 @@ namespace BodycamHorror.EditorTools
         /// <summary>The hand wheel, turning about Z, centred on its own origin.</summary>
         static Mesh WheelMesh()
         {
-            var m = new Shape();
+            var m = new MeshShape();
             Vector3 z = Vector3.forward;
             m.Torus(Vector3.zero, z, WheelRadius, 0.017f, 40, 12);
             m.Cylinder(-z * 0.024f, z * 0.024f, 0.042f, 18);   // hub
@@ -201,106 +201,6 @@ namespace BodycamHorror.EditorTools
                 m.Cylinder(dir * 0.036f, dir * WheelRadius, 0.0125f, 10, false);
             }
             return m.Build("PipeValve_WheelMesh");
-        }
-
-        /// <summary>Collects cylinders and rings into one smooth-shaded mesh.</summary>
-        sealed class Shape
-        {
-            readonly List<Vector3> vertices = new List<Vector3>(), normals = new List<Vector3>();
-            readonly List<Vector2> uvs = new List<Vector2>();
-            readonly List<int> triangles = new List<int>();
-
-            static void Basis(Vector3 axis, out Vector3 u, out Vector3 w)
-            {
-                u = Vector3.Cross(axis, Mathf.Abs(axis.y) < 0.9f ? Vector3.up : Vector3.right).normalized;
-                w = Vector3.Cross(axis, u);
-            }
-
-            int Add(Vector3 p, Vector3 n, Vector2 uv)
-            {
-                vertices.Add(p); normals.Add(n); uvs.Add(uv);
-                return vertices.Count - 1;
-            }
-
-            public void Cylinder(Vector3 a, Vector3 b, float radius, int segments, bool caps = true)
-            {
-                Vector3 axis = (b - a).normalized;
-                Basis(axis, out Vector3 u, out Vector3 w);
-                float length = Vector3.Distance(a, b);
-
-                int side = vertices.Count;
-                for (int i = 0; i <= segments; i++)
-                {
-                    float t = i / (float)segments, ang = t * Mathf.PI * 2f;
-                    Vector3 n = u * Mathf.Cos(ang) + w * Mathf.Sin(ang);
-                    Add(a + n * radius, n, new Vector2(t * radius * 6.28f, 0f));
-                    Add(b + n * radius, n, new Vector2(t * radius * 6.28f, length));
-                }
-                for (int i = 0; i < segments; i++)
-                {
-                    int a0 = side + i * 2, b0 = a0 + 1, a1 = a0 + 2, b1 = a0 + 3;
-                    triangles.Add(a0); triangles.Add(a1); triangles.Add(b0);
-                    triangles.Add(a1); triangles.Add(b1); triangles.Add(b0);
-                }
-                if (!caps) return;
-
-                for (int end = 0; end < 2; end++)
-                {
-                    Vector3 centre = end == 0 ? a : b, n = end == 0 ? -axis : axis;
-                    int c = Add(centre, n, new Vector2(0.5f, 0.5f));
-                    int ring = vertices.Count;
-                    for (int i = 0; i <= segments; i++)
-                    {
-                        float ang = i / (float)segments * Mathf.PI * 2f;
-                        Vector3 r = u * Mathf.Cos(ang) + w * Mathf.Sin(ang);
-                        Add(centre + r * radius, n, new Vector2(0.5f + Mathf.Cos(ang) * 0.5f, 0.5f + Mathf.Sin(ang) * 0.5f));
-                    }
-                    for (int i = 0; i < segments; i++)
-                    {
-                        triangles.Add(c);
-                        triangles.Add(end == 0 ? ring + i + 1 : ring + i);
-                        triangles.Add(end == 0 ? ring + i : ring + i + 1);
-                    }
-                }
-            }
-
-            public void Torus(Vector3 centre, Vector3 axis, float radius, float tube, int segments, int sides)
-            {
-                axis.Normalize();
-                Basis(axis, out Vector3 u, out Vector3 w);
-                int first = vertices.Count;
-                for (int i = 0; i <= segments; i++)
-                {
-                    float phi = i / (float)segments * Mathf.PI * 2f;
-                    Vector3 e = u * Mathf.Cos(phi) + w * Mathf.Sin(phi);
-                    for (int j = 0; j <= sides; j++)
-                    {
-                        float psi = j / (float)sides * Mathf.PI * 2f;
-                        Vector3 n = e * Mathf.Cos(psi) + axis * Mathf.Sin(psi);
-                        Add(centre + e * radius + n * tube, n, new Vector2(i / (float)segments * radius * 6.28f, j / (float)sides * tube * 6.28f));
-                    }
-                }
-                int row = sides + 1;
-                for (int i = 0; i < segments; i++)
-                    for (int j = 0; j < sides; j++)
-                    {
-                        int p00 = first + i * row + j, p10 = p00 + row, p01 = p00 + 1, p11 = p10 + 1;
-                        triangles.Add(p00); triangles.Add(p10); triangles.Add(p01);
-                        triangles.Add(p10); triangles.Add(p11); triangles.Add(p01);
-                    }
-            }
-
-            public Mesh Build(string name)
-            {
-                var mesh = new Mesh { name = name };
-                mesh.SetVertices(vertices);
-                mesh.SetNormals(normals);
-                mesh.SetUVs(0, uvs);
-                mesh.SetTriangles(triangles, 0);
-                mesh.RecalculateBounds();
-                mesh.RecalculateTangents();
-                return mesh;
-            }
         }
     }
 }

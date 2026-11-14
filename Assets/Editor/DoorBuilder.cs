@@ -47,7 +47,10 @@ namespace BodycamHorror.EditorTools
             Mesh hardware = Save(HardwareMesh(), MeshDir + "/MetalDoor_HardwareMesh.asset");
             Mesh frame = Save(FrameMesh(0.24f), MeshDir + "/MetalDoor_FrameMesh.asset");
             Mesh hasp = Save(HaspMesh(), MeshDir + "/MetalDoor_HaspMesh.asset");
-            Mesh padlock = Save(PadlockMesh(), MeshDir + "/MetalDoor_PadlockMesh.asset");
+            // the scanned-style padlock model when it is in the project (Assets/Models/Padlock), else a generated one
+            Mesh padlock = ModelPadlock(out Material padlockMaterial);
+            if (padlock) brass = padlockMaterial;
+            else padlock = Save(PadlockMesh(), MeshDir + "/MetalDoor_PadlockMesh.asset");
 
             BuildPrefab(PrefabPath, false, leaf, leafRecess, recess, hardware, frame, hasp, padlock, metal, steel, brass);
             BuildPrefab(LockedPrefabPath, true, leaf, leafRecess, recess, hardware, frame, hasp, padlock, metal, steel, brass);
@@ -109,11 +112,13 @@ namespace BodycamHorror.EditorTools
             door.leaf = leaf.transform;
             door.handles = handles;
             door.openAngle = 100f;
-            door.openTime = 1f;   // heavy, and the creak is a slow one
+            door.openTime = 1.5f;   // heavy; as long as the recorded creak (1.6 s), so sound and swing end together
+            door.volume = 0.4f;
             // recordings (Assets/Audio/CREDITS.md); a missing one falls back to the generated sound
             door.openClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_open.wav");
             door.closeClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_close.wav");
             door.shutClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_shut.wav");
+            door.lockedClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_locked.wav");   // yanked against the bolt
 
             if (locked)
             {
@@ -122,11 +127,13 @@ namespace BodycamHorror.EditorTools
                 lockRoot.transform.SetParent(leaf.transform, false);
                 lockRoot.transform.localPosition = new Vector3(LeafWidth - 0.1f, LockHeight, Thickness * 0.5f);
                 Part(lockRoot.transform, "Hasp", haspMesh, steel, Vector3.zero);
-                GameObject padlock = Part(lockRoot.transform, "Padlock", padlockMesh, brass, new Vector3(0.03f, -0.012f, 0.022f));
+                GameObject padlock = Part(lockRoot.transform, "Padlock", padlockMesh, brass, PadlockOffset);
+                // its shadow off the flashlight was a big smear on the leaf: a padlock does without one
+                padlock.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
                 var target = lockRoot.AddComponent<BoxCollider>();   // a little generous: it is a small thing to hit
-                target.center = new Vector3(0.03f, -0.045f, 0.022f);
-                target.size = new Vector3(0.1f, 0.13f, 0.06f);
+                target.center = new Vector3(StapleX, -0.045f, StapleZ);
+                target.size = new Vector3(0.11f, 0.15f, 0.065f);
                 var doorLock = lockRoot.AddComponent<DoorLock>();
                 doorLock.door = door;
                 doorLock.padlock = padlock.transform;
@@ -333,17 +340,89 @@ namespace BodycamHorror.EditorTools
             m.Box(new Vector3(-0.07f, -0.022f, 0.005f), new Vector3(0.05f, 0.022f, 0.009f));   // the hinged strap
             foreach (float x in new[] { -0.055f, -0.025f })
                 m.Cylinder(new Vector3(x, 0f, 0.009f), new Vector3(x, 0f, 0.013f), 0.007f, 8);
-            m.Torus(new Vector3(0.03f, 0f, 0.012f), Vector3.right, 0.011f, 0.0035f, 16, 8);    // staple
+            m.Torus(new Vector3(StapleX, 0f, StapleZ), Vector3.right, 0.0125f, 0.0038f, 16, 8);    // staple
             return m.Build("MetalDoor_HaspMesh");
         }
 
-        /// <summary>The padlock: its shackle's top is at the origin, the body hangs below.</summary>
+        // padlock proportions (m): the shackle's centreline radius and thickness, the body below it
+        const float ShackleRadius = 0.019f, ShackleTube = 0.0056f, ShackleLegs = 0.012f;
+        const float PadlockWidth = 0.07f, PadlockHeight = 0.062f, PadlockDepth = 0.03f;
+        /// <summary>Where the padlock hangs on the lock (its origin, the top of the shackle): threaded through the staple.</summary>
+        static readonly Vector3 PadlockOffset = new Vector3(StapleX, ShackleTube, StapleZ);
+        const float StapleX = 0.03f, StapleZ = 0.016f;
+
+        const string PadlockModelDir = "Assets/Models/Padlock";
+
+        /// <summary>"Game-ready PBR padlock" by NollieInward (CC BY 4.0), closed padlock only, put into metres with the
+        /// shackle's top at the origin and its front along +Z (see Assets/Models/Padlock). Null when it is not there.</summary>
+        static Mesh ModelPadlock(out Material material)
+        {
+            material = null;
+            Mesh mesh = null;
+            foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(PadlockModelDir + "/Padlock.obj"))
+                if (asset is Mesh m) { mesh = m; break; }
+            if (!mesh) return null;
+
+            string path = PadlockModelDir + "/Padlock.mat";
+            material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (!material)
+            {
+                material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                AssetDatabase.CreateAsset(material, path);
+            }
+            var mask = AssetDatabase.LoadAssetAtPath<Texture2D>(PadlockModelDir + "/Padlock_MetalOcclusionSmoothness.png");
+            material.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(PadlockModelDir + "/Padlock_BaseColor.png"));
+            material.SetColor("_BaseColor", Color.white);
+            material.SetTexture("_BumpMap", AssetDatabase.LoadAssetAtPath<Texture2D>(PadlockModelDir + "/Padlock_Normal.png"));
+            material.EnableKeyword("_NORMALMAP");
+            // metal in R, occlusion in G, smoothness in A (converted from the model's glTF occlusion/roughness/metal map)
+            material.SetTexture("_MetallicGlossMap", mask);
+            material.EnableKeyword("_METALLICSPECGLOSSMAP");
+            material.SetFloat("_Smoothness", 1f);
+            material.SetTexture("_OcclusionMap", mask);
+            material.EnableKeyword("_OCCLUSIONMAP");
+            EditorUtility.SetDirty(material);
+            return mesh;
+        }
+
+        /// <summary>The padlock: its shackle's top is at the origin, the body hangs below. Brass body with
+        /// rounded sides, a steel-thick U shackle, collars where it goes in, a keyway on the front (+Z).</summary>
         static Mesh PadlockMesh()
         {
             var m = new MeshShape();
-            m.Torus(new Vector3(0f, -0.016f, 0f), Vector3.forward, 0.016f, 0.0042f, 20, 8);
-            m.Box(new Vector3(-0.027f, -0.075f, -0.012f), new Vector3(0.027f, -0.026f, 0.012f));
-            m.Cylinder(new Vector3(0f, -0.058f, 0.012f), new Vector3(0f, -0.058f, 0.0145f), 0.007f, 10);   // keyway
+            float centreY = -ShackleTube - ShackleRadius;        // centre of the shackle's bend
+            float bodyTop = centreY - ShackleLegs, bodyBottom = bodyTop - PadlockHeight;
+            float hw = PadlockWidth * 0.5f, hd = PadlockDepth * 0.5f, side = hw - hd;
+
+            // the bend, as short overlapping lengths of rod, and the two legs down into the body
+            const int bend = 14;
+            Vector3 Arc(int i)
+            {
+                float a = Mathf.PI * i / bend;
+                return new Vector3(Mathf.Cos(a) * ShackleRadius, centreY + Mathf.Sin(a) * ShackleRadius, 0f);
+            }
+            for (int i = 0; i < bend; i++)
+            {
+                Vector3 a = Arc(i), b = Arc(i + 1), d = (b - a).normalized * ShackleTube * 0.35f;
+                m.Cylinder(a - d, b + d, ShackleTube, 10, false);
+            }
+            foreach (float x in new[] { -ShackleRadius, ShackleRadius })
+            {
+                m.Cylinder(new Vector3(x, centreY + 0.0005f, 0f), new Vector3(x, bodyTop - 0.002f, 0f), ShackleTube, 10, false);
+                m.Stud(new Vector3(x, bodyTop - 0.001f, 0f), new Vector3(x, bodyTop + 0.004f, 0f), ShackleTube * 1.75f, ShackleTube * 1.35f, 12);   // collar
+            }
+
+            // body: a block with round sides, a thin lip top and bottom
+            m.Box(new Vector3(-side, bodyBottom, -hd), new Vector3(side, bodyTop, hd));
+            foreach (float x in new[] { -side, side })
+                m.Cylinder(new Vector3(x, bodyBottom, 0f), new Vector3(x, bodyTop, 0f), hd, 16);
+            m.Box(new Vector3(-side, bodyTop - 0.004f, -hd - 0.0012f), new Vector3(side, bodyTop, hd + 0.0012f));
+            m.Box(new Vector3(-side, bodyBottom, -hd - 0.0012f), new Vector3(side, bodyBottom + 0.004f, hd + 0.0012f));
+
+            // keyway: a round boss on the front with the slot cut into it (a dark sliver standing proud)
+            float keyY = bodyBottom + PadlockHeight * 0.32f;
+            m.Stud(new Vector3(0f, keyY, hd - 0.001f), new Vector3(0f, keyY, hd + 0.0022f), 0.0105f, 0.0092f, 16);
+            m.Box(new Vector3(-0.0011f, keyY - 0.006f, hd + 0.0022f), new Vector3(0.0011f, keyY + 0.0045f, hd + 0.0028f));
             return m.Build("MetalDoor_PadlockMesh");
         }
     }

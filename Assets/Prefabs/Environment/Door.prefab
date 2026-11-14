@@ -264,7 +264,7 @@ MonoBehaviour:
   - {fileID: 6177675061178381939}
   - {fileID: 6394552708276701549}
   openAngle: 95
-  openTime: 1
+  openTime: 1.5
   closeTime: 0.6
   swingBothWays: 1
   startOpen: 0
@@ -276,7 +276,7 @@ MonoBehaviour:
   closeClip: {fileID: 8300000, guid: 5c136cfebca597b428e13a827d61dfa4, type: 3}
   shutClip: {fileID: 8300000, guid: daa3ae818eae4664c8beb71d67b884ad, type: 3}
   lockedClip: {fileID: 0}
-  volume: 0.8
+  volume: 0.4
 --- !u!1 &4094368622826556325
 GameObject:
   m_ObjectHideFlags: 0

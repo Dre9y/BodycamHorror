@@ -28,6 +28,7 @@ namespace BodycamHorror.Environment
 
         [Header("Swing")]
         public float openAngle = 95f;
+        [Tooltip("Seconds to swing open. Keep it close to the length of the opening sound: the creak is cut (faded) when the door stops.")]
         public float openTime = 0.7f;
         public float closeTime = 0.6f;
         [Tooltip("Opens away from whoever opens it. Off: always towards its +Z side's far side (positive angle).")]
@@ -50,7 +51,9 @@ namespace BodycamHorror.Environment
         [Tooltip("The door meeting its frame.")]
         public AudioClip shutClip;
         public AudioClip lockedClip;
-        [Range(0f, 1f)] public float volume = 0.8f;
+        [Range(0f, 1f)] public float volume = 0.4f;
+        [Tooltip("When the door stops moving, whatever is left of its creak dies away over this long (s).")]
+        public float creakFade = 0.2f;
 
         /// <summary>Open or on its way open.</summary>
         public bool IsOpen => Mathf.Abs(targetAngle) > 0.01f;
@@ -60,7 +63,10 @@ namespace BodycamHorror.Environment
 
         BoxCollider panel;
         Collider[] own;
-        AudioSource source;
+        AudioSource source, swing;         // knocks (latch, the frame) and the creak of the swing itself
+        Audio.SoundOcclusion swingOcclusion;
+        float swingLevel, swingStart;
+        bool swingFading;
         Vector3 centreLocal = new Vector3(0.5f, 1f, 0f);
         float angle, fromAngle, targetAngle, lastOpenAngle, progress, duration = 1f, scanTimer;
 
@@ -82,6 +88,18 @@ namespace BodycamHorror.Environment
             source.maxDistance = 22f;
             source.rolloffMode = AudioRolloffMode.Linear;
             Audio.SoundOcclusion.Attach(source, transform);
+
+            // the creak has a source of its own, so it can be cut short when the door stops
+            var swingObject = new GameObject("DoorSwingAudio");
+            swingObject.transform.SetParent(transform, false);
+            swingObject.transform.localPosition = centreLocal;
+            swing = swingObject.AddComponent<AudioSource>();
+            swing.playOnAwake = false;
+            swing.spatialBlend = 1f;
+            swing.minDistance = 1.5f;
+            swing.maxDistance = 22f;
+            swing.rolloffMode = AudioRolloffMode.Linear;
+            swingOcclusion = Audio.SoundOcclusion.Attach(swing, transform);
 
             lastOpenAngle = openAngle;
             if (startOpen) { targetAngle = openAngle; SetAngle(openAngle); }
@@ -147,8 +165,8 @@ namespace BodycamHorror.Environment
             float target = (swingBothWays ? side : 1f) * openAngle;
             if (IsOpen && Mathf.Approximately(target, targetAngle)) return true;
             Begin(target, thrown ? enemyOpenTime : openTime);
-            Play(openClip ? openClip : generatedOpen ? generatedOpen : (generatedOpen = ProceduralAudio.DoorOpen()),
-                thrown ? 1f : volume, thrown ? 1.2f : Random.Range(0.95f, 1.05f));
+            PlaySwing(openClip ? openClip : generatedOpen ? generatedOpen : (generatedOpen = ProceduralAudio.DoorOpen()),
+                thrown ? Mathf.Min(1f, volume * 2f) : volume, thrown ? 1.2f : Random.Range(0.95f, 1.05f));
             return true;
         }
 
@@ -156,7 +174,7 @@ namespace BodycamHorror.Environment
         {
             if (!IsOpen) return;
             Begin(0f, closeTime);
-            Play(closeClip ? closeClip : generatedCreak ? generatedCreak : (generatedCreak = ProceduralAudio.DoorCreak()),
+            PlaySwing(closeClip ? closeClip : generatedCreak ? generatedCreak : (generatedCreak = ProceduralAudio.DoorCreak()),
                 volume * 0.7f, Random.Range(0.95f, 1.05f));
         }
 
@@ -192,7 +210,19 @@ namespace BodycamHorror.Environment
                 if (progress >= 1f)
                 {
                     IsMoving = false;
+                    swingFading = true;   // the door has stopped: so does its creak
                     if (closing) Play(shutClip ? shutClip : generatedShut ? generatedShut : (generatedShut = ProceduralAudio.DoorShut()), volume, Random.Range(0.95f, 1.05f));
+                }
+            }
+
+            if (swingFading)
+            {
+                swingLevel = Mathf.MoveTowards(swingLevel, 0f, dt * swingStart / Mathf.Max(creakFade, 0.01f));
+                swingOcclusion.Volume = swingLevel;
+                if (swingLevel <= 0f || !swing.isPlaying)
+                {
+                    swing.Stop();
+                    swingFading = false;
                 }
             }
 
@@ -282,6 +312,19 @@ namespace BodycamHorror.Environment
                 Open(position, true);
                 return;
             }
+        }
+
+        /// <summary>The creak of the door moving: one at a time, faded out when the door stops (see Update).</summary>
+        void PlaySwing(AudioClip clip, float clipVolume, float pitch)
+        {
+            if (!clip || !swing) return;
+            swing.Stop();
+            swing.clip = clip;
+            swing.pitch = pitch;
+            swingLevel = swingStart = Mathf.Clamp01(clipVolume);
+            swingOcclusion.Volume = swingLevel;   // the occlusion owns the source's volume
+            swingFading = false;
+            swing.Play();
         }
 
         void Play(AudioClip clip, float clipVolume, float pitch)

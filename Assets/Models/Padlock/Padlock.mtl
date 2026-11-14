@@ -1,0 +1,3 @@
+newmtl M_Padlock
+Kd 1 1 1
+map_Kd Padlock_BaseColor.png

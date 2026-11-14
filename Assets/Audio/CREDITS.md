@@ -17,3 +17,4 @@ All recordings are from freesound.org under Creative Commons 0 (public domain), 
 | Valve/valve_turn.wav | Seamless 9.3 s loop, mono, levelled: "Foley_Mechanism_Wheel_Moderate_Rusty_Loop_Mono.wav" - https://freesound.org/s/559470/ |
 | Valve/steam_hiss.wav | Seamless 15.5 s loop, mono, levelled: "Compressed Air Pressure Release Valve Loop (Synthetic)" - https://freesound.org/s/861613/ |
 | Door/door_shut.wav | "wood_door_close.wav" by j1987 - https://freesound.org/people/j1987/sounds/335764/ |
+| Door/door_locked.wav | Only the knock (0.36-0.95 s), mono, levelled: "Locked door being forced open.wav" - https://freesound.org/s/262538/ |

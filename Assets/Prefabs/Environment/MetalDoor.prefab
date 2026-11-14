@@ -51,7 +51,7 @@ MonoBehaviour:
   - {fileID: 8527177837976398535}
   - {fileID: 1800671678268024851}
   openAngle: 100
-  openTime: 1
+  openTime: 1.5
   closeTime: 0.6
   swingBothWays: 1
   startOpen: 0
@@ -62,8 +62,9 @@ MonoBehaviour:
   openClip: {fileID: 8300000, guid: 318186b056fedb042b0ae5ed95633f2b, type: 3}
   closeClip: {fileID: 8300000, guid: 5c136cfebca597b428e13a827d61dfa4, type: 3}
   shutClip: {fileID: 8300000, guid: daa3ae818eae4664c8beb71d67b884ad, type: 3}
-  lockedClip: {fileID: 0}
-  volume: 0.8
+  lockedClip: {fileID: 8300000, guid: f63a9b5fb8277564daa708dfb6a6a4c7, type: 3}
+  volume: 0.4
+  creakFade: 0.2
 --- !u!1 &1341263715139180211
 GameObject:
   m_ObjectHideFlags: 0

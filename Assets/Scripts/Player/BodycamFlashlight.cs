@@ -27,6 +27,9 @@ namespace BodycamHorror.Player
         public float range = 26f;
         public float spotAngle = 58f;
         public float innerSpotAngle = 22f;
+        [Tooltip("Size of the lit spot on a wall, as a share of what the two angles above give (1 = as they are). " +
+                 "The debug panel (Tab) scales it further.")]
+        [Range(0.3f, 1.5f)] public float beamSize = 0.82f;
         public Color color = new Color(1f, 0.94f, 0.82f);
         public LightShadows shadows = LightShadows.Soft;
 
@@ -88,7 +91,7 @@ namespace BodycamHorror.Player
         Light beam, spill, handFill, darkFill;
         Quaternion smoothed;
         bool smoothInit;
-        float flicker, seed, closeDim = 1f;
+        float flicker, seed, closeDim = 1f, appliedSize = -1f, appliedAngle = -1f;
         InputAction toggleAction;
         AudioSource audioSource;
         AudioClip clickClip;
@@ -149,8 +152,7 @@ namespace BodycamHorror.Player
             beam.type = LightType.Spot;
             beam.color = color;
             beam.range = range;
-            beam.spotAngle = spotAngle;
-            beam.innerSpotAngle = innerSpotAngle;
+            ApplyBeamSize();
             beam.shadows = shadows;
             beam.shadowNearPlane = 0.15f;
             beam.renderMode = LightRenderMode.ForcePixel;
@@ -259,8 +261,25 @@ namespace BodycamHorror.Player
             transform.rotation = smoothed;
         }
 
+        /// <summary>Sets the beam's cone so the spot it throws is <see cref="beamSize"/> (times the debug panel's
+        /// value) as wide as the angles give: the width of a spot goes with the tangent of the half angle.</summary>
+        void ApplyBeamSize()
+        {
+            float size = Mathf.Max(beamSize * UI.DebugMenu.FlashlightSize, 0.01f);
+            if (Mathf.Approximately(size, appliedSize) && Mathf.Approximately(spotAngle, appliedAngle)) return;
+            appliedSize = size;
+            appliedAngle = spotAngle;
+            float outer = Mathf.Clamp(Scaled(spotAngle, size), 6f, 160f);
+            beam.spotAngle = outer;
+            beam.innerSpotAngle = Mathf.Clamp(Scaled(innerSpotAngle, size), 1f, outer);
+        }
+
+        static float Scaled(float angle, float size) =>
+            2f * Mathf.Atan(Mathf.Tan(Mathf.Clamp(angle, 1f, 170f) * 0.5f * Mathf.Deg2Rad) * size) * Mathf.Rad2Deg;
+
         void UpdateIntensity()
         {
+            ApplyBeamSize();
             if (!IsOn) return;
             float k = 1f;
             if (flicker > 0f)

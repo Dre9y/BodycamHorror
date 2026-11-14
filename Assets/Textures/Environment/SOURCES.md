@@ -10,6 +10,7 @@ Scanned PBR sets from [ambientCG](https://ambientcg.com), licence CC0 1.0 (publi
 | Plaster007 | ceiling | https://ambientcg.com/a/Plaster007 |
 | PaintedMetal006 | pipes: green paint flaking to rust | https://ambientcg.com/a/PaintedMetal006 |
 | Rust002 | valve wheel: rusted iron | https://ambientcg.com/a/Rust002 |
+| Metal021 | metal doors and their frames | https://ambientcg.com/a/Metal021 |
 
 `*_Mask.png` is packed from the set's Roughness and AmbientOcclusion maps by
 `Assets/Editor/EnvironmentTextures.cs` (R = metalness when the set has it, G = occlusion, A = smoothness), the way URP Lit reads them.

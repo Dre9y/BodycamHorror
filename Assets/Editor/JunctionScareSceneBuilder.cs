@@ -126,8 +126,8 @@ namespace BodycamHorror.EditorTools
             scare.to = new Vector3(-LeftReach + 1.5f, 0f, crossZ);      // far down the dark left corridor
             scare.speed = 9.5f;
 
-            scare.modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Zombie/animations/MutantLow.fbx");
-            scare.modelMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Zombie/MutantMaterial.mat");
+            scare.modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Zombie/Slasher/ZombieSlasher.fbx");
+            scare.modelMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Zombie/Slasher/ZombieSlasher.mat");
             scare.modelScale = 0.7f;
             foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath("Assets/Zombie_Animations/Animations/Zombie_Sprint_01_Forward_InPlace.fbx"))
                 if (asset is AnimationClip clip && !clip.name.StartsWith("__preview__")) { scare.runClip = clip; break; }

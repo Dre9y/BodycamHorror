@@ -36,6 +36,8 @@ namespace BodycamHorror.Weapons
         [Header("Animated hands (empty = procedural arms and the model above)")]
         [Tooltip("Rig with the gun, the arms and the clips.")]
         public ShotgunHands handsPrefab;
+        [Tooltip("Down the sights the shot hits exactly where the front sight is at this range (m); nearer it lands a touch low, further a touch high.")]
+        public float zeroDistance = 15f;
 
         public bool IsPumping => pumpStart >= 0f && Time.time - pumpStart < pumpTime;
         public override Transform VisualRoot => hands ? hands.GunAnchor : transform;
@@ -75,7 +77,7 @@ namespace BodycamHorror.Weapons
             meleeWithWeapon = true; meleeDamage = 45f; meleeForce = 12f;
             flashIntensity = 14f; flashDuration = 0.07f; bulletHoleSize = 0.05f; impactFxScale = 0.35f;
             handlingVolume = 0.45f;
-            flashlightOffset = new Vector3(0f, -0.026f, -0.06f);   // under the barrel, ahead of the magazine tube
+            flashlightOffset = new Vector3(0f, -0.073f, -0.11f);   // under the magazine tube, behind its end cap
             ejectionOffset = new Vector3(0.02f, 0f, -0.66f);       // the port on the right of the receiver
             ejectionVelocity = new Vector3(2f, 1.1f, -0.2f);       // the pump flings it out, slower than a slide
         }
@@ -105,7 +107,13 @@ namespace BodycamHorror.Weapons
             readyCant = hands.IdleCant;
             sightHeight = hands.SightHeight;
             aimPosition = hands.AimPosition;
-            if (muzzle) muzzle.SetLocalPositionAndRotation(hands.MuzzleLocal, Quaternion.identity);
+            sightPitch = hands.sightPitch;
+            // the shot goes along the sight line, not the barrel's: the barrel is raised by the sights' dip when aiming
+            // and zeroed: the barrel sits below the sight line, so it is turned up just enough to meet it at zeroDistance
+            Vector3 m = hands.MuzzleLocal;
+            float drop = hands.SightHeight - m.z * Mathf.Tan(sightPitch * Mathf.Deg2Rad) - m.y;
+            float zero = Mathf.Atan2(drop, Mathf.Max(zeroDistance - m.z, 1f)) * Mathf.Rad2Deg;
+            if (muzzle) muzzle.SetLocalPositionAndRotation(m, Quaternion.Euler(sightPitch - zero, 0f, 0f));
 
             shellInsertTime = hands.ShellTime;
             ReloadEnterTime = hands.EnterTime;

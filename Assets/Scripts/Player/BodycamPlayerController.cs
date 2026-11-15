@@ -26,7 +26,10 @@ namespace BodycamHorror.Player
         [Header("Look")]
         public float mouseSensitivity = 0.1f;
         public float gamepadLookSpeed = 160f;
+        [Tooltip("How far up the player can look (deg).")]
         public float maxPitch = 85f;
+        [Tooltip("How far down (deg): a little short of straight down, so the chest does not fill the view.")]
+        public float maxPitchDown = 72f;
 
         [Header("Speeds (m/s)")]
         public float walkSpeed = 3.2f;
@@ -36,6 +39,14 @@ namespace BodycamHorror.Player
         [Header("Running off-axis (share of sprint speed)")]
         [Range(0.3f, 1f)] public float strafeSprintScale = 0.85f;
         [Range(0.3f, 1f)] public float backSprintScale = 0.75f;
+
+        [Header("Allowed moves")]
+        [Tooltip("Crouch (Ctrl / C) and the slide it starts. Off: the player only ducks on its own under something low.")]
+        public bool allowCrouch = false;
+        [Tooltip("Jump (Space). Off: Space only climbs over and onto things (vault, mantle).")]
+        public bool allowJump = false;
+        [Tooltip("Back dive: jump while sprinting backward.")]
+        public bool allowBackDive = false;
 
         [Header("Back dive and lying down (jump while sprinting backward)")]
         public float diveSpeed = 7.5f;
@@ -349,6 +360,7 @@ namespace BodycamHorror.Player
             sprintHeld = sprintAction.IsPressed();
             crouchHeld = crouchAction.IsPressed();
             crouchPressed = crouchAction.WasPressedThisFrame();
+            if (!allowCrouch) crouchHeld = crouchPressed = false;
             jumpHeld = jumpAction.IsPressed();
             if (jumpAction.WasPressedThisFrame()) lastJumpPressTime = Time.time;
             if (braceAction.WasPressedThisFrame()) lastBracePressTime = Time.time;
@@ -404,7 +416,7 @@ namespace BodycamHorror.Player
                     yaw = clamped;
                 }
             }
-            float newPitch = Mathf.Clamp(pitch - d.y, -maxPitch, maxPitch);
+            float newPitch = Mathf.Clamp(pitch - d.y, -maxPitch, maxPitchDown);
             LookVelocity = new Vector2(yawStep, newPitch - pitch) / dt;
             pitch = newPitch;
 
@@ -457,14 +469,14 @@ namespace BodycamHorror.Player
             {
                 // jumping while sprinting backward is a dive (sprint held is enough: firing may be blocking the run)
                 bool backward = moveInput.sqrMagnitude > 0.04f && moveInput.y / moveInput.magnitude < -0.5f;
-                if (canJump && sprintHeld && backward && !crouching && Time.time >= nextDiveTime)
+                if (allowBackDive && canJump && sprintHeld && backward && !crouching && Time.time >= nextDiveTime)
                 {
                     lastJumpPressTime = -10f;
                     StartDive();
                     return;
                 }
                 if (TryStartVaultOrMantle(canJump)) { lastJumpPressTime = -10f; return; }
-                if (canJump)
+                if (allowJump && canJump)
                 {
                     lastJumpPressTime = -10f;
                     if (crouching && CanStandUp()) crouching = false;
@@ -820,7 +832,7 @@ namespace BodycamHorror.Player
                 dir = Vector3.RotateTowards(dir, wish.normalized, slideTurnRate * Mathf.Deg2Rad * dt, 0f);
             hVel = dir * speed;
 
-            if (Time.time - lastJumpPressTime <= jumpBufferTime && CanStandUp())
+            if (allowJump && Time.time - lastJumpPressTime <= jumpBufferTime && CanStandUp())
             {
                 lastJumpPressTime = -10f;
                 crouching = false;
@@ -1110,7 +1122,7 @@ namespace BodycamHorror.Player
             transform.position = feetPosition;
             cc.enabled = true;
             yaw = newYaw;
-            pitch = Mathf.Clamp(newPitch, -maxPitch, maxPitch);
+            pitch = Mathf.Clamp(newPitch, -maxPitch, maxPitchDown);
             transform.rotation = Quaternion.Euler(0f, yaw, 0f);
             if (cameraPivot) cameraPivot.localRotation = Quaternion.Euler(pitch, 0f, 0f);
             hVel = Vector3.zero;

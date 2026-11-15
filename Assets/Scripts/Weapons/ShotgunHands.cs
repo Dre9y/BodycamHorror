@@ -28,6 +28,79 @@ namespace BodycamHorror.Weapons
         [Tooltip("Height of the sight line above the weapon origin.")]
         public float sightHeight = 0.06f;
 
+        [Header("Gun model (empty = the one the clips were made with)")]
+        [Tooltip("A different gun to show in the hands. It rides the clips' bones: the body on Body, the part named below on Slide (the pump).")]
+        public GameObject modelPrefab;
+        [Tooltip("Where the model sits in gun space (sight line along +Z, up along +Y), at gun scale 1.")]
+        public Vector3 modelPosition;
+        public Vector3 modelEuler;
+        public float modelScale = 1f;
+        [Tooltip("Child of the model that slides with the pump.")]
+        public string modelPumpPart = "Spas_Pump";
+
+        [Header("Arms")]
+        [Tooltip("Size of the arms. The whole rig grows with them, clips and all, so the hands stay on the gun; the gun's own size is armsScale x gunScale.")]
+        [Range(1f, 1.6f)] public float armsScale = 1f;
+
+        [Header("Grip (fitting the clips' hands to another gun)")]
+        [Tooltip("Turns the right hand about its palm, in gun space (x pitch, y yaw, z roll): a pistol grip is held more upright than a stock's wrist.")]
+        public Vector3 rightHandEuler;
+        [Tooltip("Turns the left hand about its palm while it holds the fore-end, in gun space.")]
+        public Vector3 leftHandEuler;
+        [Tooltip("Left hand on the fore-end: how far the fingers wrap round it (0 = as the clips hold them).")]
+        [Range(0f, 1f)] public float leftGripWeight;
+        [Range(0f, 1f)] public float leftThumbCurl = 0.3f;
+        [Range(0f, 1f)] public float leftFingerCurl = 0.7f;
+
+        [Header("Left hand cradling the fore-end (needs the model)")]
+        [Tooltip("Hold the fore-end like a cylinder: palm under it, thumb up the left side, fingers round the right. Off = the clips' grip turned by leftHandEuler.")]
+        public bool leftCradle;
+        [Tooltip("Middle of the palm, in the model's own space (on the fore-end part, so it rides the pump stroke).")]
+        public Vector3 leftCradlePoint;
+        [Tooltip("Fingers point this far round from straight ahead towards the right side (degrees).")]
+        [Range(0f, 90f)] public float leftCradleFingerAngle = 45f;
+        [Tooltip("Rolls the hand so the palm faces a little to the right side as well as up (degrees).")]
+        [Range(-45f, 45f)] public float leftCradleRoll = 15f;
+
+        [Header("Reload")]
+        [Tooltip("Moves the shell and the loading hand while reloading, in gun space at gun scale 1: from where the clips' gun takes its shells to this gun's loading port.")]
+        public Vector3 reloadShellOffset;
+        [Tooltip("Size of the shell in the hand against the clips' own (which grow with the gun).")]
+        [Range(0.5f, 2f)] public float shellSize = 1f;
+        [Tooltip("The shell rides the loading hand, pinched between thumb and fingers, instead of following the clip on its own.")]
+        public bool shellInHand;
+        [Tooltip("Where the shell's middle sits against the hand: 0 at the thumb tip, 1 at the middle joint of the index finger.")]
+        [Range(0f, 1f)] public float shellPinch = 0.5f;
+        [Tooltip("Moves the shell out of the pinch, in hand space (m): it should stick out past the thumb so it reads as held.")]
+        public Vector3 shellPinchOffset;
+        [Tooltip("Turns the shell in the hand (degrees, hand space).")]
+        public Vector3 shellPinchEuler;
+        [Tooltip("Loading port: middle of the opening under the receiver, in the model's own space.")]
+        public Vector3 loadingPort;
+        [Tooltip("Height (model space) of the magazine tube's axis the shell goes up into and slides forward along.")]
+        public float loadingTubeHeight;
+        [Tooltip("How far (model units) the shell slides forward into the tube before it is gone.")]
+        public float loadingSlide = 0.05f;
+        [Tooltip("Nose-up tilt of the shell as it goes into the port (degrees).")]
+        public float loadingTilt = 12f;
+        [Tooltip("Share of each pass at which the hand starts lining the shell up under the port, and at which it starts pushing it in. "
+                 + "It is in by shellInsertShare.")]
+        public Vector2 loadingPhases = new Vector2(0.6f, 0.76f);
+        [Tooltip("Model-space height the loading hand's palm may not rise above under the receiver (keeps the fingers out of the gun). Off below -1.")]
+        public float loadingPalmCeiling = -10f;
+        [Tooltip("Model-space length range of the receiver that ceiling applies under (x from, x to).")]
+        public Vector2 loadingPortSpan = new Vector2(-0.26f, 0.02f);
+
+        [Header("Trigger finger")]
+        [Tooltip("Front face of the trigger, in the model's own space: the pad of the index finger is curled onto it.")]
+        public Vector3 rightTriggerPoint;
+        [Tooltip("0 = the clips' finger, 1 = curled onto the trigger.")]
+        [Range(0f, 1f)] public float rightTriggerWeight;
+
+        [Header("Sights")]
+        [Tooltip("How far the line from the rear sight notch to the front sight dips below the barrel (degrees): down the sights the gun is raised by it.")]
+        public float sightPitch;
+
         [Header("Placement")]
         [Tooltip("Size of the gun against the arms, grown around the right palm so the grip stays where it is.")]
         public float gunScale = 1.25f;
@@ -94,14 +167,17 @@ namespace BodycamHorror.Weapons
         [Tooltip("How far the whole rig may move when a hand target is out of range (m).")]
         public float maxReachShift = 0.55f;
 
-        /// <summary>Where the clips hold the gun; the procedural poses are measured against this.</summary>
-        public Vector3 GunPosition => gunPosition;
+        /// <summary>Where the clips hold the gun; the procedural poses are measured against this.
+        /// With bigger arms the clips are bigger too, and hold it further out.</summary>
+        public Vector3 GunPosition => bound ? clipGunPosition : gunPosition;
         /// <summary>Where the gun sits at the ready.</summary>
         public Vector3 ReadyPosition => gunPosition + readyOffset;
         /// <summary>Where the gun sits when aiming.</summary>
         public Vector3 AimPosition => new Vector3(aimSide, -SightHeight - aimDrop, aimDistance);
-        public float SightHeight => sightHeight * gunScale;
-        public Vector3 MuzzleLocal => muzzleLocal * gunScale;
+        // the gun grows around the right palm, so its points move away from the palm, not from the gun origin
+        // gun-space numbers are measured at arms scale 1: the rig, and so the clips' gun, is armsScale bigger
+        public float SightHeight => gripLocal.y + (sightHeight * armsScale - gripLocal.y) * gunScale;
+        public Vector3 MuzzleLocal => gripLocal + (muzzleLocal * armsScale - gripLocal) * gunScale;
         public Quaternion GunRotation => Quaternion.Euler(gunEuler);
         public float IdleCant => Mathf.DeltaAngle(0f, gunEuler.z);
         public Transform GunAnchor { get; private set; }
@@ -113,11 +189,23 @@ namespace BodycamHorror.Weapons
         Firearm gun;
         PlayerShooting shooting;
         BodycamPlayerController player;
-        Transform holder, freeLeftHand, gunBody, shell, pump;
+        Transform holder, freeLeftHand, gunBody, shell, pump, modelRoot, modelPump;
+        Quaternion shellRelRot = Quaternion.identity;   // the shell against the loading hand, from the reload clip
+        Vector3 shellCenterLocal;                       // the shell mesh's middle in the shell bone's space
+        Vector3 shellAxisLocal = Vector3.up;            // the shell's long axis in its bone's space, towards the nose
+        float shellHalfLocal = 0.03f;
+        Vector3 pinchInHand;                            // thumb-and-index pinch point against the loading hand, hand rotation space
+        Vector3 thumbInHand;                            // thumb tip against the loading hand, hand rotation space
+        Vector3 loadCenter, loadDir;                    // the shell on its way into the port this frame
+        Vector3 bodyRestPos;                            // the gun body in the Idle clip's first frame, weapon-holder space
+        Quaternion bodyRestRot = Quaternion.identity;
         RiggedArms otherArms;
         PlaceholderArms pose;
         ArmRig rig;
-        Vector3 rootBase, bodyScale, shellScale, pumpPalm;
+        Vector3 rootBase, bodyScale, shellScale, pumpPalm, gripLocal, clipGunPosition;
+        readonly Quaternion[] fingerScratch = new Quaternion[ArmRig.FingerCount * ArmRig.JointsPerFinger];
+        readonly float[] curl = new float[ArmRig.FingerCount];
+        bool bound;
         Quaternion pumpHand;
         float pumpHold = 1f, shotUntil;
         SkinnedMeshRenderer shellRenderer;
@@ -143,11 +231,19 @@ namespace BodycamHorror.Weapons
             }
             ViewModelLighting.MarkViewModel(gameObject);
 
+            // bigger arms: the whole rig grows about its own origin, so the clips' gun is held further out
+            Vector3 rigOrigin = holder.InverseTransformPoint(sourceRoot.position);
+            sourceRoot.localScale *= armsScale;
+            clipGunPosition = rigOrigin + (gunPosition - rigOrigin) * armsScale;
+            bound = true;
+
             if (sourceIdleClip) sourceIdleClip.SampleAnimation(sourceRoot.gameObject, 0f);
             rig = new ArmRig(sourceRoot);
             rootBase = sourceRoot.localPosition;
 
             gunBody = SourceBone("Body");
+            bodyRestPos = holder.InverseTransformPoint(gunBody.position);
+            bodyRestRot = Quaternion.Inverse(holder.rotation) * gunBody.rotation;
             shell = SourceBone("12ge_low");
             bodyScale = gunBody.localScale;
             shellScale = shell.localScale;
@@ -167,6 +263,9 @@ namespace BodycamHorror.Weapons
             GunAnchor.SetParent(gunBody, false);
             GunAnchor.localScale = Vector3.one / gunBody.lossyScale.x;
             GunAnchor.SetPositionAndRotation(holder.TransformPoint(GunPosition), holder.rotation * GunRotation);
+            gripLocal = GunAnchor.InverseTransformPoint(rig.Right.hand.position + rig.Right.hand.rotation * rig.Right.palmCenter);
+            if (modelPrefab) FitModel(weapon);
+            if (shellInHand) MeasureShellInHand();
 
             otherArms = owner ? owner.GetComponentInChildren<RiggedArms>(true) : null;
             pose = owner ? owner.GetComponentInChildren<PlaceholderArms>(true) : null;
@@ -175,6 +274,127 @@ namespace BodycamHorror.Weapons
             ready = true;
             OnEnable();
         }
+
+        /// <summary>Puts the other gun into the hands in place of the clips' own: placed in gun space while
+        /// the rig is in its rest pose, then hung on the clips' bones so every clip moves it, the pump
+        /// stroke included, and it grows with the gun.</summary>
+        void FitModel(Firearm weapon)
+        {
+            var model = Instantiate(modelPrefab, GunAnchor, false);
+            model.name = modelPrefab.name;
+            model.transform.localPosition = modelPosition * armsScale;
+            model.transform.localRotation = Quaternion.Euler(modelEuler);
+            model.transform.localScale = Vector3.one * (modelScale * armsScale);   // the anchor is at world scale 1 here
+
+            Transform pumpPart = string.IsNullOrEmpty(modelPumpPart) ? null : model.transform.Find(modelPumpPart);
+            if (pumpPart && pump) pumpPart.SetParent(pump, true);
+            modelRoot = model.transform;
+            modelPump = pumpPart;
+            model.transform.SetParent(gunBody, true);   // not the anchor: that one is held at scale 1 and would not grow
+
+            foreach (var t in model.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = weapon.gameObject.layer;
+            if (pumpPart) foreach (var t in pumpPart.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = weapon.gameObject.layer;
+            foreach (var r in model.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = ShadowCastingMode.Off;
+            if (pumpPart) foreach (var r in pumpPart.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = ShadowCastingMode.Off;
+            ViewModelLighting.MarkViewModel(model);
+            if (pumpPart) ViewModelLighting.MarkViewModel(pumpPart.gameObject);
+
+            // the clips' own gun goes; its shell stays for the reload
+            foreach (var smr in sourceRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (smr.name == "main") smr.enabled = false;
+        }
+
+        /// <summary>How the reload clip turns the shell against the loading hand while carrying it, and where the
+        /// middle of the shell mesh is: the shell is then hung on the hand itself, so it stays in the fingers.</summary>
+        void MeasureShellInHand()
+        {
+            AnimationClip reload = null;
+            foreach (var c in sourceAnimator.runtimeAnimatorController.animationClips)
+                if (c.name.Contains("eload")) reload = c;
+            if (!reload || !shell || !shellRenderer) return;
+            // part-way through the first pass: the hand has the shell and is bringing it up
+            reload.SampleAnimation(sourceRoot.gameObject, enterEnd + (firstShellEnd - enterEnd) * 0.75f);
+            Transform hand = rig.Left.hand;
+            shellRelRot = Quaternion.Inverse(hand.rotation) * shell.rotation;
+            shellCenterLocal = shell.InverseTransformPoint(shellRenderer.bounds.center);
+
+            // its long axis and length, from the mesh in the shell bone's own space (the bind pose puts each vertex
+            // there exactly); the axis points to the nose, the end away from the thumb
+            Mesh mesh = shellRenderer.sharedMesh;
+            int boneIndex = System.Array.IndexOf(shellRenderer.bones, shell);
+            if (!mesh || boneIndex < 0) return;
+            Matrix4x4 toBone = mesh.bindposes[boneIndex];
+            Vector3[] vertices = mesh.vertices;
+            BoneWeight[] weights = mesh.boneWeights;
+            Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                if (weights.Length == vertices.Length && weights[i].boneIndex0 != boneIndex) continue;
+                Vector3 p = toBone.MultiplyPoint3x4(vertices[i]);
+                min = Vector3.Min(min, p);
+                max = Vector3.Max(max, p);
+            }
+            if (min.x > max.x) return;
+            Vector3 size = max - min;
+            int k = size.x >= size.y && size.x >= size.z ? 0 : size.y >= size.z ? 1 : 2;
+            shellCenterLocal = (min + max) * 0.5f;
+            shellHalfLocal = size[k] * 0.5f;
+            shellAxisLocal = Vector3.zero;
+            shellAxisLocal[k] = 1f;
+            Vector3 thumb = rig.Left.fingerEnds[0].position;
+            if (Vector3.Distance(shell.TransformPoint(shellCenterLocal + shellAxisLocal * shellHalfLocal), thumb)
+                < Vector3.Distance(shell.TransformPoint(shellCenterLocal - shellAxisLocal * shellHalfLocal), thumb))
+                shellAxisLocal = -shellAxisLocal;
+            pinchInHand = Quaternion.Inverse(hand.rotation) * (Vector3.Lerp(thumb, rig.Left.fingers[1 * ArmRig.JointsPerFinger + 1].position, shellPinch) - hand.position);
+            thumbInHand = Quaternion.Inverse(hand.rotation) * (thumb - hand.position);
+
+            if (sourceIdleClip) sourceIdleClip.SampleAnimation(sourceRoot.gameObject, 0f);
+        }
+
+        /// <summary>Half the shell's length in the world, at its size this frame.</summary>
+        float ShellHalfLength() => shell.TransformVector(shellAxisLocal * shellHalfLocal).magnitude;
+
+        /// <summary>Where the shell is on its way in, <paramref name="push"/> 0..1: lined up just under the loading
+        /// port nose first, then up through the port to the magazine tube, then forward along it.</summary>
+        void LoadingShellPose(float push, out Vector3 center, out Vector3 dir)
+        {
+            float tilt = loadingTilt * Mathf.Deg2Rad * (1f - Mathf.Clamp01(push * 2f - 1f));   // levels out as it slides along the tube
+            dir = modelRoot.TransformDirection(new Vector3(Mathf.Cos(tilt), Mathf.Sin(tilt), 0f)).normalized;
+            float half = ShellHalfLength() / Mathf.Max(modelRoot.lossyScale.x, 1e-4f);   // model units
+            var below = new Vector3(loadingPort.x, loadingPort.y - half * 0.3f - 0.006f, loadingPort.z);
+            var inPort = new Vector3(loadingPort.x, loadingTubeHeight, loadingPort.z);
+            var inTube = inPort + new Vector3(loadingSlide, 0f, 0f);
+            Vector3 at = push < 0.5f ? Vector3.Lerp(below, inPort, Mathf.SmoothStep(0f, 1f, push * 2f))
+                                     : Vector3.Lerp(inPort, inTube, Mathf.SmoothStep(0f, 1f, push * 2f - 1f));
+            center = modelRoot.TransformPoint(at);
+        }
+
+        /// <summary>Curls the index finger just so far that the pad of its last joint lies on the trigger's face.</summary>
+        void CurlOntoTrigger(ArmRig.Arm a)
+        {
+            const int index = 1, first = index * ArmRig.JointsPerFinger;
+            Vector3 target = modelRoot.TransformPoint(rightTriggerPoint);
+            for (int j = 0; j < ArmRig.JointsPerFinger; j++) fingerScratch[j] = a.fingers[first + j].localRotation;
+
+            float PadDistance(float c)
+            {
+                ArmRig.CurlFinger(a, index, c);
+                Vector3 pad = Vector3.Lerp(a.fingers[first + ArmRig.JointsPerFinger - 1].position, a.fingerEnds[index].position, 0.3f);   // the pad: just past the last joint
+                return (pad - target).sqrMagnitude;
+            }
+            float best = 0f, bestD = float.MaxValue;
+            for (float c = 0f; c <= 1.001f; c += 0.05f) { float d = PadDistance(c); if (d < bestD) { bestD = d; best = c; } }
+            float lo = Mathf.Max(0f, best - 0.05f), hi = Mathf.Min(1f, best + 0.05f);
+            for (float c = lo; c <= hi + 0.0001f; c += 0.01f) { float d = PadDistance(c); if (d < bestD) { bestD = d; best = c; } }
+
+            ArmRig.CurlFinger(a, index, best);
+            for (int j = 0; j < ArmRig.JointsPerFinger; j++)
+                a.fingers[first + j].localRotation = Quaternion.Slerp(fingerScratch[j], a.fingers[first + j].localRotation, rightTriggerWeight);
+            TriggerPadError = Mathf.Sqrt(bestD);
+        }
+
+        /// <summary>How far the index finger's pad ended up from the trigger last frame (m): for checking the fit.</summary>
+        public float TriggerPadError { get; private set; }
 
         Transform SourceBone(string boneName)
         {
@@ -231,26 +451,58 @@ namespace BodycamHorror.Weapons
             ArmRig.Arm left = rig.Left, right = rig.Right;
             Vector3 grip = Move(right.hand.position + right.hand.rotation * right.palmCenter);
             Vector3 Grow(Vector3 p) => grip + (p - grip) * gunScale;
-
-            // everything worked out in world space first: the rig may shift under it for reach
-            Vector3 bodyPos = Grow(Move(gunBody.position)), shellPos = Grow(Move(shell.position));
-            Quaternion bodyRot = worldTurn * gunBody.rotation, shellRot = worldTurn * shell.rotation;
-
-            Vector3 rightPos = Move(right.hand.position), leftPos = Move(left.hand.position);
-            Quaternion rightRot = worldTurn * right.hand.rotation, leftRot = worldTurn * left.hand.rotation;
-            // the support hand stays on the bigger gun: its palm moves with the point it was holding
-            Vector3 leftPalm = Move(left.hand.position + left.hand.rotation * left.palmCenter);
-            leftPos += Grow(leftPalm) - leftPalm;
+            // the clips' gun frame, moved: the grip turns and the reload offset are given in it
+            Quaternion gunFrame = worldTurn * GunAnchor.rotation;
+            Quaternion TurnIn(Vector3 euler) => gunFrame * Quaternion.Euler(euler) * Quaternion.Inverse(gunFrame);
 
             // outside the reload the palm rides the fore-end: the walk clips sway the hand on their own.
             // At the end of a reload it is back there in time for the racking stroke
             bool onPump = !shooting.IsReloading || (shooting.ReloadStage == 3 && shooting.ReloadStageTime >= ExitTime * 0.8f);
             pumpHold = Mathf.MoveTowards(pumpHold, onPump ? 1f : 0f, dt * 8f);
+            // while loading, the shell and the hand that carries it go to this gun's loading port
+            Vector3 reloadShift = gunFrame * (reloadShellOffset * armsScale) * (1f - pumpHold);
+
+            // everything worked out in world space first: the rig may shift under it for reach
+            Vector3 bodyPos = Grow(Move(gunBody.position)), shellPos = Grow(Move(shell.position) + reloadShift);
+            Quaternion bodyRot = worldTurn * gunBody.rotation, shellRot = worldTurn * shell.rotation;
+
+            Vector3 rightPos = Move(right.hand.position), leftPos = Move(left.hand.position);
+            Quaternion rightRot = worldTurn * right.hand.rotation, leftRot = worldTurn * left.hand.rotation;
+            if (rightHandEuler != Vector3.zero)
+            {
+                // turned about the palm, which is what the gun hangs on: the gun does not move
+                Vector3 palm = rightPos + rightRot * right.palmCenter;
+                rightRot = TurnIn(rightHandEuler) * rightRot;
+                rightPos = palm - rightRot * right.palmCenter;
+            }
+            // the support hand stays on the bigger gun: its palm moves with the point it was holding
+            Vector3 leftPalm = Move(left.hand.position + left.hand.rotation * left.palmCenter);
+            leftPos += Grow(leftPalm) - leftPalm + reloadShift * gunScale;
+
+            // down the sights the gun must lie exactly on the line the shots and the sight picture are worked out
+            // on. The idle and walk clips keep the gun breathing in the hands, which walks the front sight out of
+            // the notch: take that out, hands and all, as the gun comes up
+            float steadyW = shooting.AimWeight * (shooting.IsReloading ? 0f : 1f);
+            if (steadyW > 0.001f)
+            {
+                Vector3 restPos = Grow(Move(holder.TransformPoint(bodyRestPos)));
+                Quaternion restRot = worldTurn * holder.rotation * bodyRestRot;
+                Quaternion turn = Quaternion.Slerp(Quaternion.identity, restRot * Quaternion.Inverse(bodyRot), steadyW);
+                Vector3 shiftTo = Vector3.Lerp(bodyPos, restPos, steadyW);
+                Vector3 Steady(Vector3 p) => shiftTo + turn * (p - bodyPos);
+                rightPos = Steady(rightPos); rightRot = turn * rightRot;
+                leftPos = Steady(leftPos); leftRot = turn * leftRot;
+                shellPos = Steady(shellPos); shellRot = turn * shellRot;
+                bodyPos = shiftTo; bodyRot = turn * bodyRot;
+            }
+
             if (pumpHold > 0.001f)
             {
                 Quaternion pumpRot = worldTurn * pump.rotation;
                 Quaternion heldRot = pumpRot * pumpHand;
-                Vector3 heldPos = Grow(Move(pump.position)) + pumpRot * (pumpPalm * gunScale) - heldRot * left.palmCenter;
+                Vector3 heldPalm = Grow(Move(pump.position)) + pumpRot * (pumpPalm * gunScale);
+                heldRot = TurnIn(leftHandEuler) * heldRot;
+                Vector3 heldPos = heldPalm - heldRot * left.palmCenter;
                 leftPos = Vector3.Lerp(leftPos, heldPos, pumpHold);
                 leftRot = Quaternion.Slerp(leftRot, heldRot, pumpHold);
             }
@@ -284,12 +536,91 @@ namespace BodycamHorror.Weapons
             gunBody.SetPositionAndRotation(bodyPos, bodyRot);
             shell.SetPositionAndRotation(shellPos, shellRot);
             gunBody.localScale = bodyScale * gunScale;
-            shell.localScale = shellScale * gunScale;
+            shell.localScale = shellScale * (gunScale * shellSize);
             GunAnchor.localScale = Vector3.one / gunBody.lossyScale.x;
+
+            // the gun is where it will be this frame now: fit the left hand to the model itself
+            float cradleW = leftCradle && modelPump ? pumpHold * (1f - leftFree) : 0f;
+            if (cradleW > 0.001f)
+            {
+                // a cylinder grip: palm under the fore-end, fingers forward and round to the right, back of the hand down
+                Vector3 fwd = modelPump.TransformDirection(Vector3.right).normalized;
+                Vector3 up = modelPump.TransformDirection(Vector3.up).normalized;
+                Vector3 fingers = Quaternion.AngleAxis(leftCradleFingerAngle, up) * fwd;
+                Vector3 back = Quaternion.AngleAxis(leftCradleRoll, fingers) * -up;
+                Quaternion cradleRot = Quaternion.LookRotation(fingers, back) * left.handFrame;
+                Vector3 cradlePos = modelPump.TransformPoint(leftCradlePoint) - cradleRot * left.palmCenter;
+                leftPos = Vector3.Lerp(leftPos, cradlePos, cradleW);
+                leftRot = Quaternion.Slerp(leftRot, cradleRot, cradleW);
+            }
+
+            // loading: the shell goes the way it would into this gun. Late in each pass the hand lines it up under the
+            // loading port, then the thumb pushes it up through the port and forward into the magazine tube
+            bool loading = shellInHand && modelRoot && shooting.ReloadStage == 2 && loadingTubeHeight != 0f;
+            float lineUp = 0f, push = 0f;
+            if (loading)
+            {
+                float pass = Mathf.Min(shooting.ReloadStageTime * reloadRate, shellCycle) / shellCycle;
+                lineUp = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(loadingPhases.x, loadingPhases.y, pass));
+                push = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(loadingPhases.y, shellInsertShare, pass));
+                LoadingShellPose(push, out loadCenter, out loadDir);
+
+                // the thumb is behind the shell's base; it can follow it up to the mouth of the port, not into the gun
+                Vector3 baseModel = modelRoot.InverseTransformPoint(loadCenter - loadDir * ShellHalfLength());
+                baseModel.y = Mathf.Min(baseModel.y, loadingPort.y - 0.002f);
+                Vector3 thumbTo = modelRoot.TransformPoint(baseModel);
+                Vector3 pinchNow = leftPos + leftRot * thumbInHand;   // the thumb tip, last frame's shape of the hand
+                leftPos += (thumbTo - pinchNow) * lineUp * (1f - leftFree);
+            }
+
+            // loading: the palm stays under the receiver, so the fingers and the shell go up to the port, not into the gun
+            float loadW = modelRoot && loadingPalmCeiling > -1f ? (1f - pumpHold) * (1f - leftFree) * (1f - lineUp) : 0f;
+            if (loadW > 0.001f)
+            {
+                Vector3 palmModel = modelRoot.InverseTransformPoint(leftPos + leftRot * left.palmCenter);
+                if (palmModel.x > loadingPortSpan.x && palmModel.x < loadingPortSpan.y && palmModel.y > loadingPalmCeiling)
+                    leftPos -= modelRoot.TransformVector(0f, palmModel.y - loadingPalmCeiling, 0f) * loadW;
+            }
+
             // climbing: the left elbow flares out to the side, not down under the frame
             Vector3 sideHint = left.upper.position + holder.right * (left.side * climbElbowOut) - holder.up * climbElbowDown;
             ArmRig.Solve(left, leftPos, leftRot, Vector3.Lerp(ArmRig.ElbowHint(left, holder), sideHint, shooting.ClimbWeight));
             ArmRig.Solve(right, rightPos, rightRot, ArmRig.ElbowHint(right, holder));
+
+            // on the fore-end the fingers wrap round it: the clips curl them round a slimmer one
+            float gripW = leftGripWeight * pumpHold * (1f - leftFree);
+            if (gripW > 0.001f)
+            {
+                for (int i = 0; i < left.fingers.Length; i++) fingerScratch[i] = left.fingers[i].localRotation;
+                curl[0] = leftThumbCurl;
+                for (int f = 1; f < ArmRig.FingerCount; f++) curl[f] = leftFingerCurl;
+                ArmRig.SetCurl(left, curl);
+                for (int i = 0; i < left.fingers.Length; i++)
+                    left.fingers[i].localRotation = Quaternion.Slerp(fingerScratch[i], left.fingers[i].localRotation, gripW);
+            }
+
+            // loading: the shell is in the fingers of the hand that carries it, pinched between thumb and index
+            if (shellInHand && shooting.ReloadStage == 2)
+            {
+                Transform hand = left.hand;
+                shell.rotation = hand.rotation * shellRelRot * Quaternion.Euler(shellPinchEuler);
+                Vector3 pinch = Vector3.Lerp(left.fingerEnds[0].position, left.fingers[1 * ArmRig.JointsPerFinger + 1].position, shellPinch);
+                shell.position += pinch + hand.rotation * shellPinchOffset - shell.TransformPoint(shellCenterLocal);
+                pinchInHand = Quaternion.Inverse(hand.rotation) * (pinch - hand.position);   // for next frame's hand target
+                thumbInHand = Quaternion.Inverse(hand.rotation) * (left.fingerEnds[0].position - hand.position);
+
+                // lined up under the port and pushed in: the shell is on its loading path, the hand's thumb behind it
+                if (loading && lineUp > 0.001f)
+                {
+                    Vector3 heldCenter = shell.TransformPoint(shellCenterLocal);
+                    Quaternion onPath = Quaternion.FromToRotation(shell.rotation * shellAxisLocal, loadDir) * shell.rotation;
+                    shell.rotation = Quaternion.Slerp(shell.rotation, onPath, lineUp);
+                    shell.position += Vector3.Lerp(heldCenter, loadCenter, lineUp) - shell.TransformPoint(shellCenterLocal);
+                }
+            }
+
+            // the index finger on the trigger: curled just so far that its pad lies on the trigger's face
+            if (rightTriggerWeight > 0.001f && modelRoot) CurlOntoTrigger(right);
 
             bool parkour = player && !(player.State == MoveState.Grounded || player.State == MoveState.Airborne || player.State == MoveState.Sliding);
             float openTarget = leftFree * (parkour || (player && player.IsBraceReady) ? 1f : 0f);
@@ -330,7 +661,9 @@ namespace BodycamHorror.Weapons
                 walking = false;
                 sourceAnimator.CrossFadeInFixedTime(reloading ? "Reload" : "Idle", reloading ? 0.08f : 0.16f, 0, 0f);
             }
-            if (shellRenderer) shellRenderer.enabled = stage == 2;   // the clip keeps the shell around all the time
+            // the clip keeps the shell around all the time; in the hand it goes once it is pushed into the port
+            bool pushedIn = shellInHand && stage == 2 && Mathf.Min(shooting.ReloadStageTime * reloadRate, shellCycle) >= shellCycle * shellInsertShare;
+            if (shellRenderer) shellRenderer.enabled = stage == 2 && !pushedIn;
             if (reloading)
             {
                 sourceAnimator.SetFloat("ReloadTime", ReloadClipTime(stage) / reloadLength);

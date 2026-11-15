@@ -18,6 +18,8 @@ namespace BodycamHorror.Enemies
         public float poseSharpness = 12f;
         [Tooltip("Animated models: running this fast (m/s) plays the run clip at its own speed. Higher = slower legs.")]
         public float runClipReferenceSpeed = 8f;
+        [Tooltip("The hands are bone stakes: wrists and fingers keep the model's own pose instead of the clips'.")]
+        public bool rigidHands = true;
 
         public SphereCollider HeadHitbox { get; private set; }
 
@@ -38,6 +40,8 @@ namespace BodycamHorror.Enemies
         Animator animator;
         bool animated;
         InfectedRagdoll ragdoll;
+        Transform[] bladeBones;
+        Quaternion[] bladeRest;
         InfectedDismemberment dismember;
         bool crawling;
         Transform[] poseBones;
@@ -147,6 +151,7 @@ namespace BodycamHorror.Enemies
             aArmR = B(HumanBodyBones.RightUpperArm); aForeR = B(HumanBodyBones.RightLowerArm); aHandR = B(HumanBodyBones.RightHand);
             aThighL = B(HumanBodyBones.LeftUpperLeg); aShinL = B(HumanBodyBones.LeftLowerLeg); aFootL = B(HumanBodyBones.LeftFoot);
             aThighR = B(HumanBodyBones.RightUpperLeg); aShinR = B(HumanBodyBones.RightLowerLeg); aFootR = B(HumanBodyBones.RightFoot);
+            RememberBlades();   // the instance is still in the model's own pose: the Animator has not run yet
             poseBones = aHips.GetComponentsInChildren<Transform>();   // parent-first order
             blendFrom = new Quaternion[poseBones.Length];
 
@@ -508,6 +513,7 @@ namespace BodycamHorror.Enemies
             }
             twitch = Quaternion.Slerp(twitch, twitchTarget, 1f - Mathf.Exp(-25f * dt));
             if (aNeck) Rotate(aNeck, root * twitch * Quaternion.Inverse(root));
+            KeepBlades();
 
             // getting up: fade from the pose the body landed in into the animation
             if (blending)
@@ -522,6 +528,26 @@ namespace BodycamHorror.Enemies
                 if (t >= 1f) blending = false;
             }
             FollowHead();
+        }
+
+        /// <summary>
+        /// The hands are bone stakes, not hands: the clips' wrist turns and finger curls would bend them, so every
+        /// bone from the wrist down is put back in the model's own pose, a rigid spike carrying on from the forearm.
+        /// </summary>
+        void KeepBlades()
+        {
+            if (!rigidHands || bladeBones == null) return;
+            for (int i = 0; i < bladeBones.Length; i++) bladeBones[i].localRotation = bladeRest[i];
+        }
+
+        void RememberBlades()
+        {
+            var list = new System.Collections.Generic.List<Transform>();
+            if (aHandL) list.AddRange(aHandL.GetComponentsInChildren<Transform>());
+            if (aHandR) list.AddRange(aHandR.GetComponentsInChildren<Transform>());
+            bladeBones = list.ToArray();
+            bladeRest = new Quaternion[bladeBones.Length];
+            for (int i = 0; i < bladeBones.Length; i++) bladeRest[i] = bladeBones[i].localRotation;
         }
 
         void FollowHead()

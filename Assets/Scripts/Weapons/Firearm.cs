@@ -53,6 +53,8 @@ namespace BodycamHorror.Weapons
         public float readyCant = -5f;
         [Tooltip("Height of the sight line above the grip origin.")]
         public float sightHeight = 0.094f;
+        [Tooltip("How far the line from the rear sight to the front sight dips below the barrel's own line (degrees). Down the sights the gun is raised by this much, so the front sight stands up in the rear notch, and the muzzle is turned down by it so the shot goes where the front sight is.")]
+        public float sightPitch;
         [Tooltip("How far ahead of the chest something has to be before the gun is tucked away (m).")]
         public float tuckDistance = 0.72f;
         [Tooltip("Accuracy of the aim line itself (deg), hip and aimed; pellets scatter on top of this.")]

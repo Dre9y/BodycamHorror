@@ -623,8 +623,8 @@ namespace BodycamHorror.EditorTools
             };
             scare.stress = 0.85f;   // a full panic heartbeat and ringing ears
 
-            scare.modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Zombie/animations/MutantLow.fbx");
-            scare.modelMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Zombie/MutantMaterial.mat");
+            scare.modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Zombie/Slasher/ZombieSlasher.fbx");
+            scare.modelMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Zombie/Slasher/ZombieSlasher.mat");
             scare.modelScale = 0.7f;
             scare.idleClip = Clip("Zombie_Idle_02");
             scare.runClip = Clip("Zombie_Sprint_01_Forward_InPlace");

@@ -61,8 +61,10 @@ namespace BodycamHorror.Weapons
         [Range(0.2f, 1f)] public float aimMoveSpeedScale = 0.7f;
 
         [Header("Bare hands")]
-        [Tooltip("The first-person arms for the melee slot. Empty = the old procedural arms.")]
+        [Tooltip("The first-person arms with no gun in them. Empty = the old procedural arms.")]
         public BareHands bareHandsPrefab;
+        [Tooltip("Punches with bare hands and jabs / bashes with a gun. Off: the empty hands just hang and swing with the walk.")]
+        public bool meleeEnabled = false;
 
         [Header("Switching")]
         public float switchLowerTime = 0.2f;
@@ -120,6 +122,9 @@ namespace BodycamHorror.Weapons
         [Tooltip("While aiming, the look input first swings the gun this far up or down from the middle of the view (degrees); "
                  + "the view only starts to turn once the gun is at that edge. The shots go where the gun points. 0 = the gun stays centred.")]
         public float freeAimRadius = 6f;
+        [Tooltip("Down the sights the line through the rear and front sight is kept running through the eye, so the front sight sits in the notch "
+                 + "wherever the gun is turned. 1 = always, 0 = the sights drift apart with sway and look inertia.")]
+        [Range(0f, 1f)] public float sightLock = 1f;
         [Tooltip("The same sideways: wider, so the gun can sweep across a doorway before the view starts to turn.")]
         public float freeAimHorizontalRadius = 12f;
 
@@ -197,7 +202,9 @@ namespace BodycamHorror.Weapons
         public int Ammo => shown ? shown.Ammo : 0;
         public bool IsSwitching => switchPhase != SwitchPhase.None;
         /// <summary>Bare hands: how far up the fists are (0 = relaxed / running, 1 = guard).</summary>
-        public float GuardWeight => shown || !HasFists ? 0f : guardW * (1f - switchW);
+        public float GuardWeight => shown || !HasFists || !meleeEnabled ? 0f : guardW * (1f - switchW);
+        /// <summary>No gun in the hands: the empty arms are out (hanging, or with melee on, the fists).</summary>
+        public bool HandsEmpty => !shown && (HasFists || !meleeEnabled);
         /// <summary>Hand throwing a strike right now: -1 left, +1 right, 0 none.</summary>
         public int PunchHand => meleeKind switch { MeleeKind.PunchLeft => -1, MeleeKind.Jab => -1, MeleeKind.PunchRight => 1, _ => 0 };
         /// <summary>0..1 extension of the current punch / jab.</summary>
@@ -277,7 +284,7 @@ namespace BodycamHorror.Weapons
             {
                 bareHands = Instantiate(bareHandsPrefab, transform, false);
                 bareHands.name = bareHandsPrefab.name;
-                bareHands.gameObject.SetActive(!shown && HasFists);
+                bareHands.gameObject.SetActive(HandsEmpty);
                 bareHands.Bind(player, this, gameObject.layer);
             }
 
@@ -479,7 +486,7 @@ namespace BodycamHorror.Weapons
             if (IsReloading && BlocksReload(state)) CancelReload();
             UpdateReload(dt);
             UpdateMelee(dt);
-            bool fistsOut = !shown && HasFists;
+            bool fistsOut = HandsEmpty;
             if (bareHands && bareHands.gameObject.activeSelf != fistsOut) bareHands.gameObject.SetActive(fistsOut);
 
             // wall tuck: something right in front of the chest pushes the gun up and back
@@ -538,7 +545,8 @@ namespace BodycamHorror.Weapons
 
             // --- base pose
             Vector3 readyPos = Vector3.Lerp(w.readyPosition, w.aimPosition, aimW);
-            Quaternion readyRot = AimAt(readyPos, w.sightHeight) * Quaternion.Euler(0f, 0f, w.readyCant * (1f - aimW));
+            // down the sights the nose comes up by the sights' own dip, so the front sight stands up in the notch
+            Quaternion readyRot = AimAt(readyPos, w.sightHeight) * Quaternion.Euler(-w.sightPitch * aimW, 0f, w.readyCant * (1f - aimW));
 
             float lowPose = w.ClipsDriveRun ? 0f : Smooth(lowW);   // run clips carry it themselves
             if (!w.TryGetLoweredPose(out Vector3 lowPos, out Vector3 lowEuler)) { lowPos = loweredPosition; lowEuler = loweredEuler; }
@@ -638,8 +646,24 @@ namespace BodycamHorror.Weapons
             }
             pos.y -= aimWalkDrop * Mathf.Clamp01(bob) * aimW;
 
-            w.transform.localPosition = pos + recoilPos + tremorPos;
-            w.transform.localRotation = rot * Quaternion.Euler(recoilRot + sway + tremor);
+            pos += recoilPos + tremorPos;
+            rot *= Quaternion.Euler(recoilRot + sway + tremor);
+
+            // --- down the sights: whatever turned the gun (look inertia, sway, free aim, strafe roll, recoil) turned it
+            // about its own grip, which takes the sight line off the eye and the front sight out of the notch.
+            // Slide the gun across so the line through both sights runs through the camera again
+            float sightLockW = sightLock * Smooth(aimW) * (1f - carryW) * (1f - lowW) * (1f - tuckW);
+            if (sightLockW > 0.001f && rig && rig.cam)
+            {
+                Vector3 eye = transform.InverseTransformPoint(rig.cam.transform.position);
+                Vector3 sight = pos + rot * new Vector3(0f, w.sightHeight, 0f);
+                Vector3 line = rot * (Quaternion.Euler(w.sightPitch, 0f, 0f) * Vector3.forward);   // the line through both sights
+                Vector3 off = sight - eye;
+                pos -= (off - Vector3.Dot(off, line) * line) * sightLockW;
+            }
+
+            w.transform.localPosition = pos;
+            w.transform.localRotation = rot;
 
             TryFire(w);
         }
@@ -772,6 +796,7 @@ namespace BodycamHorror.Weapons
 
         void TryStartMelee()
         {
+            if (!meleeEnabled) return;
             if (meleeKind != MeleeKind.None || carryW > 0.5f) return;
             if (IsUnarmed) return;   // nothing picked up yet: no strikes either
             if (switchPhase == SwitchPhase.Lowering) return;

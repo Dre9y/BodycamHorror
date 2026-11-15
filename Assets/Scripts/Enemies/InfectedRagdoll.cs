@@ -16,6 +16,14 @@ namespace BodycamHorror.Enemies
             public Transform bone;
             public Rigidbody rb;
             public Collider col;
+            public Collider[] extra;   // more hitboxes riding on this part (the stake past an arm's wrist)
+        }
+
+        /// <summary>A part's colliders: its own and the extra ones.</summary>
+        static IEnumerable<Collider> Cols(Part p)
+        {
+            yield return p.col;
+            if (p.extra != null) foreach (var c in p.extra) if (c) yield return c;
         }
 
         readonly List<Part> parts = new List<Part>();
@@ -58,7 +66,12 @@ namespace BodycamHorror.Enemies
             {
                 Transform top = null;
                 foreach (var t in head.GetComponentsInChildren<Transform>()) if (t != head && t.name.Contains("HeadTop")) top = t;
-                float r = (top ? Vector3.Distance(head.position, top.position) : Vector3.Distance(chestTop.position, head.position)) * 0.55f;
+                // a model's end bone can be anywhere (a broken export left one a metre off): the head is never
+                // much bigger than the neck is long
+                float neckLen = Vector3.Distance(chestTop.position, head.position);
+                if (top && Vector3.Distance(head.position, top.position) > neckLen * 4f + 0.05f) top = null;
+                float r = (top ? Vector3.Distance(head.position, top.position) : neckLen * 1.6f) * 0.55f;
+                r = Mathf.Clamp(r, 0.06f, 0.16f);
                 var sph = head.gameObject.AddComponent<SphereCollider>();
                 sph.radius = r / Mathf.Max(head.lossyScale.x, 0.0001f);
                 sph.center = head.InverseTransformPoint(top ? Vector3.Lerp(head.position, top.position, 0.5f) : head.position + transform.up * r);
@@ -74,9 +87,16 @@ namespace BodycamHorror.Enemies
             AddLimb(HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot, HumanBodyBones.Hips, 0.22f, totalMass * 0.1f, totalMass * 0.05f, right, fwd, true, 1f);
 
             hipsBody = Find(HumanBodyBones.Hips).rb;
-            foreach (var p in parts)
+            var mine = new List<Collider>();
+            foreach (var p in parts) mine.AddRange(Cols(p));
+            foreach (var m in mine)
                 foreach (var c in ignore)
-                    if (c) Physics.IgnoreCollision(p.col, c, true);
+                    if (c) Physics.IgnoreCollision(m, c, true);
+            // the parts overlap where they meet (shoulders in the torso, thighs in the pelvis): left to push each
+            // other apart they fight the joints every step, and the body shivers on the floor
+            for (int i = 0; i < mine.Count; i++)
+                for (int k = i + 1; k < mine.Count; k++)
+                    Physics.IgnoreCollision(mine[i], mine[k], true);
             SetDormant();
             return true;
         }
@@ -92,6 +112,47 @@ namespace BodycamHorror.Enemies
             float high = leg ? 120f : (side > 0f ? 130f : 5f);
             AddCapsule(lower, l, e, radiusK * 0.85f, lowerMass, upper, twist: 10f, swing1: 5f, swing2: 5f, hingeAxis, fwd,
                        hingeLow: low, hingeHigh: high);
+            if (!leg) AddHandSegments(lower, l, e, Vector3.Distance(l.position, e.position) * radiusK * 0.85f);
+        }
+
+        /// <summary>
+        /// Whatever the hand is (here a bone stake) gets hitboxes too: a thin capsule along each bone from the wrist
+        /// to the tip, lined up with it exactly, tapering to the point. They belong to the forearm's part: a shot at the
+        /// stake is a shot at the arm.
+        /// </summary>
+        void AddHandSegments(HumanBodyBones part, Transform forearm, Transform hand, float radius)
+        {
+            int index = parts.FindIndex(p => p.id == part);
+            if (index < 0) return;
+            var chain = new List<Transform> { hand };
+            for (Transform t = hand; t.childCount > 0; )
+            {
+                // follow the longest branch (the stake), not a stray short child
+                Transform next = null; float far = -1f;
+                foreach (Transform c in t) { float d = Vector3.Distance(c.position, forearm.position); if (d > far) { far = d; next = c; } }
+                if (Vector3.Distance(next.position, t.position) < 0.005f) break;
+                chain.Add(next); t = next;
+            }
+            var extra = new List<Collider>();
+            for (int i = 0; i < chain.Count - 1; i++)
+            {
+                Vector3 a = chain[i].position, b = chain[i + 1].position;
+                float len = Vector3.Distance(a, b);
+                float r = radius * Mathf.Lerp(1f, 0.45f, (i + 1f) / chain.Count);
+                var go = new GameObject("Hitbox_" + chain[i].name);
+                go.transform.SetParent(chain[i], true);
+                go.transform.SetPositionAndRotation((a + b) * 0.5f, Quaternion.LookRotation(b - a, transform.up));
+                go.transform.localScale = Vector3.one;
+                var cap = go.AddComponent<CapsuleCollider>();
+                float s = Mathf.Max(go.transform.lossyScale.x, 0.0001f);
+                cap.direction = 2;
+                cap.radius = r / s;
+                cap.height = (len + r) / s;
+                extra.Add(cap);
+            }
+            var p = parts[index];
+            p.extra = extra.ToArray();
+            parts[index] = p;
         }
 
         void AddCapsule(HumanBodyBones id, Transform bone, Transform child, float radiusK, float mass, HumanBodyBones parent,
@@ -128,6 +189,8 @@ namespace BodycamHorror.Enemies
             j.swing1Limit = new SoftJointLimit { limit = swing1 };
             j.swing2Limit = new SoftJointLimit { limit = swing2 };
             j.enableProjection = true;
+            j.projectionDistance = 0.02f;
+            j.projectionAngle = 5f;
             j.enablePreprocessing = false;
             return j;
         }
@@ -139,7 +202,12 @@ namespace BodycamHorror.Enemies
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             rb.linearDamping = 0.05f;
-            rb.angularDamping = 0.6f;
+            rb.angularDamping = 1.5f;
+            // light limbs on heavy joints chatter: more solver work, gentle depenetration, an earlier sleep
+            rb.solverIterations = 16;
+            rb.solverVelocityIterations = 6;
+            rb.maxDepenetrationVelocity = 2f;
+            rb.sleepThreshold = 0.05f;
             parts.Add(new Part { id = id, bone = bone, rb = rb, col = col });
         }
 
@@ -190,7 +258,11 @@ namespace BodycamHorror.Enemies
                 p.rb.isKinematic = true;
                 p.rb.interpolation = RigidbodyInterpolation.None;
                 p.rb.detectCollisions = true;
-                p.col.enabled = !severedColliders.Contains(p.col);
+                foreach (var c in Cols(p))
+                {
+                    c.enabled = !severedColliders.Contains(c);
+                    if (layer >= 0) c.gameObject.layer = layer;
+                }
                 if (layer >= 0) p.bone.gameObject.layer = layer;
             }
             IsActive = false;
@@ -200,7 +272,8 @@ namespace BodycamHorror.Enemies
         public bool TryGetPart(Collider c, out HumanBodyBones part)
         {
             foreach (var p in parts)
-                if (p.col == c) { part = p.id; return true; }
+                foreach (var pc in Cols(p))
+                    if (pc == c) { part = p.id; return true; }
             part = default;
             return false;
         }
@@ -211,8 +284,7 @@ namespace BodycamHorror.Enemies
             foreach (var p in parts)
             {
                 if (!p.bone.IsChildOf(bone)) continue;
-                severedColliders.Add(p.col);
-                p.col.enabled = false;
+                foreach (var c in Cols(p)) { severedColliders.Add(c); c.enabled = false; }
                 p.rb.useGravity = false;
             }
         }
@@ -225,7 +297,7 @@ namespace BodycamHorror.Enemies
             foreach (var p in parts)
             {
                 p.bone.gameObject.layer = 0;   // real body now: collides with the world
-                p.col.enabled = !severedColliders.Contains(p.col);
+                foreach (var c in Cols(p)) { c.gameObject.layer = 0; c.enabled = !severedColliders.Contains(c); }
                 p.rb.interpolation = RigidbodyInterpolation.Interpolate;
                 p.rb.isKinematic = false;
                 p.rb.linearVelocity = velocity;
@@ -263,8 +335,7 @@ namespace BodycamHorror.Enemies
 
         public bool Owns(Collider c)
         {
-            foreach (var p in parts) if (p.col == c) return true;
-            return false;
+            return TryGetPart(c, out _);
         }
     }
 }

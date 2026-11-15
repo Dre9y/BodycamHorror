@@ -118,8 +118,8 @@ namespace BodycamHorror.EditorTools
             scare.pickup = pickup;
             scare.lightHeight = Height - 0.25f;
             // the same infected the lighting test scene uses
-            scare.modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Zombie/animations/MutantLow.fbx");
-            scare.modelMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Zombie/MutantMaterial.mat");
+            scare.modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Zombie/Slasher/ZombieSlasher.fbx");
+            scare.modelMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Zombie/Slasher/ZombieSlasher.mat");
             scare.modelScale = 0.7f;
             scare.animatorController = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>("Assets/Zombie/ZombieAnimator.controller");
             var idles = new System.Collections.Generic.List<AnimationClip>();

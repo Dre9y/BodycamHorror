@@ -215,6 +215,17 @@ namespace BodycamHorror.Weapons
                 a.fingers[i].localRotation = Quaternion.Slerp(a.fingers[i].localRotation, a.fingersOpen[i], weight);
         }
 
+        /// <summary>Poses one finger from a curl amount (0 open, 1 closed), the others left as they are.</summary>
+        public static void CurlFinger(Arm a, int finger, float curl)
+        {
+            Vector3 angles = finger == 0 ? ThumbCurlAngles : FingerCurlAngles;
+            for (int j = 0; j < JointsPerFinger; j++)
+            {
+                int i = finger * JointsPerFinger + j;
+                a.fingers[i].localRotation = a.fingersOpen[i] * Quaternion.AngleAxis(curl * angles[j], a.curlAxes[i]);
+            }
+        }
+
         /// <summary>Poses the fingers from curl amounts (0 open, 1 closed): thumb, index, middle, ring, pinky.</summary>
         public static void SetCurl(Arm a, float[] curl)
         {

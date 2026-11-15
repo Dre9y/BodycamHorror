@@ -6,8 +6,8 @@ using UnityEngine.Rendering.Universal;
 namespace BodycamHorror.Player
 {
     /// <summary>
-    /// How the lens sees. The picture sits in a dark rounded frame and only what is right up against
-    /// the lens goes soft; aiming sharpens that up and closes the frame a little, like squinting.
+    /// How the lens sees. The picture sits in a dark rounded frame; it is sharp up to a distance (set in the Tab
+    /// debug menu) and goes out of focus beyond it. Aiming closes the frame a little, like squinting.
     /// The frame is drawn by the Lens Vignette full-screen renderer feature, the blur by a volume of its own.
     /// </summary>
     [RequireComponent(typeof(Camera))]
@@ -32,16 +32,14 @@ namespace BodycamHorror.Player
         public Vector2 aimShadeInset = new Vector2(0.06f, 0.04f);
         public float aimShadeStrength = 0.04f;
 
-        [Header("Focus")]
-        [Tooltip("In focus at this distance (m). Everything further stays practically sharp; closer gets softer towards the lens.")]
-        public float focusDistance = 6f;
-        [Tooltip("Longer lens = stronger near blur (mm).")]
-        [Range(1f, 300f)] public float focalLength = 35f;
-        [Tooltip("Lower = stronger near blur.")]
-        [Range(1f, 32f)] public float aperture = 24f;
-        [Tooltip("The same when aiming: high, so the sights stay crisp.")]
-        [Range(1f, 32f)] public float aimAperture = 32f;
-        [Tooltip("How quickly the eye refocuses.")]
+        [Header("Focus: sharp up to a distance, soft beyond it")]
+        [Tooltip("Sharp up to this far (m); further away goes out of focus. The Tab debug menu overrides it (DebugMenu.FocusDistance).")]
+        public float sharpDistance = 15f;
+        [Tooltip("Over how far past the sharp distance the blur comes in fully, as a share of that distance.")]
+        [Range(0.1f, 3f)] public float blurFalloff = 0.8f;
+        [Tooltip("How soft the far plane gets at full blur.")]
+        [Range(0.5f, 1.5f)] public float blurRadius = 1.2f;
+        [Tooltip("How quickly the eye adjusts to the aim (the frame squint).")]
         public float focusSpeed = 7f;
 
         [Header("Wide-angle glass (the body camera's fisheye)")]
@@ -82,9 +80,8 @@ namespace BodycamHorror.Player
             profile = ScriptableObject.CreateInstance<VolumeProfile>();
             profile.name = "LensLook (runtime)";
             focus = profile.Add<DepthOfField>(true);
-            focus.mode.value = DepthOfFieldMode.Bokeh;   // the only mode that blurs in front of the focus
-            focus.focusDistance.value = focusDistance;
-            focus.focalLength.value = focalLength;
+            focus.mode.value = DepthOfFieldMode.Gaussian;   // far-only: the hands and the gun right in front stay sharp
+            focus.highQualitySampling.value = true;
             profile.Add<Vignette>(true).intensity.value = 0f;   // the scenes' own, replaced by the frame
             glass = profile.Add<LensDistortion>(false);
             fringe = profile.Add<ChromaticAberration>(false);
@@ -113,7 +110,10 @@ namespace BodycamHorror.Player
             float want = shooting ? shooting.AimWeight : 0f;
             aim = Mathf.Lerp(aim, want, 1f - Mathf.Exp(-focusSpeed * Time.deltaTime));
 
-            focus.aperture.value = Mathf.Lerp(aperture, aimAperture, aim);
+            float sharp = BodycamHorror.UI.DebugMenu.FocusDistance > 0f ? BodycamHorror.UI.DebugMenu.FocusDistance : sharpDistance;
+            focus.gaussianStart.value = sharp;
+            focus.gaussianEnd.value = sharp * (1f + blurFalloff);
+            focus.gaussianMaxRadius.value = blurRadius;
             glass.intensity.Override(barrel);
             glass.scale.Override(barrelScale);
             fringe.intensity.Override(fringing);

@@ -12,22 +12,37 @@ namespace BodycamHorror.UI
     /// </summary>
     public class DebugMenu : MonoBehaviour
     {
-        const string RecoilKey = "debug.recoilScale";
-        const string TremorKey = "debug.fearTremorScale";
-        const string FlashlightKey = "debug.flashlightSize";
-        const float Min = 0f, Max = 3f, Step = 0.05f;
+        /// <summary>One slider: its range, step, the value it resets to and how it is shown.</summary>
+        class Row
+        {
+            public string name, key, format, unitPrefix, unitSuffix;
+            public float min, max, step, reset, floor, value;
+        }
+
+        static readonly Row[] Rows =
+        {
+            new Row { name = "Отдача оружия", key = "debug.recoilScale", min = 0f, max = 3f, step = 0.05f, reset = 1f, format = "0.00", unitPrefix = "x" },
+            new Row { name = "Тряска оружия от страха", key = "debug.fearTremorScale", min = 0f, max = 3f, step = 0.05f, reset = 1f, format = "0.00", unitPrefix = "x" },
+            new Row { name = "Размер пятна фонаря", key = "debug.flashlightSize", min = 0f, max = 3f, step = 0.05f, reset = 1f, floor = 0.2f, format = "0.00", unitPrefix = "x" },
+            new Row { name = "Дальность резкости", key = "debug.focusDistance", min = 2f, max = 60f, step = 0.5f, reset = 15f, format = "0.0", unitSuffix = " м" },
+        };
+
+        static DebugMenu()
+        {
+            foreach (var r in Rows) r.value = r.reset;   // as tuned until the saved values are read
+        }
 
         /// <summary>The panel is up and has the cursor.</summary>
         public static bool IsOpen { get; private set; }
 
         /// <summary>Multiplier on the recoil of every gun (weapon kick and camera kick); 1 = as tuned.</summary>
-        public static float RecoilScale { get; private set; } = 1f;
+        public static float RecoilScale => Rows[0].value;
         /// <summary>Multiplier on the hand tremor from fear; 1 = as tuned.</summary>
-        public static float FearTremorScale { get; private set; } = 1f;
+        public static float FearTremorScale => Rows[1].value;
         /// <summary>Multiplier on the size of the flashlight's lit spot; 1 = as tuned.</summary>
-        public static float FlashlightSize { get; private set; } = 1f;
-
-        static readonly string[] Names = { "Отдача оружия", "Тряска оружия от страха", "Размер пятна фонаря" };
+        public static float FlashlightSize => Rows[2].value;
+        /// <summary>The camera is sharp up to this far (m) and out of focus beyond it (LensLook).</summary>
+        public static float FocusDistance => Rows[3].value;
 
         bool open;
         GUIStyle head, line, value, hint, reset;
@@ -37,9 +52,7 @@ namespace BodycamHorror.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Load()
         {
-            RecoilScale = Mathf.Clamp(PlayerPrefs.GetFloat(RecoilKey, 1f), Min, Max);
-            FearTremorScale = Mathf.Clamp(PlayerPrefs.GetFloat(TremorKey, 1f), Min, Max);
-            FlashlightSize = Mathf.Clamp(PlayerPrefs.GetFloat(FlashlightKey, 1f), Min, Max);
+            foreach (var r in Rows) Set(r, PlayerPrefs.GetFloat(r.key, r.reset));
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -51,21 +64,15 @@ namespace BodycamHorror.UI
             go.AddComponent<DebugMenu>();
         }
 
-        static float Get(int i) => i == 0 ? RecoilScale : i == 1 ? FearTremorScale : FlashlightSize;
-
-        static void Set(int i, float v)
+        static void Set(Row r, float v)
         {
-            v = Mathf.Clamp(Mathf.Round(v * 100f) / 100f, Min, Max);
-            if (i == 0) RecoilScale = v;
-            else if (i == 1) FearTremorScale = v;
-            else FlashlightSize = Mathf.Max(v, 0.2f);   // a beam of no width is no beam
+            v = Mathf.Clamp(Mathf.Round(v / r.step) * r.step, r.min, r.max);
+            r.value = Mathf.Max(v, r.floor);   // e.g. a flashlight beam of no width is no beam
         }
 
         static void Save()
         {
-            PlayerPrefs.SetFloat(RecoilKey, RecoilScale);
-            PlayerPrefs.SetFloat(TremorKey, FearTremorScale);
-            PlayerPrefs.SetFloat(FlashlightKey, FlashlightSize);
+            foreach (var r in Rows) PlayerPrefs.SetFloat(r.key, r.value);
             PlayerPrefs.Save();
         }
 
@@ -90,29 +97,29 @@ namespace BodycamHorror.UI
             GUI.depth = -900;
 
             float pad = 18f * k, rowH = 44f * k, w = 700f * k;
-            var panel = new Rect(16f * k, 16f * k, w, pad * 2f + 44f * k + rowH * Names.Length + 34f * k);
+            var panel = new Rect(16f * k, 16f * k, w, pad * 2f + 44f * k + rowH * Rows.Length + 34f * k);
             Fill(panel, new Color(0.05f, 0.055f, 0.06f, 0.88f));
 
             float x = panel.x + pad, y = panel.y + pad, inner = w - pad * 2f;
             GUI.Label(new Rect(x, y, inner, 36f * k), "DEBUG", head);
             y += 44f * k;
 
-            for (int i = 0; i < Names.Length; i++)
+            foreach (var r in Rows)
             {
-                float v = Get(i), h = rowH - 6f * k;
-                GUI.Label(new Rect(x, y, 290f * k, h), Names[i], line);
+                float v = r.value, h = rowH - 6f * k;
+                GUI.Label(new Rect(x, y, 290f * k, h), r.name, line);
                 var bar = new Rect(x + 300f * k, y, 210f * k, h);
-                // tick at 1: the value as tuned in the inspector
-                Fill(new Rect(bar.x + bar.width * Mathf.InverseLerp(Min, Max, 1f), bar.y + 4f * k, Mathf.Max(1f, 2f * k), h - 8f * k),
+                // tick at the default: the value as tuned
+                Fill(new Rect(bar.x + bar.width * Mathf.InverseLerp(r.min, r.max, r.reset), bar.y + 4f * k, Mathf.Max(1f, 2f * k), h - 8f * k),
                      new Color(1f, 1f, 1f, 0.35f));
-                float picked = GUI.HorizontalSlider(new Rect(bar.x, bar.y + h * 0.5f - 6f * k, bar.width, 12f * k), v, Min, Max);
-                if (!Mathf.Approximately(picked, v)) Set(i, Mathf.Round(picked / Step) * Step);
-                GUI.Label(new Rect(bar.xMax + 14f * k, y, 70f * k, h), "x" + Get(i).ToString("0.00"), value);
-                if (GUI.Button(new Rect(x + inner - 70f * k, y + 4f * k, 70f * k, h - 8f * k), "1.00", reset)) Set(i, 1f);
+                float picked = GUI.HorizontalSlider(new Rect(bar.x, bar.y + h * 0.5f - 6f * k, bar.width, 12f * k), v, r.min, r.max);
+                if (!Mathf.Approximately(picked, v)) Set(r, picked);
+                GUI.Label(new Rect(bar.xMax + 14f * k, y, 90f * k, h), r.unitPrefix + r.value.ToString(r.format) + r.unitSuffix, value);
+                if (GUI.Button(new Rect(x + inner - 70f * k, y + 4f * k, 70f * k, h - 8f * k), r.reset.ToString(r.format), reset)) Set(r, r.reset);
                 y += rowH;
             }
 
-            GUI.Label(new Rect(x, y + 4f * k, inner, 30f * k), "Тяни ползунок мышью. Кнопка 1.00 — вернуть как было. Tab — закрыть.", hint);
+            GUI.Label(new Rect(x, y + 4f * k, inner, 30f * k), "Тяни ползунок мышью. Кнопка справа — вернуть как было. Tab — закрыть.", hint);
         }
 
         void Styles(float k)

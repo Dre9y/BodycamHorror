@@ -101,6 +101,17 @@ namespace BodycamHorror.Player
 
         float StreakFactor => Mathf.Lerp(1f, streakMultiplier, Mathf.Clamp01(streak / Mathf.Max(streakTime, 0.01f)));
 
+        /// <summary>Something frightening that is not an Infected or a MonsterBrain (the manthing, for one).</summary>
+        public interface IFearSource
+        {
+            /// <summary>How frightening it is right now for eyes at <paramref name="eye"/>, 0..1.</summary>
+            float FearFor(Vector3 eye);
+        }
+
+        static readonly System.Collections.Generic.List<IFearSource> fearSources = new System.Collections.Generic.List<IFearSource>();
+        public static void Register(IFearSource s) { if (s != null && !fearSources.Contains(s)) fearSources.Add(s); }
+        public static void Unregister(IFearSource s) => fearSources.Remove(s);
+
         void Update()
         {
             float dt = Time.deltaTime;
@@ -160,6 +171,13 @@ namespace BodycamHorror.Player
                 bool hunting = m.State == MonsterState.Stalk || m.State == MonsterState.Peek
                                || m.State == MonsterState.Charge || m.State == MonsterState.Attack;
                 float t = ThreatFrom(eye, m.transform, m.ChestPosition, hunting);
+                sum += t;
+                if (t > worst) worst = t;
+            }
+
+            for (int i = 0; i < fearSources.Count; i++)
+            {
+                float t = fearSources[i] != null ? Mathf.Clamp01(fearSources[i].FearFor(eye)) : 0f;
                 sum += t;
                 if (t > worst) worst = t;
             }

@@ -105,7 +105,7 @@ namespace BodycamHorror.EditorTools
             }
 
             // single sounds, as they are
-            foreach (string name in new[] { "drip_single", "scrape_stone", "scrape_pipe", "scrape_lever", "bang_pipe_concrete",
+            foreach (string name in new[] { "scrape_stone", "scrape_pipe", "scrape_lever", "bang_pipe_concrete",
                                             "creak_metallic_groan", "creak_crank_groan", "creak_bending_metal", "creak_moaning_chair", "creak_truck_squeaks" })
             {
                 var data = Mono(name, out int rate);

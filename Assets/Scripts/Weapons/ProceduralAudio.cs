@@ -114,6 +114,63 @@ namespace BodycamHorror.Weapons
                          0.55f, 18f, 0.95f);
         }
 
+        /// <summary>A jump-scare sting: a hit of noise and a sub boom right on the attack, a cluster of
+        /// screeching detuned high voices that bends upward and shudders, and a dissonant low drone
+        /// under it, all dying away over a couple of seconds. Meant to be played loud and flat (2D).</summary>
+        public static AudioClip ScareStinger()
+        {
+            const float length = 2.8f;
+            int n = (int)(Rate * length);
+            var d = new float[n];
+            var rng = new System.Random(666);
+            float[] high = { 1180f, 1243f, 1318f, 1402f, 1489f, 1571f };   // a tight, ugly cluster
+            float[] low = { 98f, 103.8f, 146.8f, 155.6f };                 // tritones and seconds
+            var hp = new float[high.Length];
+            var lpPh = new float[low.Length];
+            float subPhase = 0f, hitLp = 0f, screechLp = 0f, wobble = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+
+                // the hit: a burst of dark noise and a falling sub boom
+                hitLp += (noise - hitLp) * 0.18f;
+                float hit = hitLp * Mathf.Exp(-t * 14f) * 1.6f;
+                subPhase += Mathf.Lerp(62f, 28f, Mathf.Clamp01(t / 0.9f)) / Rate;
+                float sub = Mathf.Sin(2f * Mathf.PI * subPhase) * Mathf.Exp(-t * 2.2f) * 1.3f;
+
+                // the screech: saws sliding up a little, rough tremolo, fading out
+                wobble += (noise - wobble) * 0.0015f;
+                float bend = 1f + 0.12f * Mathf.Clamp01(t / 1.2f) + wobble * 0.05f;
+                float screech = 0f;
+                for (int v = 0; v < high.Length; v++)
+                {
+                    hp[v] += high[v] * bend * (1f + 0.004f * v) / Rate;
+                    hp[v] -= Mathf.Floor(hp[v]);
+                    screech += hp[v] * 2f - 1f;
+                }
+                screech /= high.Length;
+                screech = screech * 0.75f + screech * noise * 0.35f;            // grit
+                screechLp += (screech - screechLp) * 0.45f;
+                float trem = 0.65f + 0.35f * Mathf.Sin(2f * Mathf.PI * 14f * t);
+                float screechEnv = Mathf.Clamp01(t / 0.015f) * Mathf.Exp(-t * 1.1f);
+
+                // the drone under it
+                float drone = 0f;
+                for (int v = 0; v < low.Length; v++)
+                {
+                    lpPh[v] += low[v] / Rate;
+                    lpPh[v] -= Mathf.Floor(lpPh[v]);
+                    drone += lpPh[v] * 2f - 1f;
+                }
+                drone = drone / low.Length * Mathf.Clamp01(t / 0.05f) * Mathf.Exp(-t * 0.9f) * 0.6f;
+
+                float tail = Mathf.Clamp01((length - t) / 0.4f);
+                d[i] = (hit + sub + screechLp * screechEnv * trem + drone) * tail;
+            }
+            return Finish("ScareStinger", d, 1f, 2.4f);
+        }
+
         /// <summary>Short effort grunt (attack swing, getting up).</summary>
         public static AudioClip InfectedGrunt(int seed) =>
             Voice("InfectedGrunt", 0.35f, seed + 23, p => Mathf.Lerp(150f, 85f, p), 0.6f, 0f, 0.85f);

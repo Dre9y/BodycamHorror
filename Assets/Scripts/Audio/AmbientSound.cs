@@ -64,6 +64,8 @@ namespace BodycamHorror.Audio
 
         void Start()
         {
+            // a recording deleted from the project leaves a hole in a scene's list: skip it
+            if (clips != null) clips = System.Array.FindAll(clips, c => c);
             if (clips == null || clips.Length == 0) { enabled = false; return; }
             if (mode == Mode.Loop)
             {

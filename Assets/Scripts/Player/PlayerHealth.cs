@@ -1,21 +1,28 @@
 using System;
 using BodycamHorror.Combat;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace BodycamHorror.Player
 {
     /// <summary>
-    /// Player hit points. Hits knock the bodycam, spike stress and make the flashlight flicker.
-    /// Regenerates slowly after a calm. At zero the player is put back at the start (prototype).
+    /// Hidden two-hit health. The first blow wounds the player (concussion: double vision, a ring in the ears)
+    /// and starts a timer; another blow before it runs out kills. Left alone for the whole timer, the player
+    /// recovers fully. No numbers on screen: the state is read only from the effects.
+    /// Hits knock the bodycam, spike stress and make the flashlight flicker. At death the player is put back at
+    /// the start (prototype).
     /// </summary>
     public class PlayerHealth : MonoBehaviour, IDamageable
     {
-        public float maxHealth = 100f;
-        [Tooltip("Calm time (s) after a hit before health comes back.")]
-        public float regenDelay = 6f;
-        public float regenRate = 6f;
-        [Tooltip("Stress added per point of damage.")]
-        public float stressPerDamage = 0.012f;
+        [Tooltip("Blows it takes to die.")]
+        [Min(1)] public int hitsToDie = 2;
+        [Tooltip("Time (s) without being hit after which the wounds are gone.")]
+        public float recoveryTime = 12f;
+        [Tooltip("After a blow the player cannot be hurt for this long (s): time to see the double vision and get away. Also makes a multi-frame attack or a steam tick count as one blow.")]
+        public float invulnerableTime = 2f;
+        [Tooltip("Stress added per blow.")]
+        public float stressPerHit = 0.3f;
+        [Tooltip("Camera shake per point of the blow's damage (the hit's weight still reads in the camera).")]
         public float traumaPerDamage = 0.02f;
 
         [Header("References (found automatically)")]
@@ -23,16 +30,28 @@ namespace BodycamHorror.Player
         public BodycamCameraRig rig;
         public PlayerStress stress;
         public BodycamFlashlight flashlight;
+        [Tooltip("The concussion look on the camera; added to the lens camera if missing.")]
+        public ConcussionEffect concussion;
 
-        [Header("Debug (read only)")]
-        [SerializeField] float current;
+        [Header("Debug")]
+        [Tooltip("Editor / development builds: this key hits the player (from the front).")]
+        public Key debugHitKey = Key.F6;
+        [SerializeField] int hitsTaken;
+        [SerializeField] float woundTimeLeft;
 
-        public float Health => current;
-        public float Normalized => current / Mathf.Max(maxHealth, 1f);
-        public bool IsDead => current <= 0f;
+        /// <summary>Blows left before death.</summary>
+        public int Health => Mathf.Max(0, hitsToDie - hitsTaken);
+        public float Normalized => Health / (float)Mathf.Max(hitsToDie, 1);
+        public bool IsDead => hitsTaken >= hitsToDie;
+        public bool IsWounded => hitsTaken > 0 && !IsDead;
+        /// <summary>Seconds until the wounds heal (0 when not wounded).</summary>
+        public float WoundTimeLeft => woundTimeLeft;
         public float LastHitTime { get; private set; } = -100f;
+        /// <summary>True for a short while after a blow: further hits do nothing.</summary>
+        public bool IsInvulnerable => Time.time - LastHitTime < invulnerableTime;
 
         public event Action<DamageInfo> Damaged;
+        public event Action Recovered;
         public event Action Died;
 
         Vector3 spawnPos;
@@ -40,11 +59,17 @@ namespace BodycamHorror.Player
 
         void Awake()
         {
-            current = maxHealth;
             if (!player) player = GetComponent<BodycamPlayerController>();
             if (!rig) rig = GetComponentInChildren<BodycamCameraRig>();
             if (!stress) stress = GetComponent<PlayerStress>();
             if (!flashlight) flashlight = GetComponentInChildren<BodycamFlashlight>();
+            if (!concussion) concussion = GetComponentInChildren<ConcussionEffect>(true);
+            if (!concussion)
+            {
+                Camera cam = rig && rig.cam ? rig.cam : GetComponentInChildren<Camera>();
+                if (cam) concussion = cam.gameObject.AddComponent<ConcussionEffect>();
+            }
+            if (concussion) concussion.health = this;
             spawnPos = transform.position;
             spawnYaw = transform.eulerAngles.y;
         }
@@ -52,8 +77,10 @@ namespace BodycamHorror.Player
         public void TakeDamage(in DamageInfo info)
         {
             if (IsDead || info.amount <= 0f) return;
-            current = Mathf.Max(0f, current - info.amount);
+            if (IsInvulnerable) return;   // just hit: the same blow still landing, or a moment to get away
             LastHitTime = Time.time;
+            hitsTaken++;
+            woundTimeLeft = recoveryTime;
 
             if (rig)
             {
@@ -62,7 +89,7 @@ namespace BodycamHorror.Player
                 // shove the view along the blow: pitch from front/back, roll from the side
                 rig.AddKick(local * 0.6f, new Vector3(-local.z * 160f, local.x * 90f, -local.x * 220f));
             }
-            if (stress) stress.Add(info.amount * stressPerDamage);
+            if (stress) stress.Add(stressPerHit);
             if (flashlight) flashlight.Flicker(0.35f);
 
             Damaged?.Invoke(info);
@@ -74,13 +101,33 @@ namespace BodycamHorror.Player
             Died?.Invoke();
             Debug.Log("[PlayerHealth] Player died - respawning at start.");
             if (player) player.Teleport(spawnPos, spawnYaw);
-            current = maxHealth;
+            hitsTaken = 0;
+            woundTimeLeft = 0f;
         }
 
         void Update()
         {
-            if (!IsDead && current < maxHealth && Time.time - LastHitTime > regenDelay)
-                current = Mathf.Min(maxHealth, current + regenRate * Time.deltaTime);
+            if (IsWounded)
+            {
+                woundTimeLeft -= Time.deltaTime;
+                if (woundTimeLeft <= 0f)
+                {
+                    woundTimeLeft = 0f;
+                    hitsTaken = 0;
+                    Recovered?.Invoke();
+                }
+            }
+
+            var kb = Keyboard.current;
+            if (Debug.isDebugBuild && kb != null && debugHitKey != Key.None && kb[debugHitKey].wasPressedThisFrame)
+            {
+                Vector3 fwd = rig ? rig.transform.forward : transform.forward;
+                TakeDamage(new DamageInfo
+                {
+                    amount = 25f, point = transform.position + Vector3.up * 1.5f, normal = fwd, direction = -fwd,
+                    source = gameObject, melee = true
+                });
+            }
         }
     }
 }

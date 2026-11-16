@@ -64,11 +64,12 @@ namespace BodycamHorror.Enemies
         public float biteRange = 0.8f;
         [Tooltip("The bite lands if the feet are still this close when it snaps.")]
         public float biteReach = 1.1f;
-        [Tooltip("It rears back this long before it snaps.")]
-        public float biteWindup = 0.28f;
+        [Tooltip("It rears back (and trembles) this long before it snaps.")]
+        public float biteWindup = 0.42f;
+        [Tooltip("Seconds from the start of the snap to the teeth reaching the legs: the hit lands then, not as it starts.")]
+        public float biteContact = 0.1f;
         [Tooltip("Seconds from the snap until it can move again.")]
         public float biteRecover = 0.45f;
-        public float biteCooldown = 0.6f;
         public float biteDamage = 9f;
         [Tooltip("The little lunge forward as it snaps (m/s).")]
         public float biteLunge = 3f;
@@ -90,6 +91,22 @@ namespace BodycamHorror.Enemies
         public float hitRadius = 0.9f;
         [Tooltip("Seconds it needs to get its legs under it after a leap.")]
         public float recoverTime = 0.9f;
+
+        [Header("Prowl (between attacks it scuttles round the feet)")]
+        [Tooltip("Seconds between attacks, bite or leap (random in this range). Meanwhile it prowls.")]
+        public Vector2 attackPause = new Vector2(2.5f, 4.5f);
+        [Tooltip("Extra pause after a bite that landed.")]
+        public float pauseAfterHit = 1.5f;
+        [Tooltip("How far from the feet it circles (m, random in this range).")]
+        public Vector2 prowlRadius = new Vector2(0.9f, 1.9f);
+        [Tooltip("How fast it circles round the player (degrees per second).")]
+        public float prowlTurnRate = 120f;
+        [Tooltip("Its speed while prowling, as a share of the chase speed.")]
+        [Range(0.2f, 1f)] public float prowlSpeedShare = 0.7f;
+        [Tooltip("Seconds between changes of mind: turning back the other way, closer or further.")]
+        public Vector2 prowlSwitch = new Vector2(0.7f, 2f);
+        [Tooltip("Chance at each change of mind that it darts right in under the feet (a feint, no bite).")]
+        [Range(0f, 1f)] public float feintChance = 0.3f;
 
         [Header("Fear")]
         [Range(0f, 1f)] public float stressOnShriek = 0.35f;
@@ -115,7 +132,9 @@ namespace BodycamHorror.Enemies
         float health, stateTimer, lastSeenTime = -100f, leapCooldownTimer, leapThinkTimer, biteCooldownTimer, sobTimer, skitterTimer, pathTimer, moveBlend;
         Vector3 lastSeenPos, leapDir, biteDir, modelBasePos;
         Quaternion modelBaseRot;
-        bool leapHit, biteSnapped, deathFlipped;
+        bool leapHit, biteSnapped, biteContacted, biteLanded, deathFlipped;
+        bool prowling;
+        float prowlAngle, prowlDir = 1f, prowlSwitchTimer, prowlRadiusNow, prowlRadiusTarget;
 
         Rigidbody rb;
         SphereCollider body;
@@ -263,7 +282,7 @@ namespace BodycamHorror.Enemies
                     float d = Flat(TargetPoint() - transform.position).magnitude;
                     if (sees && biteCooldownTimer <= 0f && d <= biteRange && Grounded()) { StartBite(); break; }
                     // the leap is the rare one: ready, in range, and then only now and then
-                    if (sees && leapCooldownTimer <= 0f && leapThinkTimer <= 0f && d <= leapRange && d >= leapMinRange && Grounded())
+                    if (sees && biteCooldownTimer <= 0f && leapCooldownTimer <= 0f && leapThinkTimer <= 0f && d <= leapRange && d >= leapMinRange && Grounded())
                     {
                         leapThinkTimer = leapThinkInterval;
                         if (Random.value < leapChance) SetState(State.Windup);
@@ -272,7 +291,12 @@ namespace BodycamHorror.Enemies
 
                 case State.Bite:
                     if (!biteSnapped && stateTimer >= biteWindup) Snap();
-                    if (stateTimer >= biteWindup + biteRecover) { biteCooldownTimer = biteCooldown; SetState(State.Chase); }
+                    if (biteSnapped && !biteContacted && stateTimer >= biteWindup + biteContact) BiteContact();
+                    if (stateTimer >= biteWindup + biteRecover)
+                    {
+                        biteCooldownTimer = NextAttackPause() + (biteLanded ? pauseAfterHit : 0f);
+                        SetState(State.Chase);
+                    }
                     break;
 
                 case State.Windup:
@@ -394,13 +418,23 @@ namespace BodycamHorror.Enemies
                     // rears and turns to the legs, snaps forward a hand's width, then holds still
                     if (!biteSnapped) { face = Flat(player.transform.position - rb.position); biteDir = face.sqrMagnitude > 0.001f ? face.normalized : transform.forward; }
                     else face = biteDir;
-                    want = biteSnapped && stateTimer < biteWindup + 0.12f ? biteDir * biteLunge : Vector3.zero;
+                    want = biteSnapped && stateTimer < biteWindup + biteContact + 0.04f ? biteDir * biteLunge : Vector3.zero;
                     break;
                 case State.Chase:
-                    Vector3 goal = Time.time - lastSeenTime < 0.3f ? player.transform.position : lastSeenPos;
+                    bool fresh = Time.time - lastSeenTime < 0.3f;
+                    Vector3 goal = fresh ? player.transform.position : lastSeenPos;
+                    float pace = 1f;
+                    // between attacks: scuttle round the feet instead of sitting on them
+                    if (fresh && biteCooldownTimer > 0f && Flat(player.transform.position - rb.position).magnitude < prowlRadius.y * 2.5f)
+                    {
+                        goal = ProwlPoint(dt);
+                        pace = prowlSpeedShare;
+                    }
+                    else prowling = false;
                     Vector3 dir = Steer(goal);
-                    float slow = Flat(goal - rb.position).magnitude < 0.6f ? 0f : 1f;   // at the last seen spot: stop and listen
-                    want = dir * speed * slow;
+                    // at the last seen spot: stop and listen (prowling, the point keeps moving on)
+                    float slow = Flat(goal - rb.position).magnitude < (prowling ? 0.15f : 0.6f) ? 0f : 1f;
+                    want = dir * speed * pace * slow;
                     if (dir.sqrMagnitude > 0.01f) face = dir;
                     break;
                 case State.Leap:
@@ -415,6 +449,37 @@ namespace BodycamHorror.Enemies
             }
             if (face.sqrMagnitude > 0.001f)
                 rb.MoveRotation(Quaternion.RotateTowards(rb.rotation, Quaternion.LookRotation(Flat(face).normalized), turnSpeed * dt));
+        }
+
+        float NextAttackPause() => Random.Range(attackPause.x, Mathf.Max(attackPause.x, attackPause.y));
+
+        /// <summary>A point that circles the player's feet: it changes direction and distance now and then,
+        /// and sometimes darts right in under the feet without biting.</summary>
+        Vector3 ProwlPoint(float dt)
+        {
+            Vector3 c = player.transform.position;
+            if (!prowling)
+            {
+                prowling = true;
+                Vector3 off = Flat(rb.position - c);
+                prowlAngle = Mathf.Atan2(off.x, off.z) * Mathf.Rad2Deg;   // start from where it is now
+                prowlDir = Random.value < 0.5f ? -1f : 1f;
+                prowlRadiusNow = Mathf.Clamp(off.magnitude, prowlRadius.x, prowlRadius.y);
+                prowlRadiusTarget = Random.Range(prowlRadius.x, prowlRadius.y);
+                prowlSwitchTimer = Random.Range(prowlSwitch.x, prowlSwitch.y);
+            }
+            prowlSwitchTimer -= dt;
+            if (prowlSwitchTimer <= 0f)
+            {
+                prowlSwitchTimer = Random.Range(prowlSwitch.x, prowlSwitch.y);
+                if (Random.value < 0.6f) prowlDir = -prowlDir;
+                prowlRadiusTarget = Random.value < feintChance ? 0.45f : Random.Range(prowlRadius.x, prowlRadius.y);
+            }
+            prowlRadiusNow = Mathf.MoveTowards(prowlRadiusNow, prowlRadiusTarget, 2.5f * dt);
+            prowlAngle += prowlDir * prowlTurnRate * dt;
+            Vector3 p = c + Quaternion.Euler(0f, prowlAngle, 0f) * Vector3.forward * prowlRadiusNow;
+            p.y = rb.position.y;
+            return p;
         }
 
         /// <summary>Which way to run: along the NavMesh if the scene has one, otherwise straight on, around walls.</summary>
@@ -484,6 +549,7 @@ namespace BodycamHorror.Enemies
             rb.linearVelocity = leapDir * leapSpeed + Vector3.up * vy;
             leapHit = false;
             leapCooldownTimer = leapCooldown;
+            biteCooldownTimer = recoverTime + NextAttackPause();   // the leap counts as its attack too
             if (shriek) { voice.pitch = shriekPitch * 1.25f; voice.PlayOneShot(shriek, 0.7f); }
             SetState(State.Leap);
         }
@@ -491,21 +557,32 @@ namespace BodycamHorror.Enemies
         void StartBite()
         {
             biteSnapped = false;
+            biteContacted = false;
+            biteLanded = false;
+            prowling = false;
             Vector3 to = Flat(player.transform.position - rb.position);
             biteDir = to.sqrMagnitude > 0.001f ? to.normalized : transform.forward;
             SetState(State.Bite);
         }
 
-        /// <summary>The ground attack: a snap at the legs. Small, quick, and it keeps coming.</summary>
+        /// <summary>The ground attack starts: the head jabs at the legs. The bite itself lands a moment later
+        /// (BiteContact), when the teeth get there, so a step back in that moment still saves you.</summary>
         void Snap()
         {
             biteSnapped = true;
             feet.pitch = Random.Range(0.6f, 0.75f);
             feet.PlayOneShot(skitterClips[Random.Range(0, skitterClips.Length)], 1f);
             if (shriek) { voice.pitch = shriekPitch * Random.Range(1.6f, 1.8f); voice.PlayOneShot(shriek, 0.3f); }
+        }
+
+        /// <summary>The teeth reach the legs: the hit, if the feet are still there.</summary>
+        void BiteContact()
+        {
+            biteContacted = true;
             if (!player) return;
             Vector3 feetPos = player.transform.position;
             if (Flat(feetPos - rb.position).magnitude > biteReach) return;   // stepped back in time
+            biteLanded = true;
             playerDamageable?.TakeDamage(new DamageInfo
             {
                 amount = biteDamage, point = feetPos + Vector3.up * 0.3f, normal = -biteDir, direction = biteDir,
@@ -571,12 +648,27 @@ namespace BodycamHorror.Enemies
             {
                 Vector3 shake = state == State.Windup ? Random.insideUnitSphere * 0.015f : Vector3.zero;
                 float crouch = state == State.Windup ? -0.05f * Mathf.Clamp01(stateTimer / windupTime) : 0f;
-                // the bite: rears back and up, then the head jabs forward and down
+                // the bite: rears well back and up, trembling harder as it sets, then the head jabs forward and
+                // down, reaching the legs right when the bite lands (biteContact), holds there, and pulls back
                 Vector3 jab = Vector3.zero;
                 if (state == State.Bite)
                 {
-                    if (!biteSnapped) { float k = Mathf.Clamp01(stateTimer / biteWindup); jab = new Vector3(0f, 0.04f, -0.06f) * k; }
-                    else { float k = Mathf.Clamp01((stateTimer - biteWindup) / 0.08f) * (1f - Mathf.Clamp01((stateTimer - biteWindup - 0.12f) / 0.25f)); jab = new Vector3(0f, -0.03f, 0.1f) * k; }
+                    if (!biteSnapped)
+                    {
+                        float k = Mathf.Clamp01(stateTimer / biteWindup);
+                        k = 1f - (1f - k) * (1f - k);   // eases into the full rear
+                        jab = new Vector3(0f, 0.09f, -0.13f) * k;
+                        shake = Random.insideUnitSphere * (0.012f * k * k);
+                    }
+                    else
+                    {
+                        float since = stateTimer - biteWindup;
+                        float reach = Mathf.Max(biteContact, 0.02f);
+                        float k = since < reach
+                            ? Mathf.Lerp(-1f, 1f, since / reach)                                      // from the rear to the full jab
+                            : 1f - Mathf.Clamp01((since - reach - 0.08f) / 0.25f);                    // hold, then pull back
+                        jab = k >= 0f ? new Vector3(0f, -0.04f, 0.14f) * k : new Vector3(0f, 0.09f, -0.13f) * -k;
+                    }
                 }
                 model.localPosition = modelBasePos + shake + Vector3.up * crouch + jab;
             }

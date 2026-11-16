@@ -12306,6 +12306,7 @@ MonoBehaviour:
   sharpDistance: 15
   blurFalloff: 0.8
   blurRadius: 1.2
+  farBlur: 0.006
   focusSpeed: 7
   barrel: 0.42
   barrelScale: 1.04
@@ -38615,6 +38616,7 @@ GameObject:
   - component: {fileID: 904303002}
   - component: {fileID: 904303003}
   - component: {fileID: 904303004}
+  - component: {fileID: 904303005}
   m_Layer: 2
   m_Name: Player
   m_TagString: Untagged
@@ -38852,6 +38854,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Environment.ChainPusher
   radius: 0.35
   height: 1.8
+--- !u!114 &904303005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 904302998}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b28d9bd3f86234845afb05a5cf0c2d1a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.PlayerHealth
+  hitsToDie: 2
+  recoveryTime: 12
+  hitGrace: 0.35
+  stressPerHit: 0.3
+  traumaPerDamage: 0.02
+  player: {fileID: 0}
+  rig: {fileID: 0}
+  stress: {fileID: 0}
+  flashlight: {fileID: 0}
+  concussion: {fileID: 0}
+  debugHitKey: 99
+  hitsTaken: 0
+  woundTimeLeft: 0
 --- !u!1 &904393312
 GameObject:
   m_ObjectHideFlags: 0

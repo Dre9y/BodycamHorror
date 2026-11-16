@@ -11,8 +11,8 @@ namespace BodycamHorror.EditorTools
     /// <summary>
     /// Builds Assets/Scenes/JunctionScare.unity from the lighting test scene: a long corridor ending in a
     /// T. To the right of the T a short dead end, to the left a corridor running off into the dark. A
-    /// third of the way before the T the player crosses a trigger, and a monster bursts out of the dead
-    /// end and sprints across the T to the left, screaming, and is gone (RunnerScare).
+    /// quarter of the way before the T the player crosses a trigger, and the crying head shrieks and
+    /// scuttles out of the dead end, up the T's far wall and away over the ceiling to the left (RunnerScare).
     /// Menu: BodycamHorror > Build Junction Scare Scene.
     /// </summary>
     public static class JunctionScareSceneBuilder
@@ -28,7 +28,7 @@ namespace BodycamHorror.EditorTools
         const float CrossWidth = 2.6f;      // the T's crossing corridor
         const float RightStub = 3.6f;       // how far the dead end reaches right of the corridor's middle
         const float LeftReach = 18f;        // how far the left corridor runs before its end wall
-        const float TriggerZ = 13f;         // a third of the way short of the T, as in the sketch
+        const float TriggerZ = 15f;         // a quarter of the way short of the T
         const float PlayerZ = 1f;
 
         [MenuItem("BodycamHorror/Build Junction Scare Scene")]
@@ -119,26 +119,93 @@ namespace BodycamHorror.EditorTools
             var go = new GameObject("RunnerScare");
             go.transform.position = new Vector3(0f, 1.5f, TriggerZ);
             var scare = go.AddComponent<RunnerScare>();
+            ConfigureHeadCrawl(scare, junctionLamp);
+        }
+
+        /// <summary>
+        /// The crying head as the scare: it scuttles out of the dead end along the floor at the foot of the
+        /// T's far wall, climbs that wall up and to the left in a curve, goes over onto the ceiling and away
+        /// along it into the dark left corridor. Path points are where it touches, normals the surface's up.
+        /// </summary>
+        static void ConfigureHeadCrawl(RunnerScare scare, Transform junctionLamp)
+        {
+            scare.transform.position = new Vector3(0f, 1.5f, TriggerZ);
             scare.triggerSize = new Vector3(HalfWidth * 2f, 3f, 0.8f);
 
-            float crossZ = Length + CrossWidth * 0.5f;
-            scare.from = new Vector3(RightStub - 0.5f, 0f, crossZ);     // pressed into the dead end, out of sight behind the corner
-            scare.to = new Vector3(-LeftReach + 1.5f, 0f, crossZ);      // far down the dark left corridor
-            scare.speed = 9.5f;
+            float farWall = Length + CrossWidth;   // the far wall's face
+            Vector3 up = Vector3.up, outOfWall = Vector3.back, down = Vector3.down;
+            Vector3 floorToWall = (up + outOfWall).normalized, wallToCeiling = (down + outOfWall).normalized;
+            scare.path = new[]
+            {
+                // the floor: out of the dead end, hugging the far wall
+                new Vector3(RightStub - 0.4f, 0f, farWall - 0.9f),
+                new Vector3(2.0f, 0f, farWall - 0.55f),
+                new Vector3(1.0f, 0f, farWall - 0.25f),
+                // round the foot of the wall and up it, curving to the left
+                new Vector3(0.75f, 0.2f, farWall - 0.05f),
+                new Vector3(0.5f, 0.75f, farWall),
+                new Vector3(0.15f, 1.6f, farWall),
+                new Vector3(-0.3f, 2.35f, farWall),
+                // over the top onto the ceiling
+                new Vector3(-0.6f, Height - 0.1f, farWall - 0.15f),
+                new Vector3(-1.1f, Height, farWall - 0.7f),
+                // along the ceiling, away down the dark left corridor
+                new Vector3(-2.4f, Height, farWall - 1.2f),
+                new Vector3(-4.5f, Height, farWall - 1.3f),
+                new Vector3(-10f, Height, farWall - 1.3f),
+            };
+            scare.normals = new[]
+            {
+                up, up, up,
+                floorToWall, outOfWall, outOfWall, outOfWall,
+                wallToCeiling, down,
+                down, down, down,
+            };
+            scare.from = scare.path[0];
+            scare.to = scare.path[scare.path.Length - 1];
+            scare.speed = 5.5f;
+            scare.alignSharpness = 10f;
+            scare.delay = 0.05f;
 
-            scare.modelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Zombie/Slasher/ZombieSlasher.fbx");
-            scare.modelMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Zombie/Slasher/ZombieSlasher.mat");
-            scare.modelScale = 0.7f;
-            foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath("Assets/Zombie_Animations/Animations/Zombie_Sprint_01_Forward_InPlace.fbx"))
-                if (asset is AnimationClip clip && !clip.name.StartsWith("__preview__")) { scare.runClip = clip; break; }
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Enemies/CryingHead.prefab");
+            var head = prefab ? prefab.GetComponent<CryingHead>() : null;
+            scare.modelPrefab = prefab;
+            scare.modelMaterial = null;           // the prefab's own
+            scare.modelScale = 1.3f;              // a little bigger than the walking one, so it reads from down the corridor
+            scare.stripBehaviours = true;
+            scare.runClip = head ? head.moveClip : null;
+            scare.animationSpeed = head ? scare.speed / Mathf.Max(head.strideSpeed * scare.modelScale, 0.1f) : 2f;
 
             scare.scream = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_scream.wav");
-            var steps = new System.Collections.Generic.List<AudioClip>();
-            foreach (string guid in AssetDatabase.FindAssets("t:AudioClip", new[] { "Assets/Resources/Audio/Footsteps" }))
-                steps.Add(AssetDatabase.LoadAssetAtPath<AudioClip>(AssetDatabase.GUIDToAssetPath(guid)));
-            scare.steps = steps.ToArray();
+            scare.screamVolume = 1f;
+            scare.screamPitch = head ? head.shriekPitch : 1.55f;
+            scare.steps = new AudioClip[0];
+            scare.proceduralSkitter = true;       // fingers and tendrils on tile and plaster
+            scare.stepInterval = 0.07f;
+            scare.stepPitch = 1f;
+            scare.stepVolume = 0.7f;
             if (junctionLamp) scare.flickerLight = junctionLamp.GetComponentInChildren<Light>();
             EditorUtility.SetDirty(scare);
+            EditorUtility.SetDirty(scare.transform);
+        }
+
+        /// <summary>Puts the crying head into the scene as it is now (no rebuild): reconfigures its RunnerScare.</summary>
+        [MenuItem("BodycamHorror/Junction Scare: Use Crying Head")]
+        public static void UseCryingHead()
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var scare = Object.FindAnyObjectByType<RunnerScare>();
+            if (!scare)
+            {
+                scare = new GameObject("RunnerScare").AddComponent<RunnerScare>();
+                Undo.RegisterCreatedObjectUndo(scare.gameObject, "Crying head scare");
+            }
+            var lamp = GameObject.Find("Lamps/Lamp_Junction");
+            ConfigureHeadCrawl(scare, lamp ? lamp.transform : null);
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log("Junction scare now uses the crying head: " + ScenePath);
         }
 
         /// <summary>The same sound of the place as the lighting test: a low bed, the lamps humming, water

@@ -318,6 +318,10 @@ namespace BodycamHorror.Player
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
 
+            // tuned live from the debug panel (Tab); everything that reads these follows
+            walkSpeed = BodycamHorror.UI.DebugMenu.WalkSpeed;
+            sprintSpeed = Mathf.Max(BodycamHorror.UI.DebugMenu.SprintSpeed, walkSpeed + 0.5f);
+
             ReadInput();
             HandleCursor();
             Look(dt);

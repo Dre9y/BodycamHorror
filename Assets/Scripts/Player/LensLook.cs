@@ -8,7 +8,8 @@ namespace BodycamHorror.Player
     /// <summary>
     /// How the lens sees. The picture sits in a dark rounded frame; it is sharp up to a distance (set in the Tab
     /// debug menu) and goes out of focus beyond it. Aiming closes the frame a little, like squinting.
-    /// The frame is drawn by the Lens Vignette full-screen renderer feature, the blur by a volume of its own.
+    /// The frame is drawn by the Lens Vignette full-screen renderer feature, the focus blur by the Lens Focus one
+    /// (before post-processing, with the depth); the glass effects by a volume of its own.
     /// </summary>
     [RequireComponent(typeof(Camera))]
     public class LensLook : MonoBehaviour
@@ -37,8 +38,10 @@ namespace BodycamHorror.Player
         public float sharpDistance = 15f;
         [Tooltip("Over how far past the sharp distance the blur comes in fully, as a share of that distance.")]
         [Range(0.1f, 3f)] public float blurFalloff = 0.8f;
-        [Tooltip("How soft the far plane gets at full blur.")]
-        [Range(0.5f, 1.5f)] public float blurRadius = 1.2f;
+        [Tooltip("Not used any more (was the URP depth of field's radius); see farBlur.")]
+        [HideInInspector] public float blurRadius = 1.2f;
+        [Tooltip("How soft the far plane gets at full blur: the blur's radius as a share of the screen height.")]
+        [Range(0f, 0.02f)] public float farBlur = 0.006f;
         [Tooltip("How quickly the eye adjusts to the aim (the frame squint).")]
         public float focusSpeed = 7f;
 
@@ -62,6 +65,7 @@ namespace BodycamHorror.Player
         static readonly int FrameId = Shader.PropertyToID("_LensFrame");
         static readonly int ShadeId = Shader.PropertyToID("_LensShade");
         static readonly int BlurId = Shader.PropertyToID("_LensBlur");
+        static readonly int FocusId = Shader.PropertyToID("_LensFocus");
 
         Volume volume;
         VolumeProfile profile;
@@ -79,9 +83,11 @@ namespace BodycamHorror.Player
 
             profile = ScriptableObject.CreateInstance<VolumeProfile>();
             profile.name = "LensLook (runtime)";
+            // URP's own depth of field off: its half-resolution Gaussian left hard, streaky edges round the
+            // far patches. The focus is drawn by the Lens Focus full-screen feature instead (far only: the
+            // hands and the gun right in front stay sharp).
             focus = profile.Add<DepthOfField>(true);
-            focus.mode.value = DepthOfFieldMode.Gaussian;   // far-only: the hands and the gun right in front stay sharp
-            focus.highQualitySampling.value = true;
+            focus.mode.value = DepthOfFieldMode.Off;
             profile.Add<Vignette>(true).intensity.value = 0f;   // the scenes' own, replaced by the frame
             glass = profile.Add<LensDistortion>(false);
             fringe = profile.Add<ChromaticAberration>(false);
@@ -97,7 +103,11 @@ namespace BodycamHorror.Player
 
         void OnEnable() => Shader.SetGlobalFloat(OnId, 1f);
 
-        void OnDisable() => Shader.SetGlobalFloat(OnId, 0f);
+        void OnDisable()
+        {
+            Shader.SetGlobalFloat(OnId, 0f);
+            Shader.SetGlobalVector(FocusId, Vector4.zero);   // no player lens: the focus pass does nothing
+        }
 
         void OnDestroy()
         {
@@ -111,9 +121,7 @@ namespace BodycamHorror.Player
             aim = Mathf.Lerp(aim, want, 1f - Mathf.Exp(-focusSpeed * Time.deltaTime));
 
             float sharp = BodycamHorror.UI.DebugMenu.FocusDistance > 0f ? BodycamHorror.UI.DebugMenu.FocusDistance : sharpDistance;
-            focus.gaussianStart.value = sharp;
-            focus.gaussianEnd.value = sharp * (1f + blurFalloff);
-            focus.gaussianMaxRadius.value = blurRadius;
+            Shader.SetGlobalVector(FocusId, new Vector4(sharp, sharp * (1f + blurFalloff), farBlur, farBlur > 0f ? 1f : 0f));
             glass.intensity.Override(barrel);
             glass.scale.Override(barrelScale);
             fringe.intensity.Override(fringing);

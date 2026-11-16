@@ -91,7 +91,7 @@ namespace BodycamHorror.Player
         Light beam, spill, handFill, darkFill;
         Quaternion smoothed;
         bool smoothInit;
-        float flicker, seed, closeDim = 1f, appliedSize = -1f, appliedAngle = -1f;
+        float flicker, seed, closeDim = 1f, appliedSize = -1f, appliedAngle = -1f, appliedSpillSize = -1f, appliedSpillAngle = -1f;
         InputAction toggleAction;
         AudioSource audioSource;
         AudioClip clickClip;
@@ -160,8 +160,7 @@ namespace BodycamHorror.Player
             spill.type = LightType.Spot;
             spill.color = color;
             spill.range = spillRange;
-            spill.spotAngle = spillAngle;
-            spill.innerSpotAngle = spillAngle * 0.3f;
+            ApplySpillSize();
             spill.shadows = LightShadows.None;
 
             handFill.type = LightType.Point;
@@ -274,12 +273,25 @@ namespace BodycamHorror.Player
             beam.innerSpotAngle = Mathf.Clamp(Scaled(innerSpotAngle, size), 1f, outer);
         }
 
+        /// <summary>The outer circle: the wide, soft spill around the spot, sized by the debug panel the same way.</summary>
+        void ApplySpillSize()
+        {
+            float size = Mathf.Max(UI.DebugMenu.FlashlightOuterSize, 0.01f);
+            if (Mathf.Approximately(size, appliedSpillSize) && Mathf.Approximately(spillAngle, appliedSpillAngle)) return;
+            appliedSpillSize = size;
+            appliedSpillAngle = spillAngle;
+            float outer = Mathf.Clamp(Scaled(spillAngle, size), 6f, 170f);
+            spill.spotAngle = outer;
+            spill.innerSpotAngle = Mathf.Clamp(Scaled(spillAngle * 0.3f, size), 1f, outer);
+        }
+
         static float Scaled(float angle, float size) =>
             2f * Mathf.Atan(Mathf.Tan(Mathf.Clamp(angle, 1f, 170f) * 0.5f * Mathf.Deg2Rad) * size) * Mathf.Rad2Deg;
 
         void UpdateIntensity()
         {
             ApplyBeamSize();
+            ApplySpillSize();
             if (!IsOn) return;
             float k = 1f;
             if (flicker > 0f)

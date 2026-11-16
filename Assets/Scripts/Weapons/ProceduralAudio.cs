@@ -171,6 +171,99 @@ namespace BodycamHorror.Weapons
             return Finish("ScareStinger", d, 1f, 2.4f);
         }
 
+        /// <summary>
+        /// Sobbing: two to four broken, wavering wails, each after a few shaky, hiccuping breaths in.
+        /// A child-like voice through a mouth that is not quite right. Every seed cries differently.
+        /// </summary>
+        public static AudioClip CryingSob(int seed)
+        {
+            var rng = new System.Random(seed * 7919 + 101);
+            float R() => (float)rng.NextDouble();
+
+            // the plan: breaths in (hiccups) and wails, one after another
+            var parts = new System.Collections.Generic.List<(float start, float length, bool wail, float from, float to)>();
+            float at = 0.08f;
+            int wails = 2 + rng.Next(3);
+            for (int w = 0; w < wails; w++)
+            {
+                int hiccups = 1 + rng.Next(3);
+                for (int h = 0; h < hiccups; h++)
+                {
+                    parts.Add((at, 0.08f + 0.06f * R(), false, 0f, 0f));
+                    at += 0.13f + 0.09f * R();
+                }
+                float length = 0.6f + 1.0f * R();
+                float top = 340f + 140f * R();
+                parts.Add((at, length, true, top, top * (0.6f + 0.12f * R())));
+                at += length + 0.12f + 0.4f * R();
+            }
+
+            int n = (int)(Rate * (at + 0.25f));
+            var d = new float[n];
+            foreach (var part in parts)
+            {
+                int s0 = (int)(part.start * Rate), len = (int)(part.length * Rate);
+                float phase = 0f, jitter = 0f, b1 = 0f, l1 = 0f, b2 = 0f, l2 = 0f, b3 = 0f, l3 = 0f;
+                float catchRate = 2.4f + 1.6f * R(), catchPhase = R() * 6.28f;
+                for (int j = 0; j < len && s0 + j < n; j++)
+                {
+                    float t = j / (float)Rate, p = j / (float)len;
+                    float noise = R() * 2f - 1f;
+                    float x;
+                    if (part.wail)
+                    {
+                        // the voice: a falling, shaking pitch with breaks where the sob catches in the throat
+                        jitter += (noise - jitter) * 0.003f;
+                        float f0 = Mathf.Lerp(part.from, part.to, Mathf.Pow(p, 0.7f))
+                                   * (1f + 0.04f * Mathf.Sin(2f * Mathf.PI * 6.3f * t) + jitter * 0.08f);
+                        phase += f0 / Rate;
+                        phase -= Mathf.Floor(phase);
+                        float glottal = (phase * 2f - 1f) * 0.8f + noise * 0.3f;      // breathy
+                        // "ooh / uh": two formants (state variable band-passes)
+                        float fa = 2f * Mathf.Sin(Mathf.PI * Mathf.Lerp(780f, 520f, p) / Rate);
+                        float fb = 2f * Mathf.Sin(Mathf.PI * 1150f / Rate);
+                        float hi1 = glottal - l1 - 0.35f * b1; b1 += fa * hi1; l1 += fa * b1;
+                        float hi2 = glottal - l2 - 0.45f * b2; b2 += fb * hi2; l2 += fb * b2;
+                        float catchDip = 0.45f + 0.55f * Mathf.Pow(Mathf.Abs(Mathf.Sin(Mathf.PI * catchRate * t + catchPhase)), 0.35f);
+                        float env = Mathf.Clamp01(p / 0.07f) * Mathf.Pow(Mathf.Clamp01((1f - p) / 0.4f), 1.4f);
+                        x = (b1 * 0.9f + b2 * 0.45f) * catchDip * env * 0.55f;
+                    }
+                    else
+                    {
+                        // a breath in: rising hiss with a faint squeak
+                        float fc = 2f * Mathf.Sin(Mathf.PI * Mathf.Lerp(1400f, 2300f, p) / Rate);
+                        float hi3 = noise - l3 - 0.3f * b3; b3 += fc * hi3; l3 += fc * b3;
+                        phase += Mathf.Lerp(700f, 950f, p) / Rate;
+                        phase -= Mathf.Floor(phase);
+                        float env = Mathf.Clamp01(p / 0.15f) * Mathf.Clamp01((1f - p) / 0.3f);
+                        x = (b3 * 0.5f + Mathf.Sin(2f * Mathf.PI * phase) * 0.08f) * env;
+                    }
+                    d[s0 + j] += x;
+                }
+            }
+            return Finish("CryingSob", d, 0.9f, 1.6f);
+        }
+
+        /// <summary>One tap of a hard fingertip on the floor: the crawling head's step.</summary>
+        public static AudioClip Skitter(int seed)
+        {
+            const float length = 0.06f;
+            int n = (int)(Rate * length);
+            var d = new float[n];
+            var rng = new System.Random(seed + 4242);
+            float fc = 2f * Mathf.Sin(Mathf.PI * (2200f + 1600f * (float)rng.NextDouble()) / Rate);
+            float tone = 1400f + 900f * (float)rng.NextDouble();
+            float b = 0f, l = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                float hi = noise - l - 0.25f * b; b += fc * hi; l += fc * b;
+                d[i] = (b * 0.8f + Mathf.Sin(2f * Mathf.PI * tone * t) * 0.4f) * Mathf.Exp(-t * 110f);
+            }
+            return Finish("Skitter", d, 0.8f, 1.5f);
+        }
+
         /// <summary>Short effort grunt (attack swing, getting up).</summary>
         public static AudioClip InfectedGrunt(int seed) =>
             Voice("InfectedGrunt", 0.35f, seed + 23, p => Mathf.Lerp(150f, 85f, p), 0.6f, 0f, 0.85f);

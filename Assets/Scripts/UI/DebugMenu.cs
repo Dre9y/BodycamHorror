@@ -8,7 +8,8 @@ namespace BodycamHorror.UI
     /// mouse. While it is up the cursor is free and the player's input is ignored (PauseMenu.IsOpen),
     /// but the game keeps running; Tab again closes it and gives the mouse back to the view.
     /// The values are multipliers on top of what is set in the inspector and outlive the session
-    /// (PlayerPrefs). Read by PlayerShooting. Installs itself.
+    /// (PlayerPrefs). Read by PlayerShooting and BodycamPlayerController (walk and run speed are
+    /// set in m/s, not as multipliers). Installs itself.
     /// </summary>
     public class DebugMenu : MonoBehaviour
     {
@@ -21,10 +22,13 @@ namespace BodycamHorror.UI
 
         static readonly Row[] Rows =
         {
-            new Row { name = "Отдача оружия", key = "debug.recoilScale", min = 0f, max = 3f, step = 0.05f, reset = 1f, format = "0.00", unitPrefix = "x" },
-            new Row { name = "Тряска оружия от страха", key = "debug.fearTremorScale", min = 0f, max = 3f, step = 0.05f, reset = 1f, format = "0.00", unitPrefix = "x" },
-            new Row { name = "Размер пятна фонаря", key = "debug.flashlightSize", min = 0f, max = 3f, step = 0.05f, reset = 1f, floor = 0.2f, format = "0.00", unitPrefix = "x" },
-            new Row { name = "Дальность резкости", key = "debug.focusDistance", min = 2f, max = 60f, step = 0.5f, reset = 15f, format = "0.0", unitSuffix = " м" },
+            new Row { name = "Отдача оружия", key = "debug.recoilScale", min = 0f, max = 3f, step = 0.05f, reset = 1.45f, format = "0.00", unitPrefix = "x" },
+            new Row { name = "Тряска оружия от страха", key = "debug.fearTremorScale", min = 0f, max = 3f, step = 0.05f, reset = 1.65f, format = "0.00", unitPrefix = "x" },
+            new Row { name = "Фонарь: внутренний круг", key = "debug.flashlightSize", min = 0f, max = 3f, step = 0.05f, reset = 0.8f, floor = 0.2f, format = "0.00", unitPrefix = "x" },
+            new Row { name = "Фонарь: внешний круг", key = "debug.flashlightOuterSize", min = 0f, max = 3f, step = 0.05f, reset = 0.3f, floor = 0.1f, format = "0.00", unitPrefix = "x" },
+            new Row { name = "Дальность резкости", key = "debug.focusDistance", min = 2f, max = 60f, step = 0.5f, reset = 9f, format = "0.0", unitSuffix = " м" },
+            new Row { name = "Скорость ходьбы", key = "debug.walkSpeed", min = 0.5f, max = 8f, step = 0.1f, reset = 2.7f, floor = 0.5f, format = "0.0", unitSuffix = " м/с" },
+            new Row { name = "Скорость бега", key = "debug.sprintSpeed", min = 1f, max = 15f, step = 0.1f, reset = 3.9f, floor = 1f, format = "0.0", unitSuffix = " м/с" },
         };
 
         static DebugMenu()
@@ -42,7 +46,13 @@ namespace BodycamHorror.UI
         /// <summary>Multiplier on the size of the flashlight's lit spot; 1 = as tuned.</summary>
         public static float FlashlightSize => Rows[2].value;
         /// <summary>The camera is sharp up to this far (m) and out of focus beyond it (LensLook).</summary>
-        public static float FocusDistance => Rows[3].value;
+        public static float FocusDistance => Rows[4].value;
+        /// <summary>The player's walking speed (m/s); written into the controller every frame.</summary>
+        public static float WalkSpeed => Rows[5].value;
+        /// <summary>The player's running speed (m/s); written into the controller every frame.</summary>
+        public static float SprintSpeed => Rows[6].value;
+        /// <summary>Multiplier on the size of the flashlight's outer circle (the wide spill); 1 = as tuned.</summary>
+        public static float FlashlightOuterSize => Rows[3].value;
 
         bool open;
         GUIStyle head, line, value, hint, reset;

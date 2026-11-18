@@ -47,8 +47,8 @@ namespace BodycamHorror.Audio
         [Header("Character")]
         [Tooltip("Microphone hiss (dB). -90 and below is silent.")]
         [Range(-90f, -40f)] public float noise = -64f;
-        [Tooltip("0 = mono like a real body camera, 1 = full stereo. Kept part-way so direction can still be heard.")]
-        [Range(0f, 1f)] public float stereoWidth = 0.6f;
+        [Tooltip("0 = mono like a real body camera, 1 = full stereo. Full: the ears (SpatialSound) carry where a sound is.")]
+        [Range(0f, 1f)] public float stereoWidth = 1f;
 
         [Header("Room")]
         [Tooltip("Short reverb of a small hard room, applied before the microphone. 0 = off.")]

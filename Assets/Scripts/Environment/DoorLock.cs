@@ -51,7 +51,7 @@ namespace BodycamHorror.Environment
             if (health > 0f)
             {
                 AudioClip ping = hitClip ? hitClip : generatedHit ? generatedHit : (generatedHit = ProceduralAudio.Click(0.035f, 3400f, 0.7f));
-                AudioSource.PlayClipAtPoint(ping, transform.position, volume * 0.7f);
+                BodycamHorror.Audio.SpatialSound.PlayAt(ping, transform.position, volume * 0.7f, 1f, 100f);
                 return;
             }
             Break(info.direction);
@@ -84,7 +84,7 @@ namespace BodycamHorror.Environment
             }
 
             AudioClip clip = breakClip ? breakClip : generatedBreak ? generatedBreak : (generatedBreak = ProceduralAudio.DoubleClick(0.06f, 2200f, 1f));
-            AudioSource.PlayClipAtPoint(clip, transform.position, volume);
+            BodycamHorror.Audio.SpatialSound.PlayAt(clip, transform.position, volume, 1f, 100f);
             broken?.Invoke();
         }
     }

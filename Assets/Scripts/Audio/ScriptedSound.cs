@@ -21,6 +21,7 @@ namespace BodycamHorror.Audio
             source.spatialBlend = spatialBlend;
             source.clip = clip;
             source.volume = volume;
+            if (spatialBlend >= 0.5f && SpatialSoundInstaller.Enabled) go.AddComponent<SpatialSound>();   // placed by the ears from the start
             source.Play();
             Object.Destroy(go, clip.length / Mathf.Max(Mathf.Abs(source.pitch), 0.01f) + 0.2f);
             return source;

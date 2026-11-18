@@ -123,7 +123,10 @@ namespace BodycamHorror.EditorTools
             mat.SetTexture("_BaseMap", T("BaseColor")); mat.SetColor("_BaseColor", Color.white);
             mat.SetTexture("_BumpMap", T("Normal")); mat.EnableKeyword("_NORMALMAP");
             mat.SetTexture("_MetallicGlossMap", AssetDatabase.LoadAssetAtPath<Texture2D>(msPath)); mat.EnableKeyword("_METALLICSPECGLOSSMAP");
-            mat.SetFloat("_Smoothness", 1f);
+            // matte: wet-looking skin, not polished. The map's smoothness is scaled right down and the sky reflection is off
+            mat.SetFloat("_Smoothness", 0.22f);
+            mat.SetFloat("_EnvironmentReflections", 0f); mat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+            mat.SetFloat("_SpecularHighlights", 1f); mat.DisableKeyword("_SPECULARHIGHLIGHTS_OFF");
             mat.SetTexture("_OcclusionMap", T("Occlusion")); mat.EnableKeyword("_OCCLUSIONMAP");
             EditorUtility.SetDirty(mat);
         }

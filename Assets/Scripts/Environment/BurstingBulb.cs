@@ -21,6 +21,8 @@ namespace BodycamHorror.Environment
         [Range(0f, 1f)] public float volume = 1f;
 
         [Header("Trigger: the player inside this box")]
+        [Tooltip("Off: only a script bursts it (BurstNow), as the chain room event does.")]
+        public bool autoTrigger = true;
         public Vector3 triggerCenter;
         public Vector3 triggerSize = new Vector3(4f, 3f, 1f);
 
@@ -46,7 +48,7 @@ namespace BodycamHorror.Environment
 
         void Update()
         {
-            if (started || !player) return;
+            if (started || !player || !autoTrigger) return;
             Vector3 local = player.transform.position + Vector3.up * 0.9f - triggerCenter;
             Vector3 half = triggerSize * 0.5f;
             if (Mathf.Abs(local.x) <= half.x && Mathf.Abs(local.y) <= half.y && Mathf.Abs(local.z) <= half.z)
@@ -77,7 +79,7 @@ namespace BodycamHorror.Environment
             }
 
             // pop: a white flash, then nothing
-            if (burstClip) AudioSource.PlayClipAtPoint(burstClip, transform.position, volume);
+            if (burstClip) BodycamHorror.Audio.SpatialSound.PlayAt(burstClip, transform.position, volume, 1f, 100f);
             if (bulbLight) bulbLight.intensity = baseIntensity * 3f;
             yield return new WaitForSeconds(0.04f);
             if (bulbLight) bulbLight.enabled = false;

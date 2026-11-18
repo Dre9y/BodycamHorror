@@ -31,8 +31,14 @@ namespace BodycamHorror.EditorTools
             Directory.CreateDirectory(PrefabDir);
             Make("Mug", Hull.Box);
             Make("Clipboard", Hull.Box);
-            Make("Sofa", Hull.Mesh);
-            Make("WallShelf", Hull.Mesh);
+            Make("Sofa", Hull.Box);
+            // simple boxes, not the 18k-triangle mesh: the seat and base, the back, the two arms
+            SetBoxes("Sofa", (new Vector3(0f, 0.22f, 0.02f), new Vector3(1.45f, 0.44f, 0.8f)),
+                             (new Vector3(0f, 0.62f, -0.3f), new Vector3(1.45f, 0.42f, 0.2f)),
+                             (new Vector3(-0.65f, 0.55f, 0f), new Vector3(0.17f, 0.22f, 0.8f)),
+                             (new Vector3(0.65f, 0.55f, 0f), new Vector3(0.17f, 0.22f, 0.8f)));
+            Make("WallShelf", Hull.Box);
+            SetBoxes("WallShelf", (new Vector3(0f, 0.011f, 0.105f), new Vector3(0.82f, 0.022f, 0.21f)));   // the board only
             AssetDatabase.SaveAssets();
             Debug.Log("Apartment props set up in " + PrefabDir);
         }
@@ -138,6 +144,23 @@ namespace BodycamHorror.EditorTools
             }
         }
 
+        /// <summary>Replaces a prefab's colliders with these boxes (centre, size in the prefab's space).</summary>
+        static void SetBoxes(string name, params (Vector3 center, Vector3 size)[] boxes)
+        {
+            string path = $"{PrefabDir}/{name}.prefab";
+            var root = PrefabUtility.LoadPrefabContents(path);
+            var holder = root.GetComponentInChildren<MeshRenderer>(true).gameObject;
+            foreach (var c in root.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(c);
+            foreach (var (center, size) in boxes)
+            {
+                var box = holder.AddComponent<BoxCollider>();
+                box.center = center;
+                box.size = size;
+            }
+            PrefabUtility.SaveAsPrefabAsset(root, path);
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+
         static void FitBox(string name, Vector3 center, Vector3 size)
         {
             string path = $"{PrefabDir}/{name}.prefab";
@@ -147,14 +170,53 @@ namespace BodycamHorror.EditorTools
             PrefabUtility.UnloadPrefabContents(root);
         }
 
+        /// <summary>Largest a prop's maps are imported at, when it is less than they were baked at: small things
+        /// seen close need no 2048 (a 10 cm mug at 1024 is ~10 texels per millimetre).</summary>
+        static readonly System.Collections.Generic.Dictionary<string, int> MaxSize = new System.Collections.Generic.Dictionary<string, int>
+        {
+            { "Mug", 512 }, { "Clipboard", 1024 }, { "WallShelf", 1024 }, { "Newspaper", 1024 },
+        };
+
+        [MenuItem("BodycamHorror/Optimise Prop Textures")]
+        public static void OptimiseTextures()
+        {
+            foreach (string guid in AssetDatabase.FindAssets("t:Texture2D", new[] { TextureDir }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                string file = Path.GetFileNameWithoutExtension(path);
+                string prop = file.Substring(0, file.LastIndexOf('_'));
+                bool normal = file.EndsWith("_Normal");
+                Configure(path, !normal && file.EndsWith("_BaseColor"), normal, MaxSize.TryGetValue(prop, out int m) ? m : 2048);
+            }
+        }
+
+        /// <summary>Import settings for a baked map: its type, colour space, size cap, and on PC BC5 for a normal map
+        /// (two channels at full precision, the same memory as DXT5).</summary>
+        static void Configure(string path, bool sRGB, bool normalMap, int maxSize)
+        {
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            if (!importer) return;
+            importer.textureType = normalMap ? TextureImporterType.NormalMap : TextureImporterType.Default;
+            importer.sRGBTexture = sRGB;
+            importer.mipmapEnabled = true;
+            importer.maxTextureSize = maxSize;
+            var pc = importer.GetPlatformTextureSettings("Standalone");
+            pc.overridden = normalMap;
+            pc.maxTextureSize = maxSize;
+            if (normalMap) pc.format = TextureImporterFormat.BC5;
+            importer.SetPlatformTextureSettings(pc);
+            importer.SaveAndReimport();
+        }
+
         static void Make(string name, Hull hull)
         {
             string model = $"{ModelDir}/{name}.fbx";
             if (!File.Exists(model)) { Debug.LogWarning("Missing " + model); return; }
 
-            Texture2D baseMap = Texture($"{name}_BaseColor", true, false);
-            Texture2D normal = Texture($"{name}_Normal", false, true);
-            Texture2D metal = Texture($"{name}_MetallicSmoothness", false, false);
+            int max = MaxSize.TryGetValue(name, out int m) ? m : 2048;
+            Texture2D baseMap = Texture($"{name}_BaseColor", true, false, max);
+            Texture2D normal = Texture($"{name}_Normal", false, true, max);
+            Texture2D metal = Texture($"{name}_MetallicSmoothness", false, false, max);
 
             string matPath = $"{MaterialDir}/{name}_Mat.mat";
             var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
@@ -201,17 +263,10 @@ namespace BodycamHorror.EditorTools
             Object.DestroyImmediate(instance);
         }
 
-        static Texture2D Texture(string file, bool sRGB, bool normalMap)
+        static Texture2D Texture(string file, bool sRGB, bool normalMap, int maxSize)
         {
             string path = $"{TextureDir}/{file}.png";
-            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
-            if (importer)
-            {
-                importer.textureType = normalMap ? TextureImporterType.NormalMap : TextureImporterType.Default;
-                importer.sRGBTexture = sRGB;
-                importer.mipmapEnabled = true;
-                importer.SaveAndReimport();
-            }
+            Configure(path, sRGB, normalMap, maxSize);
             return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         }
     }

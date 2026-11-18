@@ -719,6 +719,9 @@ namespace BodycamHorror.EditorTools
             {
                 l.intensity *= dim;
                 if (l.name == "Light") main = l;
+                // shadows only from the brighter lamps: each shadowed spot renders the scene again for itself,
+                // and a dim one's shadows hardly show
+                if (dim < 0.35f) l.shadows = LightShadows.None;
             }
             if (flicker && main)
             {
@@ -843,6 +846,7 @@ namespace BodycamHorror.EditorTools
             var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
             go.name = name;
             go.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+            foreach (Transform t in go.GetComponentsInChildren<Transform>(true)) t.gameObject.isStatic = true;   // furniture: batched
             return go;
         }
 

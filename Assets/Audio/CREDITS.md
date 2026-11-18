@@ -21,5 +21,9 @@ All recordings are from freesound.org under Creative Commons 0 (public domain), 
 | ChainRoom/bulb_burst.wav | Trimmed, mono, normalised: "light bulb glass burst drop on floor1.wav" by kyles - https://freesound.org/people/kyles/sounds/637658/ |
 | ChainRoom/chain_clank_01-03.wav | Single clanks cut out, mono, normalised: "chains_hang" by C_Sander - https://freesound.org/people/C_Sander/sounds/733601/ |
 | ChainRoom/chain_clank_05-07.wav | Single clanks cut out, mono, normalised: "Chain Rattling - 1" by Roxis_Boy - https://freesound.org/people/Roxis_Boy/sounds/401622/ |
-| ChainRoom/monster_step_01-05.wav | Single steps cut out, mono, normalised: "GiantStompFootsteps.mp3" by RobHorror240 - https://freesound.org/people/RobHorror240/sounds/622737/ |
-| ChainRoom/monster_step_06-10.wav | Single steps cut out, mono, normalised: "FX SaSc Heavy Impact Stone Glass Tiles Jump Walk Footstep.wav" by Profispiesser - https://freesound.org/people/Profispiesser/sounds/583064/ |
+| ChainRoom/monster_barefoot_01-05.wav | Single footfalls cut out, pitched down, low-passed, a low thump added, normalised: "concrete_01c_barefeet_run.wav" by sturmankin - https://freesound.org/people/sturmankin/sounds/272287/ |
+| ChainRoom/monster_barefoot_06-10.wav | Single footfalls cut out, pitched down, low-passed, a low thump added, normalised: "paving_01c_barefeet_run.wav" by sturmankin - https://freesound.org/people/sturmankin/sounds/273102/ |
+| ChainRoom/monster_breath_01-10.wav | Single breaths cut out of the "Breathing Monster Sound Effect" track the project owner added (Assets/NowYouSeeMee; source and licence not recorded here), mono, normalised |
+| ChainRoom/metal_door_creak_close.mp3 | "metal-door-creaking-closing-47323" by freesound_community, added by the project owner |
+| ChainRoom/lamp_break_drop.mp3 | "lamp-break-drop_zkr68dnd", added by the project owner |
+| ChainRoom/door_slam_boom.wav, chainroom_riser.wav | Synthesised in the editor (no recording) |

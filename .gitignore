@@ -140,3 +140,6 @@ crashlytics-build.properties
 # local only (1.1 GB monster model)
 /Assets/MonsterMutant 7/
 /Assets/MonsterMutant 7.meta
+
+# Blender backup copies outside Assets
+*.blend1

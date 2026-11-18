@@ -11,6 +11,19 @@ namespace BodycamHorror.EditorTools
     public static class EnvironmentTextures
     {
         /// <summary>
+        /// Per set: (share of the scanned smoothness kept, share of the caller's bump kept). Plaster, paint and
+        /// tile at full scanned smoothness read as wet plastic under a bare lamp, with a streak of highlight
+        /// across every wall and ceiling; real ones are matte. Sets not listed keep both at 1.
+        /// </summary>
+        static readonly System.Collections.Generic.Dictionary<string, Vector2> Finish = new System.Collections.Generic.Dictionary<string, Vector2>
+        {
+            { "PaintedPlaster011", new Vector2(0.55f, 1f) },
+            { "PaintedPlaster015", new Vector2(0.5f, 1f) },
+            { "Plaster007", new Vector2(0.45f, 0.5f) },   // its relief turns into lumps under a lamp a metre away
+            { "Tiles110", new Vector2(0.75f, 1f) },
+        };
+
+        /// <summary>
         /// Material for the set in <c>textureDir/id</c>: Color, NormalGL and a mask packed here from the
         /// set's Roughness, AmbientOcclusion and (for metals) Metalness maps, which are deleted once packed.
         /// </summary>
@@ -48,14 +61,15 @@ namespace BodycamHorror.EditorTools
             material.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(colorPath));
             material.SetColor("_BaseColor", tint);
             material.SetTexture("_BumpMap", AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath));
-            material.SetFloat("_BumpScale", bumpScale);
+            Vector2 finish = Finish.TryGetValue(id, out Vector2 f) ? f : Vector2.one;
+            material.SetFloat("_BumpScale", bumpScale * finish.y);
             material.EnableKeyword("_NORMALMAP");
             material.SetTexture("_MetallicGlossMap", mask);
             material.EnableKeyword("_METALLICSPECGLOSSMAP");
             material.SetTexture("_OcclusionMap", mask);
             material.EnableKeyword("_OCCLUSIONMAP");
             material.SetFloat("_OcclusionStrength", 1f);
-            material.SetFloat("_Smoothness", 1f);
+            material.SetFloat("_Smoothness", finish.x);
             material.SetFloat("_Metallic", 0f);
             EditorUtility.SetDirty(material);
             return material;

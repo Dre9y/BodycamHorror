@@ -79,7 +79,7 @@ namespace BodycamHorror.Weapons
 
             AudioClip clip = pickupClip ? pickupClip
                 : generatedClip ? generatedClip : (generatedClip = ProceduralAudio.DoubleClick(0.09f, 1500f, 0.6f));
-            AudioSource.PlayClipAtPoint(clip, transform.position, volume);
+            BodycamHorror.Audio.SpatialSound.PlayAt(clip, transform.position, volume, 1f, 100f);
             if (flashlightOff)
             {
                 var flashlight = player.GetComponentInChildren<BodycamFlashlight>(true);

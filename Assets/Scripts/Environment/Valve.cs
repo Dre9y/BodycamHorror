@@ -147,7 +147,7 @@ namespace BodycamHorror.Environment
             IsClosed = true;
             latched = false;
             AudioClip clip = closedClip ? closedClip : generatedClosed ? generatedClosed : (generatedClosed = ProceduralAudio.DoorShut());
-            AudioSource.PlayClipAtPoint(clip, wheel.position, closedVolume);
+            BodycamHorror.Audio.SpatialSound.PlayAt(clip, wheel.position, closedVolume, 1f, 100f);
             closed?.Invoke();
         }
 

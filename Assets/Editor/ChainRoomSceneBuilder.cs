@@ -26,7 +26,9 @@ namespace BodycamHorror.EditorTools
         // metres. The corridor runs along +Z from the player's back wall into the room.
         const float Wall = 0.3f;
         const float CorridorHalfWidth = 1.2f, CorridorHeight = 3f, CorridorLength = 14f;
-        const float RoomHalf = 8f, RoomHeight = 5f;          // a 16 x 16 m room, 5 m high
+        const float RoomHalf = 8f, RoomHeight = 3.3f;        // a 16 x 16 m room with a low ceiling: the manthing all but stoops under it
+        const float ManthingPoseHeight = 1.6f;               // its tallest pose at the model.s own scale
+        static readonly float ManthingScale = Mathf.Min(2f, (RoomHeight - 0.15f) / ManthingPoseHeight);   // twice its size, or what fits
         const float RoomZ0 = CorridorLength, RoomZ1 = CorridorLength + RoomHalf * 2f;
         const float PlayerZ = 1f;
         static readonly Vector3 RoomCentre = new Vector3(0f, 0f, RoomZ0 + RoomHalf);
@@ -73,7 +75,10 @@ namespace BodycamHorror.EditorTools
             LightingTestSceneBuilder.PlaceLamp(lampPrefab, lamps, "Lamp_Corridor", new Vector3(0f, CorridorHeight, 6f), false);
             BurstingBulb bulb = BuildBulb(lamps);
             BuildChains(rust);
-            PlaceManthing(bulb);
+            Door door = PlaceDoor();
+            PlaceWriting();
+            Manthing thing = PlaceManthing(bulb);
+            PlaceEvent(door, bulb, thing);
 
             GameLook.ApplyAtmosphere();
             foreach (AutoExposure exposure in Object.FindObjectsByType<AutoExposure>(FindObjectsInactive.Include))
@@ -125,10 +130,11 @@ namespace BodycamHorror.EditorTools
             room.SetParent(shell, false);
             LightingTestSceneBuilder.Box("Floor", room, new Vector3(-rh, -Wall, RoomZ0), new Vector3(rh, 0f, RoomZ1), floor, tile, tile);
             LightingTestSceneBuilder.Box("Ceiling", room, new Vector3(-rh, RoomHeight, RoomZ0), new Vector3(rh, RoomHeight + Wall, RoomZ1), ceiling, ceilingTile, ceilingTile);
-            // the near wall, with the corridor's opening in the middle and wall over it
-            LightingTestSceneBuilder.WallBox("Wall_Near_Left", room, new Vector3(-rh - Wall, 0f, RoomZ0 - Wall), new Vector3(-hw, RoomHeight, RoomZ0));
-            LightingTestSceneBuilder.WallBox("Wall_Near_Right", room, new Vector3(hw, 0f, RoomZ0 - Wall), new Vector3(rh + Wall, RoomHeight, RoomZ0));
-            LightingTestSceneBuilder.Box("Wall_Near_Lintel", room, new Vector3(-hw, CorridorHeight, RoomZ0 - Wall), new Vector3(hw, RoomHeight, RoomZ0),
+            // the near wall, with a door in the middle (PlaceDoor) and wall over it
+            float dx = DoorBuilder.OpeningWidth * 0.5f, dh = DoorBuilder.OpeningHeight;
+            LightingTestSceneBuilder.WallBox("Wall_Near_Left", room, new Vector3(-rh - Wall, 0f, RoomZ0 - Wall), new Vector3(-dx, RoomHeight, RoomZ0));
+            LightingTestSceneBuilder.WallBox("Wall_Near_Right", room, new Vector3(dx, 0f, RoomZ0 - Wall), new Vector3(rh + Wall, RoomHeight, RoomZ0));
+            LightingTestSceneBuilder.Box("Wall_Near_Lintel", room, new Vector3(-dx, dh, RoomZ0 - Wall), new Vector3(dx, RoomHeight, RoomZ0),
                                          LightingTestSceneBuilder.wallPlaster, 2f, 2f);
             LightingTestSceneBuilder.WallBox("Wall_Far", room, new Vector3(-rh - Wall, 0f, RoomZ1), new Vector3(rh + Wall, RoomHeight, RoomZ1 + Wall));
             LightingTestSceneBuilder.WallBox("Wall_Left", room, new Vector3(-rh - Wall, 0f, RoomZ0), new Vector3(-rh, RoomHeight, RoomZ1));
@@ -138,7 +144,7 @@ namespace BodycamHorror.EditorTools
         /// <summary>One bare bulb on a long cord in the middle of the room, bright enough for all of it.</summary>
         static BurstingBulb BuildBulb(Transform parent)
         {
-            float bulbY = RoomHeight - 1.6f;
+            float bulbY = RoomHeight - 1.15f;   // on a longer cord, so the ceiling right above is not blown out
             var root = new GameObject("Bulb_Centre").transform;
             root.SetParent(parent, false);
             root.position = new Vector3(RoomCentre.x, bulbY, RoomCentre.z);
@@ -176,7 +182,7 @@ namespace BodycamHorror.EditorTools
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Point;
             light.color = new Color(1f, 0.9f, 0.74f);
-            light.intensity = 26f;
+            light.intensity = 16f;
             light.range = 17f;
             light.shadows = LightShadows.Soft;
             ViewModelLighting.SetLightLayers(light, ViewModelLighting.WorldLayer | ViewModelLighting.ViewModelLayer);
@@ -184,9 +190,8 @@ namespace BodycamHorror.EditorTools
             var bulb = root.gameObject.AddComponent<BurstingBulb>();
             bulb.bulbLight = light;
             bulb.glass = glassRenderer;
-            bulb.burstClip = AssetDatabase.LoadAssetAtPath<AudioClip>(AudioDir + "/bulb_burst.wav");
-            bulb.triggerCenter = new Vector3(0f, 1.5f, RoomZ0 + 1.6f);
-            bulb.triggerSize = new Vector3(CorridorHalfWidth * 2f + 1f, 3f, 1.2f);
+            bulb.burstClip = AssetDatabase.LoadAssetAtPath<AudioClip>(AudioDir + "/lamp_break_drop.mp3");
+            bulb.autoTrigger = false;   // the chain room event bursts it
             EditorUtility.SetDirty(bulb);
             return bulb;
         }
@@ -268,6 +273,7 @@ namespace BodycamHorror.EditorTools
             var chain = chainGo.AddComponent<HangingChain>();
             chain.segments = segments;
             chain.clanks = clanks;
+            chain.volume = 0.25f;   // muted for now: the steps are what to listen for
             EditorUtility.SetDirty(chain);
         }
 
@@ -305,20 +311,22 @@ namespace BodycamHorror.EditorTools
             return mesh;
         }
 
-        static void PlaceManthing(BurstingBulb bulb)
+        static Manthing PlaceManthing(BurstingBulb bulb)
         {
             var root = new GameObject("Manthing");
             root.layer = 2;   // not in the way of sight lines and shots; the player still bumps into it
-            root.transform.position = new Vector3(5.2f, 0f, RoomZ1 - 2.2f);
-            root.transform.rotation = Quaternion.LookRotation(new Vector3(-5.2f, 0f, -(RoomZ1 - 2.2f - RoomZ0)), Vector3.up);
+            // by the door, once it is shut behind the player: it appears there when the light goes
+            root.transform.position = new Vector3(1.5f, 0f, RoomZ0 + 1.4f);
+            root.transform.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
             var col = root.AddComponent<CapsuleCollider>();
-            col.radius = 0.4f; col.height = 2.2f; col.center = new Vector3(0f, 1.1f, 0f);
+            col.radius = 0.4f * ManthingScale; col.height = 2.2f * ManthingScale; col.center = new Vector3(0f, 1.1f * ManthingScale, 0f);
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ManthingSetup.ModelPath);
             var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab, root.transform);
             model.name = "Model";
             model.transform.localPosition = Vector3.zero;
             model.transform.localRotation = Quaternion.identity;
+            model.transform.localScale = Vector3.one * ManthingScale;
             var mat = AssetDatabase.LoadAssetAtPath<Material>(ManthingSetup.MaterialPath);
             foreach (var r in model.GetComponentsInChildren<Renderer>(true))
             {
@@ -333,16 +341,83 @@ namespace BodycamHorror.EditorTools
             var thing = root.AddComponent<Manthing>();
             thing.animator = animator;
             thing.runClip = ManthingSetup.Clip("standing run");
-            thing.freezeClips = new[] { ManthingSetup.Clip("standing run"), ManthingSetup.Clip("idle standing"), ManthingSetup.Clip("ref") };
+            thing.freezeClips = new[] { ManthingSetup.Clip("standing run"), ManthingSetup.Clip("idle standing") };   // "ref" left out for now
+            thing.poseHeight = ManthingPoseHeight;
             thing.screechClip = ManthingSetup.Clip("screech");
             thing.appearOn = bulb;
             thing.doorway = new Vector3(0f, 0f, RoomZ0 - 0.5f);
+            thing.killDistance = 1.15f * ManthingScale;   // its reach grows with it
+            thing.soleHeight = 0.03f * ManthingScale;
             var steps = new List<AudioClip>();
-            foreach (string guid in AssetDatabase.FindAssets("monster_step t:AudioClip", new[] { AudioDir }))
+            foreach (string guid in AssetDatabase.FindAssets("monster_barefoot t:AudioClip", new[] { AudioDir }))
                 steps.Add(AssetDatabase.LoadAssetAtPath<AudioClip>(AssetDatabase.GUIDToAssetPath(guid)));
             thing.steps = steps.ToArray();
             thing.scream = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_scream.wav");
+            var breaths = new List<AudioClip>();
+            foreach (string guid in AssetDatabase.FindAssets("monster_breath_ t:AudioClip", new[] { AudioDir }))
+                breaths.Add(AssetDatabase.LoadAssetAtPath<AudioClip>(AssetDatabase.GUIDToAssetPath(guid)));
+            thing.breaths = breaths.ToArray();
             EditorUtility.SetDirty(thing);
+            return thing;
+        }
+
+        /// <summary>A steel door between the corridor and the room, shut: the player opens it to go in.</summary>
+        static Door PlaceDoor()
+        {
+            float dx = DoorBuilder.OpeningWidth * 0.5f;
+            var go = DoorBuilder.Place(new Vector3(-dx, 0f, RoomZ0 - Wall * 0.5f), Vector3.right, false);
+            go.name = "Door_ChainRoom";
+            var door = go.GetComponent<Door>();
+            door.startOpen = false;
+            door.locked = false;
+            door.enemiesCanOpen = false;   // nothing gets out once it is shut
+            EditorUtility.SetDirty(door);
+            return door;
+        }
+
+        /// <summary>"Now you see me" in blood on the far wall, facing the door.</summary>
+        static void PlaceWriting()
+        {
+            const string matPath = "Assets/Textures/ChainRoom/NowYouSeeMe_Blood.mat";
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/ChainRoom/NowYouSeeMe_Blood.png");
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (!mat) { mat = new Material(Shader.Find("Universal Render Pipeline/Lit")); AssetDatabase.CreateAsset(mat, matPath); }
+            mat.SetTexture("_BaseMap", tex);
+            mat.SetColor("_BaseColor", Color.white);
+            mat.SetFloat("_AlphaClip", 1f); mat.EnableKeyword("_ALPHATEST_ON");
+            mat.SetFloat("_Cutoff", 0.35f);
+            mat.SetFloat("_Smoothness", 0.55f);   // still wet
+            mat.SetFloat("_Metallic", 0f);
+            mat.renderQueue = (int)RenderQueue.AlphaTest;
+            EditorUtility.SetDirty(mat);
+
+            var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.name = "Writing_NowYouSeeMe";
+            Object.DestroyImmediate(quad.GetComponent<Collider>());
+            float width = 5.6f, height = width * tex.height / tex.width;
+            quad.transform.position = new Vector3(0f, 1.75f - height * 0.08f, RoomZ1 - 0.01f);
+            quad.transform.rotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);   // its face towards the door
+            quad.transform.localScale = new Vector3(width, height, 1f);
+            var r = quad.GetComponent<MeshRenderer>();
+            r.sharedMaterial = mat;
+            r.shadowCastingMode = ShadowCastingMode.Off;
+        }
+
+        /// <summary>The moment: walking up to the writing shuts the door behind, then the light goes.</summary>
+        static void PlaceEvent(Door door, BurstingBulb bulb, Manthing thing)
+        {
+            var go = new GameObject("ChainRoomEvent");
+            var e = go.AddComponent<ChainRoomEvent>();
+            e.door = door;
+            e.bulb = bulb;
+            e.manthing = thing;
+            e.triggerCenter = new Vector3(0f, 1.5f, RoomZ1 - 2.2f);   // a couple of steps from the writing
+            e.triggerSize = new Vector3(7f, 3f, 4.4f);
+            e.doorClose = AssetDatabase.LoadAssetAtPath<AudioClip>(AudioDir + "/metal_door_creak_close.mp3");
+            e.doorLands = 4.55f;   // where the recording's creak ends in the latch
+            e.slam = AssetDatabase.LoadAssetAtPath<AudioClip>(AudioDir + "/door_slam_boom.wav");
+            e.riser = AssetDatabase.LoadAssetAtPath<AudioClip>(AudioDir + "/chainroom_riser.wav");
+            EditorUtility.SetDirty(e);
         }
 
         /// <summary>The usual sound of the place, and the bright bulb humming until it goes.</summary>

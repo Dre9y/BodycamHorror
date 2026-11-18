@@ -148,9 +148,9 @@ namespace BodycamHorror.Player
             {
                 Vector3 to = pickup.transform.position + Vector3.up * 0.05f - eye;
                 float distance = to.magnitude;
-                if (distance > pickupReach || distance < 0.01f) continue;
+                if (distance > (pickup.reach > 0f ? pickup.reach : pickupReach) || distance < 0.01f) continue;
                 float a = Vector3.Angle(forward, to);
-                if (a >= bestAngle) continue;
+                if (a >= bestAngle || (pickup.lookAngle > 0f && a >= pickup.lookAngle)) continue;
                 // not through a wall or a crate
                 if (Physics.Raycast(eye, to / distance, out RaycastHit block, distance - 0.1f, mask, QueryTriggerInteraction.Ignore)
                     && !block.collider.transform.IsChildOf(pickup.transform)) continue;

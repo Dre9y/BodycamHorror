@@ -89,7 +89,7 @@ namespace BodycamHorror.Audio
         /// <summary>Puts the microphone on the scene's listener if it has none yet.</summary>
         public static void Install()
         {
-            if (Instance) return;
+            if (Instance || UI.MainMenu.IsActive) return;   // the menu's music is not heard through the bodycam
             var listener = FindAnyObjectByType<AudioListener>();
             if (!listener || listener.GetComponent<BodycamMicrophone>()) return;
             // filters run in component order: the room first, then the microphone that records it

@@ -106,7 +106,7 @@ namespace BodycamHorror.Audio
         /// <summary>Puts the acoustics on the scene's listener if it has none yet.</summary>
         public static void Install()
         {
-            if (Instance) return;
+            if (Instance || UI.MainMenu.IsActive) return;
             var listener = FindAnyObjectByType<AudioListener>();
             if (listener && !listener.GetComponent<GunshotAcoustics>()) listener.gameObject.AddComponent<GunshotAcoustics>();
         }

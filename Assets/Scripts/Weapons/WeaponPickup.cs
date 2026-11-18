@@ -27,6 +27,10 @@ namespace BodycamHorror.Weapons
         public bool flashlightOff;
         [Tooltip("The key prompt floats this far above the gun (m).")]
         public float promptHeight = 0.22f;
+        [Tooltip("How close the player must be to take it (m, from the camera). 0 = PlayerInteractor's pickup reach.")]
+        public float reach;
+        [Tooltip("How directly they must look at it (deg). 0 = PlayerInteractor's pickup look angle.")]
+        public float lookAngle;
 
         [Header("Glow (optional)")]
         [Tooltip("A small light that marks the gun in the dark. It breathes a little.")]

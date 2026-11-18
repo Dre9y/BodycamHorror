@@ -187,6 +187,8 @@ namespace BodycamHorror.Player
         [NonSerialized] public bool sprintBlocked;
         /// <summary>Multiplies the target ground speed (e.g. slower while aiming).</summary>
         [NonSerialized] public float moveSpeedScale = 1f;
+        /// <summary>Set by cutscenes: movement and look input are ignored (the body still falls and collides).</summary>
+        [NonSerialized] public bool inputLocked;
 
         public event Action<float> Landed;                 // impact speed (m/s)
         public event Action<ImpactKind, float> Impacted;   // kind, speed into the obstacle
@@ -368,6 +370,12 @@ namespace BodycamHorror.Player
             jumpHeld = jumpAction.IsPressed();
             if (jumpAction.WasPressedThisFrame()) lastJumpPressTime = Time.time;
             if (braceAction.WasPressedThisFrame()) lastBracePressTime = Time.time;
+            if (inputLocked)
+            {
+                moveInput = Vector2.zero;
+                sprintHeld = crouchHeld = crouchPressed = jumpHeld = false;
+                lastJumpPressTime = lastBracePressTime = -10f;
+            }
         }
 
         void HandleCursor()
@@ -386,6 +394,7 @@ namespace BodycamHorror.Player
         {
             Vector2 mouse = Cursor.lockState == CursorLockMode.Locked ? lookAction.ReadValue<Vector2>() * mouseSensitivity : Vector2.zero;
             Vector2 d = mouse + lookStickAction.ReadValue<Vector2>() * (gamepadLookSpeed * dt);
+            if (inputLocked) d = Vector2.zero;
             if (State == MoveState.Stumbling || State == MoveState.Bumped || State == MoveState.HardLanding) d *= 0.35f;
             else if (State == MoveState.Rolling) d *= 0.5f;
 
@@ -1134,6 +1143,18 @@ namespace BodycamHorror.Player
             ResetTransientState();
             SetState(MoveState.Airborne);
         }
+
+        /// <summary>Sets where the player looks without moving them (e.g. to hand the view back after a cutscene).</summary>
+        public void SetLook(float newYaw, float newPitch)
+        {
+            yaw = newYaw;
+            pitch = Mathf.Clamp(newPitch, -maxPitch, maxPitchDown);
+            transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            if (cameraPivot) cameraPivot.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+        }
+
+        /// <summary>Eye height above the feet when standing, as the controller places the view pivot.</summary>
+        public float StandingEyeHeight => standHeight - eyeOffsetFromTop;
 
         void Respawn()
         {

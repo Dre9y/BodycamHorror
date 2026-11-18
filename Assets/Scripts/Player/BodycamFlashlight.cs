@@ -25,12 +25,14 @@ namespace BodycamHorror.Player
         [Header("Beam")]
         public float intensity = 70f;
         public float range = 26f;
-        public float spotAngle = 58f;
-        public float innerSpotAngle = 22f;
+        public float spotAngle = 64f;
+        [Tooltip("Small next to spotAngle = a long, soft fade from the hot centre out to the edge.")]
+        public float innerSpotAngle = 8f;
         [Tooltip("Size of the lit spot on a wall, as a share of what the two angles above give (1 = as they are). " +
                  "The debug panel (Tab) scales it further.")]
         [Range(0.3f, 1.5f)] public float beamSize = 0.82f;
-        public Color color = new Color(1f, 0.94f, 0.82f);
+        [Tooltip("Used until the settings give one (GameSettings.FlashlightColor overrides it in play).")]
+        public Color color = new Color(0.7f, 0.83f, 1f);
         public LightShadows shadows = LightShadows.Soft;
 
         [Header("Close up (the beam eases off near a surface, so a wall or a face at arm's length is not a white blot)")]
@@ -49,8 +51,14 @@ namespace BodycamHorror.Player
         [Range(0f, 0.05f)] public float hazeDensity = 0.0007f;
         [Range(0f, 1f)] public float hazeWisps = 0.5f;
 
+        [Header("Halo (between the spot and the spill: bridges the two, so there is no ring where one ends)")]
+        public float haloIntensity = 16f;
+        [Tooltip("Where its edge sits between the spot's edge (0) and the spill's (1).")]
+        [Range(0f, 1f)] public float haloSpread = 0.5f;
+        public float haloRange = 16f;
+
         [Header("Spill (wide, faint, no shadows)")]
-        public float spillIntensity = 5f;
+        public float spillIntensity = 9f;
         public float spillAngle = 120f;
         public float spillRange = 10f;
 
@@ -88,7 +96,8 @@ namespace BodycamHorror.Player
         /// <summary>The gun the light is on right now (null = chest).</summary>
         public Firearm MountedOn { get; private set; }
 
-        Light beam, spill, handFill, darkFill;
+        Light beam, halo, spill, handFill, darkFill;
+        Color appliedColor = new Color(-1f, 0f, 0f);
         Quaternion smoothed;
         bool smoothInit;
         float flicker, seed, closeDim = 1f, appliedSize = -1f, appliedAngle = -1f, appliedSpillSize = -1f, appliedSpillAngle = -1f;
@@ -105,6 +114,7 @@ namespace BodycamHorror.Player
             if (!shooting && player) shooting = player.GetComponentInChildren<PlayerShooting>(true);
             chestPosition = transform.localPosition;
             beam = FindOrMakeLight("Beam");
+            halo = FindOrMakeLight("Halo");
             spill = FindOrMakeLight("Spill");
             handFill = FindOrMakeLight("HandFill");
             darkFill = MakeDarkFill();
@@ -157,6 +167,10 @@ namespace BodycamHorror.Player
             beam.shadowNearPlane = 0.15f;
             beam.renderMode = LightRenderMode.ForcePixel;
 
+            halo.type = LightType.Spot;
+            halo.range = haloRange;
+            halo.shadows = LightShadows.None;
+
             spill.type = LightType.Spot;
             spill.color = color;
             spill.range = spillRange;
@@ -170,7 +184,9 @@ namespace BodycamHorror.Player
             handFill.transform.localPosition = new Vector3(0f, 0.05f, -0.05f);
 
             ViewModelLighting.SetLightLayers(beam, ViewModelLighting.WorldLayer);
+            ViewModelLighting.SetLightLayers(halo, ViewModelLighting.WorldLayer);
             ViewModelLighting.SetLightLayers(spill, ViewModelLighting.WorldLayer);
+            ApplyColor();
             ViewModelLighting.SetLightLayers(handFill, ViewModelLighting.ViewModelLayer);
 
             // the beam shows in the air: dust and smoke light up along it, and bodies cut shadows into it
@@ -203,6 +219,7 @@ namespace BodycamHorror.Player
             on &= owned;   // nothing to switch on without one
             IsOn = on;
             beam.enabled = on;
+            halo.enabled = on;
             spill.enabled = on;
             foreach (var lens in lenses.Values) if (lens) lens.sharedMaterial = on ? lensOnMat : lensOffMat;
             if (!click || !audioSource) return;
@@ -282,16 +299,30 @@ namespace BodycamHorror.Player
             appliedSpillAngle = spillAngle;
             float outer = Mathf.Clamp(Scaled(spillAngle, size), 6f, 170f);
             spill.spotAngle = outer;
-            spill.innerSpotAngle = Mathf.Clamp(Scaled(spillAngle * 0.3f, size), 1f, outer);
+            spill.innerSpotAngle = 1f;   // a plateau here drew a second ring: fade all the way from the middle
         }
 
         static float Scaled(float angle, float size) =>
             2f * Mathf.Atan(Mathf.Tan(Mathf.Clamp(angle, 1f, 170f) * 0.5f * Mathf.Deg2Rad) * size) * Mathf.Rad2Deg;
 
+        /// <summary>Takes the colour from the settings page (and keeps up when it is changed there).</summary>
+        void ApplyColor()
+        {
+            Color c = UI.GameSettings.FlashlightColor;
+            if (c == appliedColor) return;
+            appliedColor = color = c;
+            beam.color = halo.color = spill.color = handFill.color = c;
+            if (lensOnMat && lensOnMat.HasProperty("_EmissionColor")) lensOnMat.SetColor("_EmissionColor", c * 4f);
+        }
+
         void UpdateIntensity()
         {
+            ApplyColor();
             ApplyBeamSize();
             ApplySpillSize();
+            // the halo's edge between the spot's and the spill's, never inside the spot (the debug panel sizes both)
+            halo.spotAngle = Mathf.Clamp(Mathf.Max(beam.spotAngle * 1.2f, Mathf.Lerp(beam.spotAngle, spill.spotAngle, haloSpread)), 1f, 165f);
+            halo.innerSpotAngle = 1f;   // no flat plateau: it fades all the way from the middle
             if (!IsOn) return;
             float k = 1f;
             if (flicker > 0f)
@@ -302,6 +333,7 @@ namespace BodycamHorror.Player
             }
             float near = CloseDim();
             beam.intensity = intensity * k * near;
+            halo.intensity = haloIntensity * k * near;
             spill.intensity = spillIntensity * k * near;
             handFill.intensity = handFillIntensity * k;
         }

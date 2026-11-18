@@ -181,10 +181,10 @@ namespace BodycamHorror.EditorTools
             Material metal = SimpleMaterial("LampMetal", new Color(0.05f, 0.05f, 0.05f), 0.7f, 0.35f);
             Material shadeMat = SimpleMaterial("LampShade", new Color(0.07f, 0.11f, 0.1f), 0.2f, 0.5f);
             shadeMat.SetFloat("_Cull", (float)CullMode.Off);   // the shade is a single skin seen from both sides
-            Material bulbMat = SimpleMaterial("LampBulb", new Color(1f, 0.9f, 0.7f), 0f, 0.8f);
+            Material bulbMat = SimpleMaterial("LampBulb", new Color(0.7f, 0.83f, 1f), 0f, 0.8f);
             bulbMat.EnableKeyword("_EMISSION");
             bulbMat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-            bulbMat.SetColor("_EmissionColor", new Color(0.92f, 0.95f, 0.93f) * 8f);
+            bulbMat.SetColor("_EmissionColor", new Color(0.7f, 0.83f, 1f) * 8f);   // cold blue
             Material hazeMat = AssetDatabase.LoadAssetAtPath<Material>(MaterialDir + "/LightHaze.mat");
             if (!hazeMat)
             {
@@ -230,7 +230,7 @@ namespace BodycamHorror.EditorTools
             lightObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             var light = lightObject.AddComponent<Light>();
             light.type = LightType.Spot;
-            light.color = new Color(0.9f, 0.93f, 0.91f);
+            light.color = new Color(0.7f, 0.83f, 1f);   // cold blue
             light.intensity = 6.5f;
             light.range = 10f;
             light.spotAngle = 118f;
@@ -253,7 +253,7 @@ namespace BodycamHorror.EditorTools
             glow.type = LightType.Spot;
             glow.spotAngle = 170f;
             glow.innerSpotAngle = 130f;
-            glow.color = new Color(0.9f, 0.93f, 0.91f);
+            glow.color = new Color(0.7f, 0.83f, 1f);
             glow.intensity = 1.2f;
             glow.range = 3.5f;
             glow.shadows = LightShadows.None;

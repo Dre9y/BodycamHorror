@@ -1,3 +1,5 @@
+using BodycamHorror.Player;
+using BodycamHorror.Weapons;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -10,25 +12,31 @@ namespace BodycamHorror.UI
     /// The values are multipliers on top of what is set in the inspector and outlive the session
     /// (PlayerPrefs). Read by PlayerShooting and BodycamPlayerController (walk and run speed are
     /// set in m/s, not as multipliers). Installs itself.
+    /// The sliders are split into sections (tabs along the top); a section can also carry actions, such as
+    /// handing the player the flashlight when they have none yet.
     /// </summary>
     public class DebugMenu : MonoBehaviour
     {
         /// <summary>One slider: its range, step, the value it resets to and how it is shown.</summary>
         class Row
         {
+            public Section section;
             public string name, key, format, unitPrefix, unitSuffix;
             public float min, max, step, reset, floor, value;
         }
 
+        enum Section { Weapons, Flashlight, Camera, Movement }
+        static readonly string[] SectionNames = { "Оружие", "Фонарик", "Камера", "Движение" };
+
         static readonly Row[] Rows =
         {
-            new Row { name = "Отдача оружия", key = "debug.recoilScale", min = 0f, max = 3f, step = 0.05f, reset = 1.45f, format = "0.00", unitPrefix = "x" },
-            new Row { name = "Тряска оружия от страха", key = "debug.fearTremorScale", min = 0f, max = 3f, step = 0.05f, reset = 1.65f, format = "0.00", unitPrefix = "x" },
-            new Row { name = "Фонарь: внутренний круг", key = "debug.flashlightSize", min = 0f, max = 3f, step = 0.05f, reset = 0.8f, floor = 0.2f, format = "0.00", unitPrefix = "x" },
-            new Row { name = "Фонарь: внешний круг", key = "debug.flashlightOuterSize", min = 0f, max = 3f, step = 0.05f, reset = 0.3f, floor = 0.1f, format = "0.00", unitPrefix = "x" },
-            new Row { name = "Дальность резкости", key = "debug.focusDistance", min = 2f, max = 60f, step = 0.5f, reset = 9f, format = "0.0", unitSuffix = " м" },
-            new Row { name = "Скорость ходьбы", key = "debug.walkSpeed", min = 0.5f, max = 8f, step = 0.1f, reset = 2.7f, floor = 0.5f, format = "0.0", unitSuffix = " м/с" },
-            new Row { name = "Скорость бега", key = "debug.sprintSpeed", min = 1f, max = 15f, step = 0.1f, reset = 3.9f, floor = 1f, format = "0.0", unitSuffix = " м/с" },
+            new Row { section = Section.Weapons, name = "Отдача оружия", key = "debug.recoilScale", min = 0f, max = 3f, step = 0.05f, reset = 1.45f, format = "0.00", unitPrefix = "x" },
+            new Row { section = Section.Weapons, name = "Тряска оружия от страха", key = "debug.fearTremorScale", min = 0f, max = 3f, step = 0.05f, reset = 1.65f, format = "0.00", unitPrefix = "x" },
+            new Row { section = Section.Flashlight, name = "Фонарь: внутренний круг", key = "debug.flashlightSize", min = 0f, max = 3f, step = 0.05f, reset = 0.8f, floor = 0.2f, format = "0.00", unitPrefix = "x" },
+            new Row { section = Section.Flashlight, name = "Фонарь: внешний круг", key = "debug.flashlightOuterSize", min = 0f, max = 3f, step = 0.05f, reset = 0.3f, floor = 0.1f, format = "0.00", unitPrefix = "x" },
+            new Row { section = Section.Camera, name = "Дальность резкости", key = "debug.focusDistance", min = 2f, max = 60f, step = 0.5f, reset = 9f, format = "0.0", unitSuffix = " м" },
+            new Row { section = Section.Movement, name = "Скорость ходьбы", key = "debug.walkSpeed", min = 0.5f, max = 8f, step = 0.1f, reset = 2.7f, floor = 0.5f, format = "0.0", unitSuffix = " м/с" },
+            new Row { section = Section.Movement, name = "Скорость бега", key = "debug.sprintSpeed", min = 1f, max = 15f, step = 0.1f, reset = 3.9f, floor = 1f, format = "0.0", unitSuffix = " м/с" },
         };
 
         static DebugMenu()
@@ -55,7 +63,8 @@ namespace BodycamHorror.UI
         public static float FlashlightOuterSize => Rows[3].value;
 
         bool open;
-        GUIStyle head, line, value, hint, reset;
+        static Section shown;   // the open section, kept while the game runs
+        GUIStyle head, line, value, hint, reset, tab, tabOn, action;
         float styleScale = -1f;
         static Texture2D white;
 
@@ -106,16 +115,38 @@ namespace BodycamHorror.UI
             Styles(k);
             GUI.depth = -900;
 
-            float pad = 18f * k, rowH = 44f * k, w = 700f * k;
-            var panel = new Rect(16f * k, 16f * k, w, pad * 2f + 44f * k + rowH * Rows.Length + 34f * k);
+            float pad = 18f * k, rowH = 44f * k, w = 700f * k, tabH = 40f * k, actionH = 48f * k;
+            int count = 0;
+            foreach (var r in Rows) if (r.section == shown) count++;
+            int actions = shown == Section.Flashlight ? 1 : 0;
+            var panel = new Rect(16f * k, 16f * k, w, pad * 2f + 44f * k + tabH + 14f * k + rowH * count + actionH * actions + 34f * k);
             Fill(panel, new Color(0.05f, 0.055f, 0.06f, 0.88f));
 
             float x = panel.x + pad, y = panel.y + pad, inner = w - pad * 2f;
             GUI.Label(new Rect(x, y, inner, 36f * k), "DEBUG", head);
             y += 44f * k;
 
+            // the sections, as tabs
+            float tw = (inner - 6f * k * (SectionNames.Length - 1)) / SectionNames.Length;
+            for (int i = 0; i < SectionNames.Length; i++)
+                if (GUI.Button(new Rect(x + i * (tw + 6f * k), y, tw, tabH), SectionNames[i], (Section)i == shown ? tabOn : tab)) shown = (Section)i;
+            y += tabH + 14f * k;
+
+            if (shown == Section.Flashlight)
+            {
+                var light = FindAnyObjectByType<BodycamFlashlight>(FindObjectsInactive.Include);
+                bool has = light && light.owned;
+                bool was = GUI.enabled;
+                GUI.enabled = light && !has;
+                string label = !light ? "Фонарика нет в сцене" : has ? "Фонарик уже есть" : "Выдать фонарик";
+                if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), label, action)) GiveFlashlight(light);
+                GUI.enabled = was;
+                y += actionH;
+            }
+
             foreach (var r in Rows)
             {
+                if (r.section != shown) continue;
                 float v = r.value, h = rowH - 6f * k;
                 GUI.Label(new Rect(x, y, 290f * k, h), r.name, line);
                 var bar = new Rect(x + 300f * k, y, 210f * k, h);
@@ -132,6 +163,19 @@ namespace BodycamHorror.UI
             GUI.Label(new Rect(x, y + 4f * k, inner, 30f * k), "Тяни ползунок мышью. Кнопка справа — вернуть как было. Tab — закрыть.", hint);
         }
 
+        /// <summary>As if the weapon light had been picked up (WeaponPickup, Kind Pistol Light): the player owns
+        /// the flashlight from now on, it fits under the pistol, and it is switched on.</summary>
+        static void GiveFlashlight(BodycamFlashlight light)
+        {
+            if (!light) return;
+            light.owned = true;
+            var player = light.GetComponentInParent<BodycamPlayerController>();
+            var shooting = player ? player.GetComponentInChildren<PlayerShooting>(true) : null;
+            var pistol = shooting ? shooting.FindWeapon<Pistol>() : null;
+            if (pistol) pistol.HasLight = true;
+            light.SetOn(true);
+        }
+
         void Styles(float k)
         {
             if (Mathf.Approximately(k, styleScale) && head != null) return;
@@ -145,6 +189,12 @@ namespace BodycamHorror.UI
             value = new GUIStyle(line) { fontStyle = FontStyle.Bold };
             value.normal.textColor = new Color(1f, 0.82f, 0.4f);
             reset = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(17f * k) };
+            tab = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(19f * k) };
+            tab.normal.textColor = new Color(0.62f, 0.65f, 0.62f);
+            tabOn = new GUIStyle(tab) { fontStyle = FontStyle.Bold };
+            tabOn.normal.background = tabOn.active.background;
+            tabOn.normal.textColor = tabOn.hover.textColor = new Color(1f, 0.82f, 0.4f);
+            action = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(19f * k), fontStyle = FontStyle.Bold };
             hint = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(17f * k), alignment = TextAnchor.UpperLeft, wordWrap = true };
             hint.normal.textColor = new Color(0.62f, 0.65f, 0.62f);
         }

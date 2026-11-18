@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -25,6 +26,10 @@ namespace BodycamHorror.UI
         Page page;
         float timeScaleBefore = 1f;
         InputAction toggle;
+        // Animators stopped for the pause. With time at 0 the scripts that pose the arms (BareHands, RiggedArms,
+        // the gun hands...) skip their frame, but an Animator still writes its clip's raw pose every frame: the
+        // hands would fall out of their IK pose. Stopped, the bones stay exactly as last posed.
+        readonly List<Animator> frozen = new List<Animator>();
 
         static Texture2D white;
         GUIStyle title, button, label, value, hint;
@@ -64,7 +69,7 @@ namespace BodycamHorror.UI
 
         void Update()
         {
-            if (!toggle.WasPressedThisFrame()) return;
+            if (!toggle.WasPressedThisFrame() || MainMenu.IsActive) return;   // no pausing the main menu
             if (!open) Open();
             else if (page != Page.Main) page = Page.Main;   // Escape steps back out of a sub-page first
             else Close();
@@ -78,6 +83,7 @@ namespace BodycamHorror.UI
             timeScaleBefore = Time.timeScale;
             Time.timeScale = 0f;
             AudioListener.pause = true;
+            Freeze();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
@@ -88,9 +94,28 @@ namespace BodycamHorror.UI
             open = false;
             Time.timeScale = timeScaleBefore > 0f ? timeScaleBefore : 1f;
             AudioListener.pause = false;
+            Thaw();
             if (DebugMenu.IsOpen) return;   // its sliders still need the cursor
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+        }
+
+        void Freeze()
+        {
+            frozen.Clear();
+            foreach (Animator a in FindObjectsByType<Animator>(FindObjectsSortMode.None))
+            {
+                if (!a.isActiveAndEnabled || a.updateMode == AnimatorUpdateMode.UnscaledTime) continue;
+                a.keepAnimatorStateOnDisable = true;   // carry on mid-clip afterwards, not from the start
+                a.enabled = false;
+                frozen.Add(a);
+            }
+        }
+
+        void Thaw()
+        {
+            foreach (Animator a in frozen) if (a) a.enabled = true;
+            frozen.Clear();
         }
 
         static void Quit()
@@ -112,7 +137,7 @@ namespace BodycamHorror.UI
             GUI.depth = -1000;
 
             Fill(new Rect(0f, 0f, Screen.width, Screen.height), Shade);
-            float w = 660f * k, h = (page == Page.Main ? 420f : 580f) * k;
+            float w = 660f * k, h = (page == Page.Main ? 420f : 650f) * k;
             var panel = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
             Fill(panel, Panel);
             Frame(panel, Edge, Mathf.Max(1f, Mathf.Round(2f * k)));
@@ -154,6 +179,9 @@ namespace BodycamHorror.UI
 
             bool ringing = GameSettings.EarRinging;
             if (Row("Писк в ушах при страхе", ringing ? "Вкл" : "Выкл", true, k)) GameSettings.EarRinging = !ringing;
+
+            int light = GameSettings.FlashlightColorIndex;
+            if (Row("Цвет фонарика", GameSettings.FlashlightColors[light].name, true, k)) GameSettings.FlashlightColorIndex = light + 1;
 
             GUILayout.FlexibleSpace();
             if (Button("Назад", k)) page = Page.Main;

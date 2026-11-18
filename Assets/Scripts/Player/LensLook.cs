@@ -61,6 +61,14 @@ namespace BodycamHorror.Player
         [Tooltip("Smear when the camera moves or turns fast. 0 = off.")]
         [Range(0f, 1f)] public float motionBlur = 0.06f;
 
+        [Header("Driven by cutscenes")]
+        [Tooltip("0 = eyes open, 1 = shut: the frame closes in from top and bottom like eyelids.")]
+        [Range(0f, 1f)] public float eyelids;
+        [Tooltip("0 = normal focus, 1 = everything past arm's length is badly out of focus (coming round, dazed).")]
+        [Range(0f, 1f)] public float daze;
+        [Tooltip("Focus blur at full daze: the blur's radius as a share of the screen height.")]
+        [Range(0f, 0.03f)] public float dazeBlur = 0.014f;
+
         static readonly int OnId = Shader.PropertyToID("_LensOn");
         static readonly int FrameId = Shader.PropertyToID("_LensFrame");
         static readonly int ShadeId = Shader.PropertyToID("_LensShade");
@@ -121,7 +129,13 @@ namespace BodycamHorror.Player
             aim = Mathf.Lerp(aim, want, 1f - Mathf.Exp(-focusSpeed * Time.deltaTime));
 
             float sharp = BodycamHorror.UI.DebugMenu.FocusDistance > 0f ? BodycamHorror.UI.DebugMenu.FocusDistance : sharpDistance;
-            Shader.SetGlobalVector(FocusId, new Vector4(sharp, sharp * (1f + blurFalloff), farBlur, farBlur > 0f ? 1f : 0f));
+            float blur = farBlur;
+            if (daze > 0f)
+            {
+                sharp = Mathf.Lerp(sharp, 0.35f, daze);
+                blur = Mathf.Lerp(farBlur, dazeBlur, daze);
+            }
+            Shader.SetGlobalVector(FocusId, new Vector4(sharp, sharp * (1f + blurFalloff), blur, blur > 0f ? 1f : 0f));
             glass.intensity.Override(barrel);
             glass.scale.Override(barrelScale);
             fringe.intensity.Override(fringing);
@@ -131,8 +145,20 @@ namespace BodycamHorror.Player
 
             Vector2 frame = frameInset + aimFrameInset * aim;
             Vector2 shade = shadeInset + aimShadeInset * aim;
-            Shader.SetGlobalVector(FrameId, new Vector4(frame.x, frame.y, frameRadius, frameFeather));
-            Shader.SetGlobalVector(ShadeId, new Vector4(shade.x, shade.y, shadeFeather, Mathf.Clamp01(shadeStrength + aimShadeStrength * aim)));
+            float feather = frameFeather;
+            float shadeK = Mathf.Clamp01(shadeStrength + aimShadeStrength * aim);
+            if (eyelids > 0f)
+            {
+                // eyelids: the frame narrows to a slit from top and bottom, softer the more it closes; shut = black
+                float lid = Mathf.Clamp01(eyelids);
+                frame.y = Mathf.Lerp(frame.y, 1f, lid);   // 1 = the box has no height left: all black
+                frame.x = Mathf.Lerp(frame.x, 0.25f, lid);
+                feather = Mathf.Lerp(frameFeather, 0.55f, Mathf.Sqrt(lid));
+                shade.y = Mathf.Lerp(shade.y, 0.9f, lid);
+                shadeK = Mathf.Lerp(shadeK, 0.9f, lid);
+            }
+            Shader.SetGlobalVector(FrameId, new Vector4(frame.x, frame.y, frameRadius, feather));
+            Shader.SetGlobalVector(ShadeId, new Vector4(shade.x, shade.y, shadeFeather, shadeK));
         }
     }
 }

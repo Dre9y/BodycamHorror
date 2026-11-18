@@ -12,6 +12,31 @@ namespace BodycamHorror.UI
         const string FpsCapKey = "settings.fpsCap";
         const string ShowFpsKey = "settings.showFps";
         const string EarRingingKey = "settings.earRinging";
+        const string FlashlightColorKey = "settings.flashlightColor";
+
+        /// <summary>Flashlight colours offered on the settings page, in the order they cycle.</summary>
+        public static readonly (string name, Color color)[] FlashlightColors =
+        {
+            ("Холодный синий", new Color(0.70f, 0.83f, 1f)),
+            ("Белый", new Color(0.95f, 0.97f, 1f)),
+            ("Тёплый", new Color(1f, 0.94f, 0.82f)),
+            ("Жёлтый", new Color(1f, 0.84f, 0.58f)),
+            ("Зеленоватый", new Color(0.8f, 1f, 0.86f)),
+        };
+
+        /// <summary>Which of <see cref="FlashlightColors"/> the flashlight shines.</summary>
+        public static int FlashlightColorIndex
+        {
+            get => flashlightColor ??= Mathf.Clamp(PlayerPrefs.GetInt(FlashlightColorKey, 0), 0, FlashlightColors.Length - 1);   // read every frame: cached
+            set
+            {
+                flashlightColor = (value % FlashlightColors.Length + FlashlightColors.Length) % FlashlightColors.Length;
+                PlayerPrefs.SetInt(FlashlightColorKey, flashlightColor.Value);
+                PlayerPrefs.Save();
+            }
+        }
+        static int? flashlightColor;
+        public static Color FlashlightColor => FlashlightColors[FlashlightColorIndex].color;
 
         /// <summary>The frame counter in the top right corner (FpsCounter).</summary>
         public static bool ShowFps

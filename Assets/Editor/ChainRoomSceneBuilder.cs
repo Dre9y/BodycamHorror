@@ -150,7 +150,7 @@ namespace BodycamHorror.EditorTools
             root.position = new Vector3(RoomCentre.x, bulbY, RoomCentre.z);
 
             Material black = LightingTestSceneBuilder.SimpleMaterial("LampMetal", new Color(0.05f, 0.05f, 0.05f), 0.7f, 0.35f);
-            Material glassMat = LightingTestSceneBuilder.EmissiveMaterial("ChainRoomBulb", new Color(1f, 0.92f, 0.75f), 14f);
+            Material glassMat = LightingTestSceneBuilder.EmissiveMaterial("ChainRoomBulb", new Color(0.7f, 0.83f, 1f), 14f);
 
             var cord = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             cord.name = "Cord"; Object.DestroyImmediate(cord.GetComponent<Collider>());
@@ -181,7 +181,7 @@ namespace BodycamHorror.EditorTools
             lightGo.transform.localPosition = new Vector3(0f, -0.12f, 0f);
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Point;
-            light.color = new Color(1f, 0.9f, 0.74f);
+            light.color = new Color(0.7f, 0.83f, 1f);   // cold blue
             light.intensity = 16f;
             light.range = 17f;
             light.shadows = LightShadows.Soft;

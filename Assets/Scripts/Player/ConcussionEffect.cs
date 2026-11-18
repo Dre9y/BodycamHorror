@@ -102,6 +102,19 @@ namespace BodycamHorror.Player
             }
         }
 
+        /// <summary>Double vision (and optionally the ring) without a hit, e.g. coming round after being knocked out.</summary>
+        public void Daze(float strength = 1f, bool ringing = true)
+        {
+            peak = Mathf.Max(peak, Mathf.Clamp01(strength));
+            seed = Random.value * 100f;
+            if (ringing && ring && ringVolume > 0f)
+            {
+                EnsureRing();
+                ringLevel = Mathf.Max(ringLevel, Mathf.Clamp01(strength));
+                if (!ringSource.isPlaying) ringSource.Play();
+            }
+        }
+
         void OnDied() { peak = 0f; residue = 0f; ringLevel = 0f; }
 
         void LateUpdate()

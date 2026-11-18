@@ -3178,6 +3178,9 @@ MonoBehaviour:
   edgeBlur: 0.007
   edgeBlurStart: 0.45
   motionBlur: 0.06
+  eyelids: 0
+  daze: 0
+  dazeBlur: 0.014
 --- !u!114 &330585549
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3537,6 +3540,8 @@ MonoBehaviour:
   equip: 1
   flashlightOff: 0
   promptHeight: 0.22
+  reach: 0
+  lookAngle: 0
   glow: {fileID: 1305745701}
   glowPulse: 0.18
   glowPeriod: 2.6
@@ -4453,10 +4458,10 @@ MonoBehaviour:
   startOn: 0
   intensity: 70
   range: 26
-  spotAngle: 58
-  innerSpotAngle: 22
+  spotAngle: 64
+  innerSpotAngle: 8
   beamSize: 0.82
-  color: {r: 1, g: 0.94, b: 0.82, a: 1}
+  color: {r: 0.7, g: 0.83, b: 1, a: 1}
   shadows: 2
   closeDimDistance: 6
   closeDimPower: 1.35
@@ -4468,7 +4473,10 @@ MonoBehaviour:
   hazeMaterial: {fileID: 2100000, guid: b45e69105b27f0148b684d399f423d01, type: 2}
   hazeDensity: 0.0007
   hazeWisps: 0.5
-  spillIntensity: 5
+  haloIntensity: 16
+  haloSpread: 0.5
+  haloRange: 16
+  spillIntensity: 9
   spillAngle: 120
   spillRange: 10
   handFillIntensity: 0.5
@@ -9243,7 +9251,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.PlayerHealth
   hitsToDie: 2
   recoveryTime: 12
-  hitGrace: 0.35
+  invulnerableTime: 2
   stressPerHit: 0.3
   traumaPerDamage: 0.02
   player: {fileID: 0}
@@ -9534,6 +9542,7 @@ GameObject:
   m_Component:
   - component: {fileID: 926739390}
   - component: {fileID: 926739391}
+  - component: {fileID: 926739392}
   m_Layer: 0
   m_Name: Lamp_Closet_A
   m_TagString: Untagged
@@ -9621,6 +9630,35 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
+--- !u!114 &926739392
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 926739389}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!1 &928743883
 GameObject:
   m_ObjectHideFlags: 0
@@ -9907,6 +9945,8 @@ MonoBehaviour:
   equip: 1
   flashlightOff: 0
   promptHeight: 0.15
+  reach: 0
+  lookAngle: 0
   glow: {fileID: 1207846855}
   glowPulse: 0.18
   glowPeriod: 2.6
@@ -10190,6 +10230,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1025670252}
   - component: {fileID: 1025670253}
+  - component: {fileID: 1025670254}
   m_Layer: 0
   m_Name: Lamp_Doors
   m_TagString: Untagged
@@ -10277,6 +10318,35 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
+--- !u!114 &1025670254
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1025670251}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!1 &1033995744
 GameObject:
   m_ObjectHideFlags: 0
@@ -10287,6 +10357,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1033995745}
   - component: {fileID: 1033995746}
+  - component: {fileID: 1033995747}
   m_Layer: 0
   m_Name: Lamp_Closet_B
   m_TagString: Untagged
@@ -10374,6 +10445,35 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
+--- !u!114 &1033995747
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1033995744}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!1 &1034109522
 GameObject:
   m_ObjectHideFlags: 0
@@ -12306,6 +12406,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1254811987}
   - component: {fileID: 1254811988}
+  - component: {fileID: 1254811989}
   m_Layer: 0
   m_Name: Lamp_SteamPipe
   m_TagString: Untagged
@@ -12393,6 +12494,35 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
+--- !u!114 &1254811989
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1254811986}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!1 &1256847530
 GameObject:
   m_ObjectHideFlags: 0
@@ -18839,6 +18969,8 @@ MonoBehaviour:
   equip: 1
   flashlightOff: 0
   promptHeight: 0.22
+  reach: 0
+  lookAngle: 0
   glow: {fileID: 928743887}
   glowPulse: 0.18
   glowPeriod: 2.6

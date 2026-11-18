@@ -18,6 +18,9 @@ namespace BodycamHorror.EditorTools
     /// the big room is seen, where the monster stands once the gun is taken and from where it runs out
     /// through the outer doorway (PeekScare). A grey, wet, run-down panel flat: no flashlight yet, a few
     /// dim lamps along the way, a desk lamp, rubbish on the floor, leak streaks on the walls.
+    /// The game starts further back: knocked out in a store room (room 1, WakeUpIntro), from where a
+    /// passage leads north into the corridor's near end. The big room has a second, padlocked door in its
+    /// top wall onto a dark passage that goes up and turns right, towards what comes next.
     /// Menu: BodycamHorror > Build Level Scene. Rebuilding writes over the scene.
     ///
     /// Coordinates (m): X to the right of the sketch, Z up the sketch, origin at the big room's inner
@@ -41,9 +44,23 @@ namespace BodycamHorror.EditorTools
         const float SmallDoorX = 1.0f;  // in the small room's bottom wall
         const float OuterDoorZ = 6.6f;  // in the big room's right wall
         // the window in the small room's right wall
+        const float DeskZ = 6.0f;      // the middle of the desk under the window (its length runs along Z)
         const float WindowZ0 = 5.2f, WindowZ1 = 6.9f, SillY = 0.9f, WindowTopY = 2.1f;   // wide: from anywhere along the desk the outer doorway shows through it
         // the corridor outside the outer door
         const float CorridorX1 = RoomW + Wall + 2.2f, CorridorZ0 = 3.6f, CorridorZ1 = 10f;
+        // the passage south out of the corridor's near end, down to the start room
+        const float PassX0 = RoomW + Wall + 0.45f, PassX1 = CorridorX1 - 0.45f, PassTop = 2.2f;
+        // the start room (room 1), below the passage and off to its left; its door is where the passage comes in
+        // it lies below the big room's bottom-left corner; a low corridor runs east from its right-hand door
+        // and turns up into the passage
+        const float Room1X0 = -2.8f, Room1X1 = 1.8f, Room1Z0 = -6.8f, Room1Z1 = -3f;
+        const float LowZ0 = -5.6f, LowZ1 = -4.3f;   // the low corridor, inside faces
+        const float Room1DoorZ = LowZ0 + (LowZ1 - LowZ0 - DoorBuilder.OpeningWidth) * 0.5f;
+        // the locked door: straight ahead at the corridor's far end (the big room's door is the turn to the
+        // left on the way), in the middle of its end wall, onto a dark passage that goes on up and turns right
+        // (the way on, opened later)
+        const float LockedDoorX = (RoomW + Wall + CorridorX1) * 0.5f - DoorBuilder.OpeningWidth * 0.5f;
+        const float NorthX0 = PassX0, NorthX1 = PassX1, NorthZ1 = 13f, NorthLegZ0 = 11.6f, NorthLegX1 = 15f;
 
         static Material wallPaint, wallPlaster, floorMat, ceilingMat;
         static Material wood, woodDark, woodPaint, fabric, fabricDark, paper, grime, wet, rust, enamel, cardboard, rubbish, carpet, glass;
@@ -83,9 +100,11 @@ namespace BodycamHorror.EditorTools
             Pistol pistol = null;
             if (player)
             {
-                // in the corridor, facing the outer door
-                player.transform.SetPositionAndRotation(new Vector3(RoomW + Wall + 1.1f, player.transform.position.y, OuterDoorZ + 0.5f),
-                                                        Quaternion.Euler(0f, -90f, 0f));
+                // knocked out on the start room's floor, the door in front once up (WakeUpIntro)
+                var start = new Vector3(Room1X0 + 2.2f, player.transform.position.y, Room1DoorZ + DoorBuilder.OpeningWidth * 0.5f - 0.1f);
+                Vector3 toDoor = new Vector3(Room1X1, start.y, Room1DoorZ + DoorBuilder.OpeningWidth * 0.5f) - start;
+                player.transform.SetPositionAndRotation(start, Quaternion.LookRotation(toDoor));
+                if (!player.GetComponent<WakeUpIntro>()) player.gameObject.AddComponent<WakeUpIntro>();
                 var shooting = player.GetComponentInChildren<PlayerShooting>(true);
                 if (shooting)
                 {
@@ -109,6 +128,7 @@ namespace BodycamHorror.EditorTools
             BuildWindow(level);
             FurnishSmallRoom(level);
             FurnishBigRoom(level);
+            FurnishStartRoom(level);
             Rubbish(level);
             Leaks(level);
             WeaponPickup pickup = PlacePistol(pistol);
@@ -234,10 +254,44 @@ namespace BodycamHorror.EditorTools
 
             // the corridor outside: runs along Z past the outer door, both ends closed
             WallZ("Corridor_Far", shell, CorridorZ0 - w, CorridorZ1 + w, CorridorX1, CorridorX1 + w);
-            WallX("Corridor_EndNear", shell, RoomW + w, CorridorX1, CorridorZ0 - w, CorridorZ0);
-            WallX("Corridor_EndFar", shell, RoomW, CorridorX1, CorridorZ1, CorridorZ1 + w);
+            WallX("Corridor_EndNear", shell, RoomW + w, CorridorX1, CorridorZ0 - w, CorridorZ0, new Hole(PassX0, PassX1, 0f, PassTop));
+            WallX("Corridor_EndFar", shell, RoomW, CorridorX1, CorridorZ1, CorridorZ1 + w, DoorHole(LockedDoorX));
             // its near side is the big room's right wall; past the room's top corner it needs a wall of its own
             WallZ("Corridor_Near", shell, RoomD + w, CorridorZ1, RoomW, RoomW + w);
+
+            // the passage south from the corridor's near end, down to the corner with the low corridor
+            float passZ0 = LowZ1 + w, passZ1 = CorridorZ0 - w;
+            LightingTestSceneBuilder.Box("Floor_Passage", shell, new Vector3(PassX0 - w, -w, passZ0), new Vector3(PassX1 + w, 0f, passZ1), floorMat, tile, tile);
+            LightingTestSceneBuilder.Box("Ceiling_Passage", shell, new Vector3(PassX0 - w, Height, passZ0), new Vector3(PassX1 + w, Height + w, passZ1), ceilingMat, ceilingTile, ceilingTile);
+            WallZ("Passage_Left", shell, LowZ1, passZ1, PassX0 - w, PassX0);
+            WallZ("Passage_Right", shell, LowZ0, passZ1, PassX1, PassX1 + w);
+
+            // the low corridor: east from the start room's door, under the big room, to the passage's foot
+            float lowX0 = Room1X1 + w;
+            LightingTestSceneBuilder.Box("Floor_Low", shell, new Vector3(lowX0, -w, LowZ0 - w), new Vector3(PassX1 + w, 0f, LowZ1 + w), floorMat, tile, tile);
+            LightingTestSceneBuilder.Box("Ceiling_Low", shell, new Vector3(lowX0, Height, LowZ0 - w), new Vector3(PassX1 + w, Height + w, LowZ1 + w), ceilingMat, ceilingTile, ceilingTile);
+            WallX("Low_Top", shell, lowX0, PassX0 - w, LowZ1, LowZ1 + w);
+            WallX("Low_Bottom", shell, lowX0, PassX1 + w, LowZ0 - w, LowZ0);
+
+            // the start room, its door in the right wall
+            LightingTestSceneBuilder.Box("Floor_Room1", shell, new Vector3(Room1X0 - w, -w, Room1Z0 - w), new Vector3(Room1X1 + w, 0f, Room1Z1 + w), floorMat, tile, tile);
+            LightingTestSceneBuilder.Box("Ceiling_Room1", shell, new Vector3(Room1X0 - w, Height, Room1Z0 - w), new Vector3(Room1X1 + w, Height + w, Room1Z1 + w), ceilingMat, ceilingTile, ceilingTile);
+            WallX("Room1_Top", shell, Room1X0 - w, Room1X1 + w, Room1Z1, Room1Z1 + w);
+            WallX("Room1_Bottom", shell, Room1X0 - w, Room1X1 + w, Room1Z0 - w, Room1Z0);
+            WallZ("Room1_Left", shell, Room1Z0, Room1Z1, Room1X0 - w, Room1X0);
+            WallZ("Room1_Right", shell, Room1Z0, Room1Z1, Room1X1, Room1X1 + w, DoorHole(Room1DoorZ));
+
+            // behind the locked door: on up from the corridor's far end, then right (towards room 4), closed off for now
+            float northZ0 = CorridorZ1 + w;
+            LightingTestSceneBuilder.Box("Floor_North", shell, new Vector3(NorthX0 - w, -w, northZ0), new Vector3(NorthX1 + w, 0f, NorthZ1 + w), floorMat, tile, tile);
+            LightingTestSceneBuilder.Box("Floor_NorthLeg", shell, new Vector3(NorthX1 + w, -w, NorthLegZ0 - w), new Vector3(NorthLegX1 + w, 0f, NorthZ1 + w), floorMat, tile, tile);
+            LightingTestSceneBuilder.Box("Ceiling_North", shell, new Vector3(NorthX0 - w, Height, northZ0), new Vector3(NorthX1 + w, Height + w, NorthZ1 + w), ceilingMat, ceilingTile, ceilingTile);
+            LightingTestSceneBuilder.Box("Ceiling_NorthLeg", shell, new Vector3(NorthX1 + w, Height, NorthLegZ0 - w), new Vector3(NorthLegX1 + w, Height + w, NorthZ1 + w), ceilingMat, ceilingTile, ceilingTile);
+            WallZ("North_Left", shell, northZ0, NorthZ1 + w, NorthX0 - w, NorthX0);
+            WallZ("North_Right", shell, northZ0, NorthLegZ0 - w, NorthX1, NorthX1 + w);
+            WallX("North_Top", shell, NorthX0, NorthLegX1 + w, NorthZ1, NorthZ1 + w);
+            WallX("North_LegBottom", shell, NorthX1 + w, NorthLegX1 + w, NorthLegZ0 - w, NorthLegZ0);
+            WallZ("North_LegEnd", shell, NorthLegZ0, NorthZ1, NorthLegX1, NorthLegX1 + w);
         }
 
         static void BuildDoors(Transform level)
@@ -247,6 +301,10 @@ namespace BodycamHorror.EditorTools
             DoorBuilder.Place(new Vector3(SmallDoorX, 0f, SmallZ0 - Wall * 0.5f), Vector3.right, false, doors).name = "Door_SmallRoom";
             // outer: in the big room's right wall, front facing into the big room
             DoorBuilder.Place(new Vector3(RoomW + Wall * 0.5f, 0f, OuterDoorZ), Vector3.forward, false, doors).name = "Door_Outer";
+            // start room: in its right wall onto the low corridor, front facing into the room
+            DoorBuilder.Place(new Vector3(Room1X1 + Wall * 0.5f, 0f, Room1DoorZ), Vector3.forward, false, doors).name = "Door_StartRoom";
+            // straight ahead at the corridor's far end: padlocked, the padlock facing down the corridor
+            DoorBuilder.Place(new Vector3(LockedDoorX + DoorBuilder.OpeningWidth, 0f, CorridorZ1 + Wall * 0.5f), Vector3.left, true, doors).name = "Door_Locked";
         }
 
         static void BuildWindow(Transform level)
@@ -278,23 +336,21 @@ namespace BodycamHorror.EditorTools
         {
             var room = Group(level, "SmallRoom");
 
-            // the desk along the window wall, under the window
+            // the desk along the window wall, under the window: the Blender model (1.24 x 0.69 m, front on its +Z),
+            // turned so its front faces into the room, back against the wall; the pedestal ends up at the far (+Z) end
             var desk = Group(room, "Desk");
-            float dx0 = SmallX1 - 0.7f, dx1 = SmallX1 - 0.02f, dz0 = 5.05f, dz1 = 6.55f, top = 0.76f;
-            Prop(desk, "Top", new Vector3(dx0, top - 0.04f, dz0), new Vector3(dx1, top, dz1), wood);
-            Prop(desk, "Pedestal", new Vector3(dx0 + 0.03f, 0f, dz0 + 0.02f), new Vector3(dx1 - 0.03f, top - 0.04f, dz0 + 0.45f), wood);
-            for (int i = 0; i < 3; i++)
-                Prop(desk, "Drawer" + i, new Vector3(dx0 + 0.01f, 0.06f + i * 0.22f, dz0 + 0.04f), new Vector3(dx0 + 0.03f, 0.24f + i * 0.22f, dz0 + 0.43f), woodDark, collider: false);
-            Prop(desk, "Leg_A", new Vector3(dx0 + 0.03f, 0f, dz1 - 0.07f), new Vector3(dx0 + 0.08f, top - 0.04f, dz1 - 0.02f), wood);
-            Prop(desk, "Leg_B", new Vector3(dx1 - 0.08f, 0f, dz1 - 0.07f), new Vector3(dx1 - 0.03f, top - 0.04f, dz1 - 0.02f), wood);
-            // on it: papers, a mug, a book; the lamp is built with the lights
-            Prop(desk, "Papers", new Vector3(dx0 + 0.15f, top, 5.25f), new Vector3(dx0 + 0.45f, top + 0.01f, 5.55f), paper, 14f, false);
-            Prop(desk, "Paper_Loose", new Vector3(dx0 + 0.05f, top, 6.1f), new Vector3(dx0 + 0.26f, top + 0.003f, 6.4f), paper, -22f, false);
-            Cylinder(desk, "Mug", new Vector3(dx0 + 0.2f, top + 0.045f, 5.75f), 0.04f, 0.09f, enamel, false);
-            Prop(desk, "Book", new Vector3(dx0 + 0.42f, top, 5.15f), new Vector3(dx0 + 0.6f, top + 0.04f, 5.4f), woodDark, -6f, false);
+            float dx0 = SmallX1 - 0.71f, top = 0.76f;
+            PlaceModel(DeskPrefab, desk, "Desk_Model", new Vector3(SmallX1 - 0.365f, 0f, DeskZ), -90f);
+            // on it: the pistol in the middle of the lamp's pool (PlacePistol), the mug and the clipboard either
+            // side of it in the light, a loose sheet and a book out in the dark; the lamp is built with the lights.
+            // The small things on it have no colliders: nothing may block the pistol's pickup ray
+            Bare(PlaceModel(ClipboardPrefab, desk, "Clipboard_Model", new Vector3(dx0 + 0.25f, top, DeskZ - 0.24f), -80f));   // clip to the window
+            Bare(PlaceModel(MugPrefab, desk, "Mug_Model", new Vector3(dx0 + 0.17f, top, DeskZ + 0.16f), -110f));   // the roses to the room
+            Prop(desk, "Paper_Loose", new Vector3(dx0 + 0.03f, top, DeskZ + 0.28f), new Vector3(dx0 + 0.24f, top + 0.003f, DeskZ + 0.58f), paper, -22f, false);
+            Prop(desk, "Book", new Vector3(dx0 + 0.42f, top, DeskZ - 0.58f), new Vector3(dx0 + 0.6f, top + 0.04f, DeskZ - 0.33f), woodDark, -6f, false);
 
-            // the chair pushed back from the desk
-            Chair(room, "Chair_Desk", new Vector3(dx0 - 0.45f, 0f, 5.75f), 85f, false);
+            // the chair pushed back from the desk at the knee space, a little askew
+            Chair(room, "Chair_Desk", new Vector3(dx0 - 0.5f, 0f, DeskZ - 0.35f), 250f, false);
 
             // the sketch's grey things: a bookcase top left, a bin bottom left, a chair bottom right, rubbish by the desk
             var shelf = Group(room, "Bookcase");
@@ -322,7 +378,7 @@ namespace BodycamHorror.EditorTools
             Prop(room, "Book_Floor2", new Vector3(1.0f, 0f, 7.2f), new Vector3(1.18f, 0.035f, 7.44f), woodDark, -50f, false);
 
             Cylinder(room, "Bin", new Vector3(0.4f, 0.22f, SmallZ0 + 0.4f), 0.18f, 0.44f, rust);
-            Chair(room, "Chair_Fallen", new Vector3(SmallX1 - 0.5f, 0f, SmallZ0 + 0.5f), -30f, true);
+            Chair(room, "Chair_Fallen", new Vector3(SmallX1 - 0.75f, 0f, SmallZ0 + 0.75f), -30f, true);
             RubbishPile(room, "Pile_DeskCorner", new Vector3(SmallX1 - 0.45f, 0f, RoomD - 0.4f), 0.45f, 9, 3);
 
             // a wardrobe against the left wall, a door hanging open
@@ -342,14 +398,11 @@ namespace BodycamHorror.EditorTools
         {
             var room = Group(level, "BigRoom");
 
-            // the bottom strip: a sofa on the left, an overturned table, a fridge in the far corner
+            // the bottom strip: a sofa on the left under a wall shelf, an overturned table, a fridge in the far corner
             var sofa = Group(room, "Sofa");
-            Prop(sofa, "Base", new Vector3(0.05f, 0f, 0.3f), new Vector3(0.9f, 0.42f, 2.3f), fabric);
-            Prop(sofa, "Back", new Vector3(0.05f, 0.42f, 0.3f), new Vector3(0.3f, 0.9f, 2.3f), fabric);
-            Prop(sofa, "Arm_A", new Vector3(0.05f, 0.42f, 0.3f), new Vector3(0.9f, 0.6f, 0.45f), fabric);
-            Prop(sofa, "Arm_B", new Vector3(0.05f, 0.42f, 2.15f), new Vector3(0.9f, 0.6f, 2.3f), fabric);
+            PlaceModel(SofaPrefab, sofa, "Sofa_Model", new Vector3(0.47f, 0f, 1.3f), 90f);            // back to the left wall
+            PlaceModel(WallShelfPrefab, sofa, "WallShelf_Model", new Vector3(0f, 1.45f, 1.3f), 90f);   // on the wall over it
             Prop(sofa, "Cushion_Fallen", new Vector3(1.0f, 0f, 1.0f), new Vector3(1.55f, 0.12f, 1.55f), fabricDark, 25f);
-            Prop(sofa, "Stain", new Vector3(0.35f, 0.421f, 1.2f), new Vector3(0.8f, 0.423f, 1.9f), grime, 0f, false);
 
             var table = Group(room, "Table_Overturned");   // on its side, legs to the room
             Prop(table, "Top", new Vector3(2.6f, 0f, 1.6f), new Vector3(3.8f, 0.75f, 1.64f), wood, 8f);
@@ -360,17 +413,15 @@ namespace BodycamHorror.EditorTools
                 Prop(table, "LegT" + i, new Vector3(x, 0.62f, 0.95f), new Vector3(x + 0.05f, 0.67f, 1.6f), wood, 8f);
             }
 
-            var fridge = Group(room, "Fridge");
-            Prop(fridge, "Body", new Vector3(RoomW - 0.7f, 0f, 0.05f), new Vector3(RoomW - 0.05f, 1.45f, 0.68f), enamel);
-            Prop(fridge, "Rust", new Vector3(RoomW - 0.71f, 0.02f, 0.1f), new Vector3(RoomW - 0.7f, 0.35f, 0.6f), rust, 0f, false);
-            Prop(fridge, "Handle", new Vector3(RoomW - 0.73f, 0.9f, 0.55f), new Vector3(RoomW - 0.7f, 1.2f, 0.58f), rust, 0f, false);
+            var fridge = Group(room, "Fridge");   // in the corner, its door to the room
+            PlaceModel(FridgePrefab, fridge, "Fridge_Model", new Vector3(RoomW - 0.37f, 0f, 0.37f), -90f);
 
             // cardboard boxes, a heap of rubbish bags
             var boxes = Group(room, "Boxes");
-            Prop(boxes, "Box0", new Vector3(5.6f, 0f, 0.1f), new Vector3(6.2f, 0.45f, 0.6f), cardboard, 6f);
-            Prop(boxes, "Box1", new Vector3(6.25f, 0f, 0.12f), new Vector3(6.8f, 0.5f, 0.62f), cardboard, -4f);
-            Prop(boxes, "Box2", new Vector3(5.75f, 0.45f, 0.15f), new Vector3(6.25f, 0.8f, 0.55f), cardboard, 18f);
-            Prop(boxes, "Box_Crushed", new Vector3(6.6f, 0f, 0.9f), new Vector3(7.1f, 0.12f, 1.3f), cardboard, 40f);
+            PlaceModel(BoxClosedPrefab, boxes, "Box_Closed", new Vector3(5.9f, 0f, 0.35f), 6f);
+            PlaceModel(BoxOpenPrefab, boxes, "Box_Open", new Vector3(6.55f, 0f, 0.45f), -4f);       // flaps out, clear of the wall
+            PlaceModel(BoxSmallPrefab, boxes, "Box_Small", new Vector3(5.98f, 0.45f, 0.35f), 18f);  // on the closed one
+            PlaceModel(BoxCrushedPrefab, boxes, "Box_Crushed", new Vector3(6.85f, 0f, 1.1f), 40f);
             Bags(room, new Vector3(4.4f, 0f, 0.45f), 6);
 
             // the right part, seen through the window: a mattress, a wardrobe, a carpet, a chair
@@ -393,11 +444,56 @@ namespace BodycamHorror.EditorTools
             Prop(room, "CeilingChunk", new Vector3(3.9f, 0f, 1.9f), new Vector3(4.6f, 0.05f, 2.4f), wallPlaster, 22f);
             Prop(room, "CeilingHole", new Vector3(3.9f, Height - 0.01f, 1.8f), new Vector3(4.7f, Height, 2.5f), grime, 15f, false);
 
-            // the corridor outside: bare, a few things against the far wall
+            // the corridor outside: bare (the corridors are kept clear of litter), only a pipe riser
             var corridor = Group(level, "Corridor");
-            Prop(corridor, "Box", new Vector3(CorridorX1 - 0.6f, 0f, 8.6f), new Vector3(CorridorX1 - 0.05f, 0.5f, 9.2f), cardboard, 10f);
-            Bags(corridor, new Vector3(CorridorX1 - 0.4f, 0f, 4.3f), 3);
             Cylinder(corridor, "Riser", new Vector3(CorridorX1 - 0.12f, Height * 0.5f, 6.0f), 0.05f, Height, rust);
+            // an electrical panel, its door gone, on the far wall across from the big room's door
+            PlaceModel(ElectricPanelPrefab, corridor, "ElectricPanel", new Vector3(CorridorX1, 1.45f, 5.0f), -90f);
+        }
+
+        /// <summary>The start room: a bare store room where the player was dumped. A dark stain where the head lay,
+        /// a chair knocked over, a shelf rack stripped bare, crates, a bucket; nothing to fight with.</summary>
+        static void FurnishStartRoom(Transform level)
+        {
+            var room = Group(level, "StartRoom");
+
+            // where the head hit the floor: a dark smear, a few spots
+            // (the player lies just left of the middle, head to the left wall, feet to the door)
+            float hx = Room1X0 + 1.6f, hz = Room1DoorZ + DoorBuilder.OpeningWidth * 0.5f - 0.1f;
+            Prop(room, "Stain_Head", new Vector3(hx - 0.3f, 0.002f, hz - 0.3f), new Vector3(hx + 0.3f, 0.004f, hz + 0.25f), grime, 18f, false);
+            Prop(room, "Stain_Drop0", new Vector3(hx + 1.3f, 0.002f, hz + 0.35f), new Vector3(hx + 1.4f, 0.004f, hz + 0.45f), grime, 30f, false);
+            Prop(room, "Stain_Drop1", new Vector3(hx + 1.75f, 0.002f, hz - 0.15f), new Vector3(hx + 1.82f, 0.004f, hz - 0.08f), grime, 10f, false);
+
+            // a metal rack along the left wall, stripped bare
+            var rack = Group(room, "Rack");
+            float rx0 = Room1X0 + 0.05f, rx1 = Room1X0 + 0.5f, rz0 = -6.4f, rz1 = -4.0f;
+            for (int i = 0; i < 4; i++)
+            {
+                float x = i % 2 == 0 ? rx0 : rx1 - 0.04f, z = i < 2 ? rz0 : rz1 - 0.04f;
+                Prop(rack, "Post" + i, new Vector3(x, 0f, z), new Vector3(x + 0.04f, 1.9f, z + 0.04f), rust);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                float y = 0.15f + i * 0.55f;
+                Prop(rack, "Shelf" + i, new Vector3(rx0, y, rz0), new Vector3(rx1, y + 0.03f, rz1), rust);
+            }
+            Prop(rack, "Box_Empty", new Vector3(rx0 + 0.05f, 0.73f, -5.9f), new Vector3(rx1 - 0.05f, 1.0f, -5.4f), cardboard, 5f, false);
+
+            // crates stacked in the bottom right corner (below the door's swing), one fallen
+            var crates = Group(room, "Crates");
+            Prop(crates, "Crate0", new Vector3(Room1X1 - 0.75f, 0f, Room1Z0 + 0.05f), new Vector3(Room1X1 - 0.05f, 0.6f, Room1Z0 + 0.7f), wood, 3f);
+            Prop(crates, "Crate1", new Vector3(Room1X1 - 0.7f, 0.6f, Room1Z0 + 0.1f), new Vector3(Room1X1 - 0.1f, 1.1f, Room1Z0 + 0.6f), woodDark, -8f);
+            Prop(crates, "Crate2", new Vector3(Room1X1 - 1.6f, 0f, Room1Z0 + 0.1f), new Vector3(Room1X1 - 0.95f, 0.55f, Room1Z0 + 0.7f), wood, 20f);
+            Prop(crates, "Crate_Fallen", new Vector3(Room1X1 - 2.3f, 0f, Room1Z0 + 0.2f), new Vector3(Room1X1 - 1.75f, 0.45f, Room1Z0 + 0.75f), woodDark, 35f);
+
+            // a chair knocked over by the top wall, a bucket in the top right corner
+            Chair(room, "Chair_Fallen", new Vector3(Room1X0 + 1.2f, 0f, Room1Z1 - 0.7f), 140f, true);
+            Cylinder(room, "Bucket", new Vector3(Room1X1 - 0.2f, 0.16f, Room1Z1 - 0.3f), 0.14f, 0.32f, rust);
+
+            // pipes: a riser in the top left corner, a run along the top wall under the ceiling
+            Cylinder(room, "Riser", new Vector3(Room1X0 + 0.12f, Height * 0.5f, Room1Z1 - 0.12f), 0.05f, Height, rust);
+            var run = Cylinder(room, "Run", new Vector3((Room1X0 + Room1X1) * 0.5f, Height - 0.18f, Room1Z1 - 0.1f), 0.04f, Room1X1 - Room1X0, rust);
+            run.transform.rotation = Quaternion.Euler(0f, 0f, 90f);
         }
 
         /// <summary>Litter over both floors and the corridor: papers, chunks of plaster, bits, puddles.</summary>
@@ -411,7 +507,8 @@ namespace BodycamHorror.EditorTools
                 new[] { 0.3f, SmallZ0 + 0.3f, SmallX1 - 0.3f, RoomD - 0.5f, 38f },   // small room
                 new[] { 0.3f, 0.3f, RoomW - 0.3f, SmallZ0 - 0.6f, 55f },               // bottom strip
                 new[] { SmallX1 + Wall + 0.3f, SmallZ0, RoomW - 0.3f, RoomD - 0.3f, 35f }, // right part
-                new[] { RoomW + Wall + 0.2f, CorridorZ0 + 0.2f, CorridorX1 - 0.2f, CorridorZ1 - 0.2f, 22f },
+                new[] { Room1X0 + 0.6f, Room1Z0 + 0.3f, Room1X1 - 0.3f, Room1Z1 - 0.3f, 26f },      // start room
+                // the corridors: no litter
             };
             int n = 0;
             foreach (float[] a in areas)
@@ -446,6 +543,8 @@ namespace BodycamHorror.EditorTools
             Puddle(root, new Vector3(8.3f, 0f, 6.3f), 0.8f, 1.1f, 35f);
             Puddle(root, new Vector3(4.25f, 0f, 2.15f), 1.0f, 0.7f, 5f);   // under the ceiling hole
             Puddle(root, new Vector3(RoomW + Wall + 1.0f, 0f, 5.2f), 0.9f, 1.4f, 0f);
+            Puddle(root, new Vector3((PassX0 + PassX1) * 0.5f, 0f, -1.4f), 0.8f, 1.6f, 5f);
+            Puddle(root, new Vector3(6.0f, 0f, (LowZ0 + LowZ1) * 0.5f), 1.6f, 0.8f, -4f);
         }
 
         /// <summary>Dark streaks running down the walls from the ceiling, where water has got in for years.</summary>
@@ -482,6 +581,11 @@ namespace BodycamHorror.EditorTools
             Streaks("Big_Right", new Vector3(RoomW, 0f, 1f), new Vector3(RoomW, 0f, OuterDoorZ - 0.1f), Vector3.left, 5);
             Streaks("Big_Top", new Vector3(SmallX1 + Wall, 0f, RoomD), new Vector3(RoomW, 0f, RoomD), Vector3.back, 4);
             Streaks("Corridor", new Vector3(CorridorX1, 0f, CorridorZ0), new Vector3(CorridorX1, 0f, CorridorZ1), Vector3.left, 6);
+            Streaks("Passage", new Vector3(PassX0, 0f, LowZ1 + Wall + 0.3f), new Vector3(PassX0, 0f, CorridorZ0 - Wall - 0.3f), Vector3.right, 4);
+            Streaks("Room1_Bottom", new Vector3(Room1X0 + 0.6f, 0f, Room1Z0), new Vector3(Room1X1, 0f, Room1Z0), Vector3.forward, 5);
+            Streaks("Room1_Top", new Vector3(Room1X0 + 0.3f, 0f, Room1Z1), new Vector3(Room1X1, 0f, Room1Z1), Vector3.back, 3);
+            Streaks("Low_Top", new Vector3(Room1X1 + Wall + 0.3f, 0f, LowZ1), new Vector3(PassX0 - Wall - 0.3f, 0f, LowZ1), Vector3.back, 5);
+            Prop(root, "Ceiling_Damp3", new Vector3(Room1X0 + 0.6f, Height - 0.003f, Room1Z1 - 1.3f), new Vector3(Room1X0 + 1.8f, Height, Room1Z1 - 0.1f), grime, 0f, false);
             // damp patches on the ceilings
             Prop(root, "Ceiling_Damp0", new Vector3(2.6f, Height - 0.003f, 7.0f), new Vector3(4.0f, Height, 7.95f), grime, 0f, false);
             Prop(root, "Ceiling_Damp1", new Vector3(5.0f, Height - 0.003f, 0.05f), new Vector3(6.5f, Height, 1.6f), grime, 0f, false);
@@ -493,14 +597,17 @@ namespace BodycamHorror.EditorTools
         static WeaponPickup PlacePistol(Pistol pistol)
         {
             // on the desk's room-side edge: far enough from the sill to be seen through the window from the big room
-            var point = new Vector3(SmallX1 - 0.56f, 0.76f, 5.95f);
+            var point = new Vector3(SmallX1 - 0.42f, 0.76f, DeskZ);   // the middle of the desk, where the lamp shines
             var pickup = DarkRoomSceneBuilder.PlaceGunPickup(pistol, WeaponPickup.Kind.Pistol, point, Quaternion.Euler(0f, 112f, 90f));
             pickup.name = "Pickup_Pistol";
-            if (pickup.glow)   // the desk lamp lights it: the glow only has to keep it findable
+            if (pickup.glow)   // the desk lamp lights it: no glow, it is found by looking
             {
-                pickup.glow.intensity = 0.2f;
-                pickup.glow.range = 1.3f;
+                UnityEngine.Object.DestroyImmediate(pickup.glow.gameObject);
+                pickup.glow = null;
             }
+            // up at the desk and looking down at it: the player's eyes are on the desk, not the doorway
+            pickup.reach = 1.4f;
+            pickup.lookAngle = 12f;
             EditorUtility.SetDirty(pickup);
             return pickup;
         }
@@ -508,22 +615,14 @@ namespace BodycamHorror.EditorTools
         static void Lights(Transform level)
         {
             var lights = Group(level, "Lights");
-            Material lampMetal = LightingTestSceneBuilder.SimpleMaterial("LampMetal", new Color(0.05f, 0.05f, 0.05f), 0.7f, 0.35f);
-            Material bulb = LightingTestSceneBuilder.EmissiveMaterial("Level_DeskBulb", new Color(1f, 0.75f, 0.45f), 6f);
-
-            // the desk lamp: a warm pool on the desk and the gun, nothing much beyond it
+            // the desk lamp: a warm pool on the desk and the gun, nothing much beyond it. The Blender model's shade
+            // leans out along its +Z; turned to point at the gun, its cable trails back towards the wall
             var lamp = Group(lights, "DeskLamp");
-            Vector3 b = new Vector3(SmallX1 - 0.18f, 0.76f, 6.35f);
-            Cylinder(lamp, "Base", b + Vector3.up * 0.012f, 0.07f, 0.024f, lampMetal, false);
-            var arm = Cylinder(lamp, "Arm", b + new Vector3(-0.06f, 0.2f, -0.04f), 0.008f, 0.42f, lampMetal, false);
-            arm.transform.rotation = Quaternion.Euler(-12f, 0f, 22f);
-            var shade = Cylinder(lamp, "Shade", b + new Vector3(-0.17f, 0.36f, -0.12f), 0.065f, 0.12f, lampMetal, false);
-            shade.transform.rotation = Quaternion.Euler(-25f, 0f, 45f);
-            shade.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
-            var bulbGo = Cylinder(lamp, "Bulb", b + new Vector3(-0.19f, 0.32f, -0.14f), 0.03f, 0.02f, bulb, false);
-            var deskLight = new GameObject("Light").AddComponent<Light>();
-            deskLight.transform.SetParent(lamp, false);
-            deskLight.transform.SetPositionAndRotation(b + new Vector3(-0.19f, 0.32f, -0.14f), Quaternion.LookRotation(new Vector3(-0.5f, -1f, -0.4f)));
+            // standing at the back, a little to the left of the middle: its beam falls on the middle of the desk (on the pistol)
+            var lampModel = PlaceModel(DeskLampPrefab, lamp, "DeskLamp_Model", new Vector3(SmallX1 - 0.19f, 0.76f, DeskZ + 0.21f), -132f);
+            var bulbGo = lampModel.transform.Find("Bulb").gameObject;
+            var deskLight = lampModel.GetComponentInChildren<Light>();
+            deskLight.name = "Light";
             deskLight.type = LightType.Spot;
             deskLight.color = new Color(1f, 0.72f, 0.42f);
             deskLight.intensity = 2.4f;   // the goal of the room: it has to pull the eye, through the door and the window
@@ -548,7 +647,7 @@ namespace BodycamHorror.EditorTools
             coldLight.transform.SetParent(cold, false);
             coldLight.transform.SetPositionAndRotation(new Vector3(7.37f, Height - 0.1f, 6.8f), Quaternion.Euler(90f, 0f, 0f));
             coldLight.type = LightType.Spot;
-            coldLight.color = new Color(0.62f, 0.78f, 0.92f);
+            coldLight.color = new Color(0.7f, 0.83f, 1f);
             coldLight.intensity = 2.2f;
             coldLight.range = 6f;
             coldLight.spotAngle = 140f;
@@ -571,6 +670,44 @@ namespace BodycamHorror.EditorTools
             HangingLamp(lampPrefab, lights, "Lamp_SmallDoor", new Vector3(SmallDoorX + 0.5f, Height, 1.9f), 0.45f, false);
             // the small room's own ceiling light, low and failing: the room reads, the desk lamp still leads
             HangingLamp(lampPrefab, lights, "Lamp_SmallRoom", new Vector3(2.2f, Height, 5.4f), 0.3f, true);
+            // the start room: one weak bulb between where the player lies and the door: seen over the head on
+            // waking, and once up it is what lights the door (a lamp right over the head only fogs the view)
+            HangingLamp(lampPrefab, lights, "Lamp_StartRoom", new Vector3(Room1X1 - 1.0f, Height, (LowZ0 + LowZ1) * 0.5f), 0.55f, true);
+            // the low corridor: dark along its length, a dim lamp at the far corner where it turns up
+            HangingLamp(lampPrefab, lights, "Lamp_LowCorner", new Vector3((PassX0 + PassX1) * 0.5f, Height, (LowZ0 + LowZ1) * 0.5f), 0.25f, true);
+            // the passage: a single dim bulkhead lamp on its right wall halfway, the corridor's end lamp beyond it
+            WallLamp(lights, "WallLamp_Passage", new Vector3(PassX1, 1.85f, 0.2f), -90f, 1.43f, true);
+            // the locked door at the corridor's end: a steady lamp just in front of it, its light turned onto the
+            // padlock, so from the turn into the big room the lock reads at once
+            float lockX = LockedDoorX + DoorBuilder.OpeningWidth * 0.5f;
+            HangingLamp(lampPrefab, lights, "Lamp_LockedDoor", new Vector3(lockX, Height, CorridorZ1 - 0.9f), 0.7f, false);
+            Transform lockLamp = lights.Find("Lamp_LockedDoor");
+            if (lockLamp)
+                foreach (Light l in lockLamp.GetComponentsInChildren<Light>(true))
+                {
+                    if (l.name != "Light" || l.type != LightType.Spot) continue;
+                    Vector3 padlock = new Vector3(lockX, 1.25f, CorridorZ1 - 0.05f);
+                    l.transform.rotation = Quaternion.LookRotation(padlock - l.transform.position);
+                    l.spotAngle = Mathf.Min(l.spotAngle, 90f);
+                }
+        }
+
+        /// <summary>The oval bulkhead lamp (BodycamHorror > Set Up Utility Props) on a wall: its back on the wall
+        /// at <paramref name="wallPoint"/>, turned <paramref name="yaw"/> to face the room; its spot at
+        /// <paramref name="intensity"/>, the wall wash in proportion.</summary>
+        static void WallLamp(Transform parent, string name, Vector3 wallPoint, float yaw, float intensity, bool flicker)
+        {
+            var lamp = PlaceModel(WallLampPrefab, parent, name, wallPoint, yaw);
+            Light spot = lamp.transform.Find("Light").GetComponent<Light>();
+            Light wash = lamp.transform.Find("WallWash").GetComponent<Light>();
+            wash.intensity *= intensity / spot.intensity;
+            spot.intensity = intensity;
+            if (!flicker) return;
+            var f = spot.gameObject.AddComponent<LightFlicker>();
+            f.kind = LightFlicker.Kind.Fluorescent;
+            f.depth = 0.6f;
+            f.pace = new Vector2(3f, 10f);
+            foreach (Renderer r in lamp.GetComponentsInChildren<Renderer>(true)) if (r.name.EndsWith("_Glass")) f.glow = r;
         }
 
         static void HangingLamp(GameObject prefab, Transform parent, string name, Vector3 ceilingPoint, float dim, bool flicker)
@@ -612,6 +749,9 @@ namespace BodycamHorror.EditorTools
             // an arm come into the doorway while the hips stay at the jamb's edge
             scare.peekOffset = new Vector3(0f, 0f, -0.05f);
             scare.peekLean = 23f;
+            scare.appearDelay = 0f;   // there at once, already leaning out: the player is looking down at the desk
+            scare.peekTime = 0f;
+            scare.viewMargin = 0.02f; // goes off as soon as it shows at the edge of the view
             var doorObject = GameObject.Find("Level/Doors/Door_Outer");
             if (doorObject) scare.door = doorObject.GetComponent<Door>();
             var glassObject = GameObject.Find("Level/Window/Glass");
@@ -670,6 +810,42 @@ namespace BodycamHorror.EditorTools
             return t;
         }
 
+        // the office props modelled in Blender (Blender/Props_Office.blend), floor-pivoted, front on their +Z
+        const string DeskPrefab = "Assets/Prefabs/Props/Desk.prefab";
+        const string ChairPrefab = "Assets/Prefabs/Props/Chair.prefab";
+        const string DeskLampPrefab = "Assets/Prefabs/Props/DeskLamp.prefab";
+        // the Khrushchevka apartment props (BodycamHorror > Set Up Apartment Props)
+        const string SofaPrefab = "Assets/Prefabs/Props/Sofa.prefab";
+        const string WallShelfPrefab = "Assets/Prefabs/Props/WallShelf.prefab";
+        const string MugPrefab = "Assets/Prefabs/Props/Mug.prefab";
+        const string ClipboardPrefab = "Assets/Prefabs/Props/Clipboard.prefab";
+        // the utility props (BodycamHorror > Set Up Utility Props)
+        const string WallLampPrefab = "Assets/Prefabs/Props/WallLamp.prefab";
+        const string ElectricPanelPrefab = "Assets/Prefabs/Props/ElectricPanel.prefab";
+        // the storage props (BodycamHorror > Set Up Storage Props)
+        const string FridgePrefab = "Assets/Prefabs/Props/Fridge.prefab";
+        const string BoxClosedPrefab = "Assets/Prefabs/Props/Box_Closed.prefab";
+        const string BoxOpenPrefab = "Assets/Prefabs/Props/Box_Open.prefab";
+        const string BoxSmallPrefab = "Assets/Prefabs/Props/Box_Small.prefab";
+        const string BoxCrushedPrefab = "Assets/Prefabs/Props/Box_Crushed.prefab";
+
+        /// <summary>Takes the colliders off a placed model (small things on a surface).</summary>
+        static void Bare(GameObject go)
+        {
+            foreach (Collider c in go.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(c);
+        }
+
+        /// <summary>A prefab instance at a world point, turned <paramref name="yaw"/> degrees.</summary>
+        static GameObject PlaceModel(string prefabPath, Transform parent, string name, Vector3 position, float yaw)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefab == null) throw new System.IO.FileNotFoundException("Missing prop prefab", prefabPath);
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+            go.name = name;
+            go.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+            return go;
+        }
+
         /// <summary>A cube between two corners, turned <paramref name="yaw"/> degrees about its middle.</summary>
         static GameObject Prop(Transform parent, string name, Vector3 min, Vector3 max, Material material, float yaw = 0f, bool collider = true)
         {
@@ -708,17 +884,14 @@ namespace BodycamHorror.EditorTools
         static void Chair(Transform parent, string name, Vector3 floor, float yaw, bool fallen)
         {
             var chair = Group(parent, name);
-            const float s = 0.42f, seat = 0.45f;
-            Prop(chair, "Seat", new Vector3(-s / 2, seat - 0.03f, -s / 2), new Vector3(s / 2, seat, s / 2), wood);
-            Prop(chair, "Back", new Vector3(-s / 2, seat, s / 2 - 0.03f), new Vector3(s / 2, seat + 0.45f, s / 2), wood);
-            for (int i = 0; i < 4; i++)
-            {
-                float x = (i % 2 == 0 ? -1 : 1) * (s / 2 - 0.025f), z = (i < 2 ? -1 : 1) * (s / 2 - 0.025f);
-                Prop(chair, "Leg" + i, new Vector3(x - 0.02f, 0f, z - 0.02f), new Vector3(x + 0.02f, seat - 0.03f, z + 0.02f), wood, 0f, false);
-            }
+            const float s = 0.42f;
+            // the Blender model faces its +Z; this chair's convention is back at +Z, facing -Z
+            var model = PlaceModel(ChairPrefab, chair, "Chair_Model", Vector3.zero, 0f).transform;
+            model.localPosition = Vector3.zero;
+            model.localRotation = Quaternion.Euler(0f, 180f, 0f);
             if (fallen)
             {
-                chair.localPosition = new Vector3(0f, s / 2 + 0.02f, 0f);
+                chair.localPosition = new Vector3(0f, s / 2 + 0.02f, 0.47f);   // lying on its back, centred on the pivot
                 chair.localRotation = Quaternion.Euler(-90f, 0f, 0f);
                 var pivot = Group(parent, name + "_Fallen");
                 chair.SetParent(pivot, false);

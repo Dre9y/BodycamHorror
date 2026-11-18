@@ -27,3 +27,4 @@ All recordings are from freesound.org under Creative Commons 0 (public domain), 
 | ChainRoom/metal_door_creak_close.mp3 | "metal-door-creaking-closing-47323" by freesound_community, added by the project owner |
 | ChainRoom/lamp_break_drop.mp3 | "lamp-break-drop_zkr68dnd", added by the project owner |
 | ChainRoom/door_slam_boom.wav, chainroom_riser.wav | Synthesised in the editor (no recording) |
+| Music/menu_psycho_crime_loop.wav | Main menu loop, as downloaded: "14104 psycho crime ambience loop.wav" by Robinhood76 - https://freesound.org/s/875476/ (licence not checked: confirm before release, it may not be CC0) |

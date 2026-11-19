@@ -18,13 +18,20 @@ namespace BodycamHorror.Enemies
     /// and again (Bite); now and then, from a few metres, it leaps at the face instead (rare, long cooldown).
     /// After a leap it needs a moment to get its legs under it again: that is when to shoot it. Loses interest after a while
     /// out of sight and starts crying again where it stopped.
+    /// Walls: mostly it runs on the floor (NavMesh), but between attacks it now and then picks a spot on a wall
+    /// near the player (in reach of a leap, with a clear line to the face), runs to the foot of that wall, climbs
+    /// up and across to the spot, clings there head-down watching, and leaps at the face from the wall. It drops
+    /// off if it loses sight of you, if you walk out of reach, or if a hard hit knocks it off. Placed rotated
+    /// with its legs against a wall, it starts there and sobs on the wall.
+    /// On a wall: gravity is off and it is held to the surface along its own up (the wall's normal); off a
+    /// wall everything works as before.
     /// Physics body (Rigidbody + sphere), animated by a PlayableGraph (idle / move clips of the model).
     /// Built by CryingHeadBuilder (menu BodycamHorror/Crying Head/...).
     /// </summary>
     [RequireComponent(typeof(Rigidbody), typeof(SphereCollider))]
     public class CryingHead : MonoBehaviour, IDamageable
     {
-        public enum State { Weeping, Noticing, Chase, Windup, Leap, Recover, Stagger, Dead, Bite }
+        public enum State { Weeping, Noticing, Chase, Windup, Leap, Recover, Stagger, Dead, Bite, ToWall, Climb, Perch }
 
         [Header("Body")]
         [Tooltip("The model (has the Animator). Turned upside down when it dies.")]
@@ -108,6 +115,33 @@ namespace BodycamHorror.Enemies
         [Tooltip("Chance at each change of mind that it darts right in under the feet (a feint, no bite).")]
         [Range(0f, 1f)] public float feintChance = 0.3f;
 
+        [Header("Walls (it climbs up a wall near the player and leaps at the face from there)")]
+        public bool climbsWalls = true;
+        [Tooltip("Between attacks, the chance it goes for a wall each time it thinks about it.")]
+        [Range(0f, 1f)] public float wallChance = 0.35f;
+        [Tooltip("Seconds between those thoughts.")]
+        public float wallThinkInterval = 1f;
+        [Tooltip("Seconds after a wall attack (or a try) before it goes for a wall again.")]
+        public float wallCooldown = 8f;
+        [Tooltip("Only goes for a wall while the player is this far away (flat, metres).")]
+        public Vector2 wallPlayerDistance = new Vector2(1.8f, 9f);
+        [Tooltip("How far around itself it looks for a wall to climb.")]
+        public float wallSearchRange = 4f;
+        [Tooltip("How far along the wall (towards the player) it is willing to go from where it climbs on.")]
+        public float wallSlide = 3f;
+        [Tooltip("Height above the floor of the spot it clings to (random in this range).")]
+        public Vector2 perchHeight = new Vector2(1.5f, 2.3f);
+        [Tooltip("Speed on the wall (m/s).")]
+        public float climbSpeed = 3.6f;
+        [Tooltip("Seconds it clings and watches before the leap (random in this range).")]
+        public Vector2 perchHold = new Vector2(0.5f, 1.6f);
+        [Tooltip("From the wall it leaps at the face from at most this far (m, straight line).")]
+        public float wallLeapRange = 5f;
+        [Tooltip("Speed of the leap from a wall (m/s).")]
+        public float wallLeapSpeed = 9f;
+        [Tooltip("Out of sight this long on the wall and it drops off.")]
+        public float perchLoseTime = 1.2f;
+
         [Header("Fear")]
         [Range(0f, 1f)] public float stressOnShriek = 0.35f;
         [Range(0f, 1f)] public float stressOnHit = 0.2f;
@@ -141,6 +175,16 @@ namespace BodycamHorror.Enemies
         bool leapHit, biteSnapped, biteContacted, biteLanded, deathFlipped;
         bool prowling;
         float prowlAngle, prowlDir = 1f, prowlSwitchTimer, prowlRadiusNow, prowlRadiusTarget;
+
+        // walls
+        Vector3 surfaceUp = Vector3.up;       // the normal of what it stands on: up on the floor, the wall's normal on a wall
+        Vector3 wallBase, wallNormal, perchPos;
+        float wallThinkTimer, wallCooldownTimer, perchHoldTime;
+        bool perchReached;
+        Quaternion tilt = Quaternion.identity;   // eases the model over when the body snaps onto a wall
+
+        /// <summary>Clinging to a wall (not standing on a floor).</summary>
+        public bool OnWall => surfaceUp.y < 0.7f;
 
         Rigidbody rb;
         SphereCollider body;
@@ -247,6 +291,15 @@ namespace BodycamHorror.Enemies
 
         void OnEnable() => FindPlayer();
 
+        void Start()
+        {
+            // placed with its legs against a wall: it starts on that wall
+            if (climbsWalls && transform.up.y < 0.7f &&
+                SurfaceProbe(transform.position + transform.up * (body.radius * 2f), -transform.up, body.radius * 2f + 0.5f, out RaycastHit hit) &&
+                Mathf.Abs(hit.normal.y) < 0.5f)
+                AttachToWall(hit, transform.forward);
+        }
+
         void OnDisable()
         {
             if (playerShooting) playerShooting.Fired -= OnGunshot;
@@ -281,6 +334,8 @@ namespace BodycamHorror.Enemies
             leapCooldownTimer -= dt;
             leapThinkTimer -= dt;
             biteCooldownTimer -= dt;
+            wallThinkTimer -= dt;
+            wallCooldownTimer -= dt;
 
             if (state == State.Dead) { Scurry(dt, 0f); UpdateDeath(dt); return; }
 
@@ -299,9 +354,11 @@ namespace BodycamHorror.Enemies
                     break;
 
                 case State.Chase:
+                    if (OnWall) { DropOff(); break; }   // never chases from a wall
                     if (Time.time - lastSeenTime > loseTime) { SetState(State.Weeping); sobTimer = Random.Range(1.5f, 3f); break; }
                     float d = Flat(TargetPoint() - transform.position).magnitude;
                     if (sees && biteCooldownTimer <= 0f && d <= biteRange && Grounded()) { StartBite(); break; }
+                    if (sees && ThinksOfWall(d) && FindPerch()) { SetState(State.ToWall); break; }
                     // the leap is the rare one: ready, in range, and then only now and then
                     if (sees && biteCooldownTimer <= 0f && leapCooldownTimer <= 0f && leapThinkTimer <= 0f && d <= leapRange && d >= leapMinRange && Grounded())
                     {
@@ -335,6 +392,24 @@ namespace BodycamHorror.Enemies
 
                 case State.Stagger:
                     if (stateTimer >= 0.45f) SetState(State.Chase);
+                    break;
+
+                case State.ToWall:
+                    // running to the foot of the wall; FixedUpdate climbs on when it gets there
+                    if (stateTimer > 3f) { wallCooldownTimer = wallCooldown * 0.5f; SetState(State.Chase); }
+                    break;
+
+                case State.Climb:
+                    if (perchReached) { perchHoldTime = Random.Range(perchHold.x, Mathf.Max(perchHold.x, perchHold.y)); SetState(State.Perch); }
+                    else if (stateTimer > 4f) DropOff();   // something on the wall in the way
+                    break;
+
+                case State.Perch:
+                    if (Time.time - lastSeenTime > perchLoseTime) { DropOff(); break; }
+                    if (stateTimer < perchHoldTime) break;
+                    float reach = Vector3.Distance(BodyCenter, TargetPoint());
+                    if (sees && reach <= wallLeapRange) SetState(State.Windup);                    // the jump at the face
+                    else if (reach > wallLeapRange * 1.6f || stateTimer > perchHoldTime + 3f) DropOff();   // walked away: back to the floor
                     break;
             }
 
@@ -381,7 +456,15 @@ namespace BodycamHorror.Enemies
             if (playerLight) playerLight.Flicker(0.3f);
             leapCooldownTimer = Random.Range(0.6f, 3f);   // sometimes the first thing it does is jump, mostly not
             leapThinkTimer = 0f;
-            SetState(State.Chase);
+            wallThinkTimer = wallThinkInterval;
+            if (OnWall)
+            {
+                // it was crying on a wall: it stays there a moment, then comes off it at the face (or drops)
+                perchReached = true;
+                perchHoldTime = Random.Range(0.15f, 0.5f);
+                SetState(State.Perch);
+            }
+            else SetState(State.Chase);
         }
 
         void OnGunshot()
@@ -397,7 +480,10 @@ namespace BodycamHorror.Enemies
             return d < hearRunRange && player.Speed > player.walkSpeed + 0.3f;
         }
 
-        Vector3 Eye => rb.position + Vector3.up * (body.center.y + body.radius * 0.6f);
+        Vector3 Eye => rb.position + surfaceUp * (body.center.y + body.radius * 0.6f);
+
+        /// <summary>The middle of the ball, on a floor or on a wall.</summary>
+        Vector3 BodyCenter => rb.position + surfaceUp * body.center.y;
 
         /// <summary>The player's head: what it looks at and leaps for.</summary>
         Vector3 TargetPoint() => playerRig ? playerRig.transform.position : player.transform.position + Vector3.up * 1.5f;
@@ -409,12 +495,13 @@ namespace BodycamHorror.Enemies
             float dist = d.magnitude;
             if (dist > sightRange) return false;
             bool alert = state != State.Weeping;
-            if (!alert && dist > closeRange && Vector3.Angle(transform.forward, Flat(d)) > sightAngle * 0.5f) return false;
+            if (!alert && dist > closeRange && Vector3.Angle(transform.forward, OnWall ? d : Flat(d)) > sightAngle * 0.5f) return false;
             return !Probe(eye, d / dist, dist, out _);
         }
 
+        /// <summary>Feet on something: the floor, or the wall it clings to.</summary>
         bool Grounded() =>
-            Physics.SphereCast(rb.position + Vector3.up * (body.radius + 0.05f), body.radius * 0.8f, Vector3.down, out _,
+            Physics.SphereCast(rb.position + surfaceUp * (body.radius + 0.05f), body.radius * 0.8f, -surfaceUp, out _,
                                0.3f, environmentMask, QueryTriggerInteraction.Ignore);
 
         // ------------------------------------------------------------------ moving
@@ -429,12 +516,34 @@ namespace BodycamHorror.Enemies
             Vector3 want = Vector3.zero;
             Vector3 face = transform.forward;
 
+            if (OnWall) { WallMove(dt); return; }
+
             switch (state)
             {
                 case State.Noticing:
                 case State.Windup:
                     face = Flat(TargetPoint() - rb.position);
                     break;
+                case State.ToWall:
+                {
+                    // close in, straight at it: the steering would shy away from the very wall it wants
+                    Vector3 toBase = Flat(wallBase - rb.position);
+                    Vector3 runDir = toBase.magnitude < 1.5f ? toBase.normalized : Steer(wallBase);
+                    want = runDir * speed;
+                    if (runDir.sqrMagnitude > 0.01f) face = runDir;
+                    // at the foot of the wall (or bumping into it): on it goes
+                    if (Flat(wallBase - rb.position).magnitude < 0.3f || Flat(v).sqrMagnitude > 1f)
+                    {
+                        if (SurfaceProbe(BodyCenter, -wallNormal, body.radius + 0.35f, out RaycastHit hit) && Mathf.Abs(hit.normal.y) < 0.5f)
+                        {
+                            AttachToWall(hit, Vector3.up);
+                            perchReached = false;
+                            SetState(State.Climb);
+                            return;
+                        }
+                    }
+                    break;
+                }
                 case State.Bite:
                     // rears and turns to the legs, snaps forward a hand's width, then holds still
                     if (!biteSnapped) { face = Flat(player.transform.position - rb.position); biteDir = face.sqrMagnitude > 0.001f ? face.normalized : transform.forward; }
@@ -468,8 +577,156 @@ namespace BodycamHorror.Enemies
                 flat = Vector3.MoveTowards(flat, want, acceleration * dt);
                 rb.linearVelocity = new Vector3(flat.x, v.y, flat.z);
             }
-            if (face.sqrMagnitude > 0.001f)
-                rb.MoveRotation(Quaternion.RotateTowards(rb.rotation, Quaternion.LookRotation(Flat(face).normalized), turnSpeed * dt));
+            TurnTo(face, dt);
+        }
+
+        /// <summary>Turns to face this way along what it stands on (its own up is the surface normal).</summary>
+        void TurnTo(Vector3 face, float dt)
+        {
+            Vector3 f = Vector3.ProjectOnPlane(face, surfaceUp);
+            if (f.sqrMagnitude < 0.0001f) f = Vector3.ProjectOnPlane(transform.forward, surfaceUp);
+            if (f.sqrMagnitude < 0.0001f) f = Vector3.ProjectOnPlane(transform.up, surfaceUp);   // fell off a wall head-down
+            if (f.sqrMagnitude < 0.0001f) return;
+            rb.MoveRotation(Quaternion.RotateTowards(rb.rotation, Quaternion.LookRotation(f.normalized, surfaceUp), turnSpeed * dt));
+        }
+
+        // ------------------------------------------------------------------ walls
+
+        /// <summary>Time to think about a wall? Only between attacks, from the floor, with the player in a sensible range.</summary>
+        bool ThinksOfWall(float flatDistance)
+        {
+            if (!climbsWalls || wallCooldownTimer > 0f || wallThinkTimer > 0f) return false;
+            wallThinkTimer = wallThinkInterval;
+            if (biteCooldownTimer <= 0.5f) return false;   // about to attack from the floor anyway
+            if (flatDistance < wallPlayerDistance.x || flatDistance > wallPlayerDistance.y || !Grounded()) return false;
+            if (Random.value >= wallChance) return false;
+            wallCooldownTimer = wallCooldown * 0.3f;   // a failed search does not repeat every frame either
+            return true;
+        }
+
+        /// <summary>Looks around for a wall near itself with a spot on it, at perch height and slid along towards
+        /// the player, that is real wall all the way (no doorway, no window), in leaping reach of the face and with a
+        /// clear line to it. Sets wallBase (the foot of the wall to run to), wallNormal and perchPos.</summary>
+        bool FindPerch()
+        {
+            if (!player) return false;
+            Vector3 origin = rb.position + Vector3.up * body.center.y;
+            Vector3 feetPos = player.transform.position, head = TargetPoint();
+            float floorY = rb.position.y;
+            float bestScore = float.MaxValue;
+            bool found = false;
+            const int Rays = 12;
+            float spin = Random.Range(0f, 360f / Rays);
+            for (int i = 0; i < Rays; i++)
+            {
+                Vector3 dir = Quaternion.Euler(0f, spin + i * 360f / Rays, 0f) * Vector3.forward;
+                if (!SurfaceProbe(origin, dir, wallSearchRange, out RaycastHit hit) || Mathf.Abs(hit.normal.y) > 0.25f) continue;
+                Vector3 n = Flat(hit.normal).normalized;
+                Vector3 along = Vector3.Cross(Vector3.up, n);
+                float slide = Mathf.Clamp(Vector3.Dot(Flat(feetPos - hit.point), along), -wallSlide, wallSlide);
+                Vector3 spot = hit.point + along * slide;
+                spot.y = floorY + Random.Range(perchHeight.x, Mathf.Max(perchHeight.x, perchHeight.y));
+
+                // wall there, and along the way up and across to it
+                if (!WallAt(spot, n, out RaycastHit perchHit)) continue;
+                Vector3 climbOn = new Vector3(hit.point.x, floorY + 0.6f, hit.point.z);
+                if (!WallAt(Vector3.Lerp(climbOn, spot, 0.5f), n, out _) || !WallAt(Vector3.Lerp(climbOn, spot, 0.85f), n, out _)) continue;
+
+                // the face in reach, nothing in between
+                Vector3 eye = perchHit.point + perchHit.normal * (body.radius * 2f);
+                Vector3 to = head - eye;
+                float dist = to.magnitude;
+                if (dist > wallLeapRange || Flat(to).magnitude < 1f) continue;
+                if (Probe(eye, to / dist, dist, out _)) continue;
+
+                // best: about three metres from the player, and a wall close by
+                float score = Mathf.Abs(Flat(spot - feetPos).magnitude - 3f) + hit.distance * 0.3f;
+                if (score >= bestScore) continue;
+                bestScore = score;
+                found = true;
+                wallNormal = n;
+                wallBase = hit.point + n * (body.radius + 0.05f);
+                wallBase.y = floorY;
+                perchPos = perchHit.point + perchHit.normal * 0.01f;
+            }
+            return found;
+        }
+
+        /// <summary>A plain wall facing this way at this point.</summary>
+        bool WallAt(Vector3 p, Vector3 n, out RaycastHit hit) =>
+            SurfaceProbe(p + n * 0.4f, -n, 0.8f, out hit) && Mathf.Abs(hit.normal.y) < 0.3f && Vector3.Dot(hit.normal, n) > 0.8f;
+
+        /// <summary>Gets onto the wall it touches: feet on the wall, back to the room, gravity off.</summary>
+        void AttachToWall(RaycastHit hit, Vector3 look)
+        {
+            Quaternion before = rb.rotation;
+            surfaceUp = hit.normal;
+            rb.useGravity = false;
+            Vector3 f = Vector3.ProjectOnPlane(look, surfaceUp);
+            if (f.sqrMagnitude < 0.0001f) f = Vector3.ProjectOnPlane(Vector3.up, surfaceUp);
+            Quaternion after = Quaternion.LookRotation(f.normalized, surfaceUp);
+            rb.position = hit.point + hit.normal * 0.01f;
+            rb.rotation = after;
+            transform.SetPositionAndRotation(rb.position, after);
+            rb.linearVelocity = Vector3.zero;
+            tilt = Quaternion.Inverse(after) * before;   // the model swings over instead of snapping
+        }
+
+        /// <summary>Lets go of the wall: falls under gravity and rights itself in the air.</summary>
+        void Detach()
+        {
+            if (!OnWall) return;
+            surfaceUp = Vector3.up;
+            rb.useGravity = true;
+        }
+
+        /// <summary>Lets go and drops back to the floor, a little away from the wall.</summary>
+        void DropOff()
+        {
+            Vector3 n = surfaceUp;
+            Detach();
+            rb.linearVelocity = Flat(n).normalized * 1.3f;
+            wallCooldownTimer = wallCooldown;
+            SetState(State.Recover);
+        }
+
+        /// <summary>On a wall: held to it along its normal, moving along it (to its spot), facing the player while it waits.</summary>
+        void WallMove(float dt)
+        {
+            // feel for the wall under the feet; gone (an edge, a doorway) and it falls
+            if (!SurfaceProbe(BodyCenter, -surfaceUp, body.center.y + 0.45f, out RaycastHit hit)) { DropOff(); return; }
+            if (hit.normal.y > 0.7f) { Detach(); SetState(State.Recover); return; }   // walked down onto a floor
+            surfaceUp = Vector3.Slerp(surfaceUp, hit.normal, 10f * dt).normalized;
+
+            Vector3 want = Vector3.zero, face = transform.forward;
+            switch (state)
+            {
+                case State.Climb:
+                {
+                    Vector3 to = Vector3.ProjectOnPlane(perchPos - rb.position, surfaceUp);
+                    float d = to.magnitude;
+                    if (d < 0.12f) perchReached = true;
+                    else
+                    {
+                        want = to / d * climbSpeed * Mathf.Clamp01(d / 0.3f);
+                        face = to;
+                    }
+                    break;
+                }
+                case State.Perch:
+                case State.Windup:
+                case State.Noticing:
+                    if (player) face = TargetPoint() - rb.position;   // head-down on the wall, looking at you
+                    break;
+            }
+
+            // along the wall: eased like on the floor; into the wall: held at the surface
+            Vector3 v = rb.linearVelocity;
+            Vector3 along = Vector3.MoveTowards(Vector3.ProjectOnPlane(v, surfaceUp), want, acceleration * dt);
+            float gap = hit.distance - body.center.y;   // the ball's surface to the wall
+            float into = Mathf.Clamp(-gap * 12f, -3f, 1f);
+            rb.linearVelocity = along + surfaceUp * into;
+            TurnTo(face, dt);
         }
 
         float NextAttackPause() => Random.Range(attackPause.x, Mathf.Max(attackPause.x, attackPause.y));
@@ -561,13 +818,30 @@ namespace BodycamHorror.Enemies
         void Leap()
         {
             Vector3 target = TargetPoint() - Vector3.up * 0.25f;
-            Vector3 to = target - rb.position;
-            Vector3 flat = Flat(to);
-            float d = Mathf.Max(flat.magnitude, 0.5f);
-            leapDir = flat / d;
-            float time = d / leapSpeed;
-            float vy = Mathf.Clamp((to.y - body.radius + 0.5f * -Physics.gravity.y * time * time) / time, 2f, 6.5f);
-            rb.linearVelocity = leapDir * leapSpeed + Vector3.up * vy;
+            if (OnWall)
+            {
+                // off the wall at the face: a flatter, faster jump, from the middle of the ball, down if need be
+                Vector3 from = BodyCenter;
+                Detach();
+                Vector3 off = target - from;
+                Vector3 offFlat = Flat(off);
+                float fd = Mathf.Max(offFlat.magnitude, 0.3f);
+                leapDir = offFlat / fd;
+                float ft = Mathf.Max(fd / wallLeapSpeed, 0.12f);
+                float fvy = Mathf.Clamp((off.y + 0.5f * -Physics.gravity.y * ft * ft) / ft, -6f, 6.5f);
+                rb.linearVelocity = leapDir * (fd / ft) + Vector3.up * fvy;
+                wallCooldownTimer = wallCooldown;
+            }
+            else
+            {
+                Vector3 to = target - rb.position;
+                Vector3 flat = Flat(to);
+                float d = Mathf.Max(flat.magnitude, 0.5f);
+                leapDir = flat / d;
+                float time = d / leapSpeed;
+                float vy = Mathf.Clamp((to.y - body.radius + 0.5f * -Physics.gravity.y * time * time) / time, 2f, 6.5f);
+                rb.linearVelocity = leapDir * leapSpeed + Vector3.up * vy;
+            }
             leapHit = false;
             leapCooldownTimer = leapCooldown;
             biteCooldownTimer = recoverTime + NextAttackPause();   // the leap counts as its attack too
@@ -644,8 +918,9 @@ namespace BodycamHorror.Enemies
 
         void Animate(float dt)
         {
+            tilt = Quaternion.RotateTowards(tilt, Quaternion.identity, 540f * dt);
             if (!mixer.IsValid()) return;
-            float ground = Flat(rb.linearVelocity).magnitude;
+            float ground = SurfaceSpeed;
             float target = state == State.Leap || state == State.Windup || state == State.Bite ? 1f : Mathf.Clamp01(ground / 0.8f);
             moveBlend = Mathf.MoveTowards(moveBlend, target, dt * 5f);
             mixer.SetInputWeight(0, 1f - moveBlend);
@@ -691,13 +966,19 @@ namespace BodycamHorror.Enemies
                         jab = k >= 0f ? new Vector3(0f, -0.04f, 0.14f) * k : new Vector3(0f, 0.09f, -0.13f) * -k;
                     }
                 }
-                model.localPosition = modelBasePos + shake + Vector3.up * crouch + jab;
+                // the swing onto a wall, about the middle of the ball
+                Vector3 pivot = body.center;
+                model.localRotation = tilt * modelBaseRot;
+                model.localPosition = pivot + tilt * (modelBasePos + shake + Vector3.up * crouch + jab - pivot);
             }
         }
 
+        /// <summary>Speed along what it stands on: the floor, or the wall.</summary>
+        float SurfaceSpeed => Vector3.ProjectOnPlane(rb.linearVelocity, surfaceUp).magnitude;
+
         void Skitter(float dt)
         {
-            float ground = Flat(rb.linearVelocity).magnitude;
+            float ground = SurfaceSpeed;
             if (scurry)
             {
                 // the loop: in with the running, a little quicker and louder the faster it goes
@@ -752,6 +1033,13 @@ namespace BodycamHorror.Enemies
             if (health <= 0f) { Die(push); return; }
             if (info.amount >= staggerDamage && state != State.Leap)
             {
+                if (OnWall)
+                {
+                    // knocked off the wall: away from it, whichever way the shot came
+                    push = (push + Flat(surfaceUp).normalized).normalized;
+                    Detach();
+                    wallCooldownTimer = wallCooldown;
+                }
                 rb.linearVelocity = push * 3.2f + Vector3.up * 1.6f;
                 SetState(State.Stagger);
             }
@@ -760,6 +1048,18 @@ namespace BodycamHorror.Enemies
 
         void Die(Vector3 push)
         {
+            if (OnWall)
+            {
+                // drops off the wall dead, upright again so the flip onto its back reads right
+                push = (push + Flat(surfaceUp).normalized).normalized;
+                Vector3 f = Flat(transform.forward);
+                if (f.sqrMagnitude < 0.001f) f = Flat(surfaceUp);
+                Detach();
+                Quaternion upright = Quaternion.LookRotation(f.normalized, Vector3.up);
+                rb.rotation = upright;
+                transform.rotation = upright;
+                tilt = Quaternion.identity;
+            }
             SetState(State.Dead);
             voice.Stop();
             if (shriek) { voice.pitch = shriekPitch * 0.7f; voice.PlayOneShot(shriek, 0.8f); }
@@ -825,6 +1125,23 @@ namespace BodycamHorror.Enemies
             return found;
         }
 
+        /// <summary>Like Probe, but only what it can stand on: no bodies (other heads, the infected, props), no doors.</summary>
+        bool SurfaceProbe(Vector3 origin, Vector3 dir, float dist, out RaycastHit best)
+        {
+            best = default;
+            int n = Physics.RaycastNonAlloc(origin, dir, Hits, dist, environmentMask, QueryTriggerInteraction.Ignore);
+            float bestD = float.MaxValue;
+            bool found = false;
+            for (int i = 0; i < n; i++)
+            {
+                var col = Hits[i].collider;
+                if (col.attachedRigidbody) continue;
+                if (col.GetComponentInParent<BodycamPlayerController>() || Door.Of(col) != null) continue;
+                if (Hits[i].distance < bestD) { bestD = Hits[i].distance; best = Hits[i]; found = true; }
+            }
+            return found;
+        }
+
         static Vector3 Flat(Vector3 v) { v.y = 0f; return v; }
 
         /// <summary>The clips of a list that are really there (a deleted recording leaves a hole).</summary>
@@ -836,6 +1153,12 @@ namespace BodycamHorror.Enemies
             Gizmos.DrawWireSphere(transform.position, leapRange);
             Gizmos.color = new Color(1f, 0.8f, 0.3f, 0.3f);
             Gizmos.DrawWireSphere(transform.position, hearRunRange);
+            if (Application.isPlaying && (state == State.ToWall || state == State.Climb || state == State.Perch))
+            {
+                Gizmos.color = Color.magenta;
+                Gizmos.DrawLine(wallBase, perchPos);
+                Gizmos.DrawWireSphere(perchPos, 0.15f);
+            }
         }
     }
 }

@@ -1512,14 +1512,30 @@ MonoBehaviour:
   speed: 5.4
   acceleration: 25
   turnSpeed: 600
+  biteRange: 0.8
+  biteReach: 1.1
+  biteWindup: 0.42
+  biteContact: 0.1
+  biteRecover: 0.45
+  biteDamage: 9
+  biteLunge: 3
   leapRange: 3.4
   leapMinRange: 1.1
+  leapChance: 0.3
+  leapThinkInterval: 0.7
   windupTime: 0.35
   leapSpeed: 8
   leapCooldown: 7
   damage: 22
   hitRadius: 0.9
   recoverTime: 0.9
+  attackPause: {x: 2.5, y: 4.5}
+  pauseAfterHit: 1.5
+  prowlRadius: {x: 0.9, y: 1.9}
+  prowlTurnRate: 120
+  prowlSpeedShare: 0.7
+  prowlSwitch: {x: 0.7, y: 2}
+  feintChance: 0.3
   stressOnShriek: 0.35
   stressOnHit: 0.2
   sobs: []
@@ -1529,6 +1545,9 @@ MonoBehaviour:
   sobVolume: 0.85
   sobPause: {x: 0.3, y: 2.4}
   skitterVolume: 0.4
+  scurryLoop: {fileID: 8300000, guid: e1898f0df235a91478eca49abb840e4d, type: 3}
+  scurryVolume: 0.6
+  scurryFade: 6
   environmentMask:
     serializedVersion: 2
     m_Bits: 4294967035

@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 namespace BodycamHorror.Player
 {
     /// <summary>
-    /// Lets the player use doors, turn valves and pick guns up: stand close, look at one, and the key to
+    /// Lets the player use doors (unlocking one whose key is on their KeyRing), turn valves and pick guns and keys up: stand close, look at one, and the key to
     /// press shows by its handle / on the wheel / over the gun (E / D-pad down). Doors and pickups add this to the player themselves,
     /// so nothing has to be set up per scene. While something is in reach the same key does not toggle
     /// the flashlight (see BodycamFlashlight).
@@ -16,7 +16,7 @@ namespace BodycamHorror.Player
     {
         public static PlayerInteractor Instance { get; private set; }
         /// <summary>A door or a pickup is in reach and looked at right now.</summary>
-        public static bool HasTarget => Instance && Instance.isActiveAndEnabled && (Instance.Target || Instance.Pickup || Instance.Valve);
+        public static bool HasTarget => Instance && Instance.isActiveAndEnabled && (Instance.Target || Instance.Pickup || Instance.Key || Instance.Valve);
 
         [Tooltip("How far the player can reach (m, from the camera).")]
         public float reach = 2.2f;
@@ -40,6 +40,7 @@ namespace BodycamHorror.Player
 
         public Door Target { get; private set; }
         public WeaponPickup Pickup { get; private set; }
+        public KeyPickup Key { get; private set; }
         public Valve Valve { get; private set; }
 
         Camera cam;
@@ -90,12 +91,15 @@ namespace BodycamHorror.Player
             }
             Target = cam ? FindDoor(cam.transform.position, cam.transform.forward) : null;
             Pickup = cam && !Target ? FindPickup(cam.transform.position, cam.transform.forward) : null;
-            Valve = cam && !Target && !Pickup ? FindValve(cam.transform.position, cam.transform.forward) : null;
+            Key = cam && !Target && !Pickup ? FindKey(cam.transform.position, cam.transform.forward) : null;
+            Valve = cam && !Target && !Pickup && !Key ? FindValve(cam.transform.position, cam.transform.forward) : null;
 
             if (Target)
             {
-                promptPoint = Target.PromptPoint(cam.transform.position) + Vector3.up * promptLift;
-                if (useAction.WasPressedThisFrame() && !Target.Toggle(cam.transform.position) && Target.locked)
+                Vector3 eye = cam.transform.position;
+                promptPoint = Target.PromptPoint(eye) + Vector3.up * promptLift;
+                // a locked door opens with the right key on the ring; otherwise it rattles and the padlock badge shows
+                if (useAction.WasPressedThisFrame() && !Target.TryUnlock(gameObject, eye) && !Target.Toggle(eye) && Target.IsBarred(eye))
                 {
                     triedLocked = Target;
                     lockedAge = 0f;   // pops in again (and shakes) on every try
@@ -106,15 +110,20 @@ namespace BodycamHorror.Player
                 promptPoint = Pickup.PromptPoint;
                 if (useAction.WasPressedThisFrame() && Pickup.Take(gameObject)) Pickup = null;
             }
+            else if (Key)
+            {
+                promptPoint = Key.PromptPoint;
+                if (useAction.WasPressedThisFrame() && Key.Take(gameObject)) Key = null;
+            }
             else if (Valve)
             {
                 promptPoint = Valve.PromptPoint;
                 if (useAction.IsPressed()) Valve.Use(useAction.WasPressedThisFrame());
             }
-            promptAlpha = Mathf.MoveTowards(promptAlpha, Target || Pickup || Valve ? 1f : 0f, Time.unscaledDeltaTime * 7f);
+            promptAlpha = Mathf.MoveTowards(promptAlpha, Target || Pickup || Key || Valve ? 1f : 0f, Time.unscaledDeltaTime * 7f);
 
-            // the lock badge stays while the player keeps looking at that door, until it is shot open
-            if (triedLocked && (Target != triedLocked || !triedLocked.locked)) triedLocked = null;
+            // the lock badge stays while the player keeps looking at that door, until it is shot or unlocked open
+            if (triedLocked && (Target != triedLocked || !triedLocked.IsBarred(cam.transform.position))) triedLocked = null;
             lockedAge += Time.unscaledDeltaTime;
             lockedShown = Mathf.MoveTowards(lockedShown, triedLocked ? 1f : 0f, Time.unscaledDeltaTime * (triedLocked ? 12f : 7f));
         }
@@ -146,7 +155,7 @@ namespace BodycamHorror.Player
             float bestAngle = pickupLookAngle;
             foreach (WeaponPickup pickup in WeaponPickup.All)
             {
-                Vector3 to = pickup.transform.position + Vector3.up * 0.05f - eye;
+                Vector3 to = pickup.Centre + Vector3.up * 0.02f - eye;
                 float distance = to.magnitude;
                 if (distance > (pickup.reach > 0f ? pickup.reach : pickupReach) || distance < 0.01f) continue;
                 float a = Vector3.Angle(forward, to);
@@ -155,6 +164,25 @@ namespace BodycamHorror.Player
                 if (Physics.Raycast(eye, to / distance, out RaycastHit block, distance - 0.1f, mask, QueryTriggerInteraction.Ignore)
                     && !block.collider.transform.IsChildOf(pickup.transform)) continue;
                 best = pickup;
+                bestAngle = a;
+            }
+            return best;
+        }
+
+        KeyPickup FindKey(Vector3 eye, Vector3 forward)
+        {
+            KeyPickup best = null;
+            float bestAngle = pickupLookAngle;
+            foreach (KeyPickup key in KeyPickup.All)
+            {
+                Vector3 to = key.Centre - eye;
+                float distance = to.magnitude;
+                if (distance > (key.reach > 0f ? key.reach : pickupReach) || distance < 0.01f) continue;
+                float a = Vector3.Angle(forward, to);
+                if (a >= bestAngle || (key.lookAngle > 0f && a >= key.lookAngle)) continue;
+                if (Physics.Raycast(eye, to / distance, out RaycastHit block, distance - 0.05f, mask, QueryTriggerInteraction.Ignore)
+                    && !block.collider.transform.IsChildOf(key.transform)) continue;
+                best = key;
                 bestAngle = a;
             }
             return best;

@@ -12,13 +12,19 @@ namespace BodycamHorror.Environment
     /// that turns (about its own Y axis, closed at zero). The player opens and closes it through
     /// PlayerInteractor; it swings away from whoever opens it. Enemies heading for a closed door throw
     /// it open themselves. Closing onto somebody standing in the way makes it swing back open.
+    /// A locked door with a <see cref="keyId"/> opens for a player carrying that key (KeyRing). A door with a
+    /// <see cref="latch"/> is bolted on one side: it opens only from that side, and once opened it is a door like
+    /// any other (enemies leave it alone until then).
     /// </summary>
     public class Door : MonoBehaviour
     {
+        /// <summary>Which side a latched door can be opened from. Front is the door's +Z side.</summary>
+        public enum Latch { None, FrontOnly, BackOnly }
+
         public static readonly List<Door> All = new List<Door>();
         static readonly Dictionary<Collider, Door> ByCollider = new Dictionary<Collider, Door>();
         static readonly Collider[] Buffer = new Collider[64];
-        static AudioClip generatedOpen, generatedCreak, generatedShut, generatedLocked;
+        static AudioClip generatedOpen, generatedCreak, generatedShut, generatedLocked, generatedUnlock;
 
         [Header("Parts")]
         [Tooltip("The part that turns. Its origin is on the hinge line, the door extends along its +X.")]
@@ -33,8 +39,22 @@ namespace BodycamHorror.Environment
         public float closeTime = 0.6f;
         [Tooltip("Opens away from whoever opens it. Off: always towards its +Z side's far side (positive angle).")]
         public bool swingBothWays = true;
+        [Tooltip("With Swing Both Ways off: open the other way (towards the +Z side instead of away from it).")]
+        public bool reverseSwing;
         public bool startOpen;
+
+        [Header("Lock")]
         public bool locked;
+        [Tooltip("The key that unlocks it (a KeyPickup's Key Id). Empty: no key does.")]
+        public string keyId;
+        [Tooltip("The key stays in the lock: it is taken off the player's ring.")]
+        public bool keyUsedUp = true;
+        [Tooltip("Bolted on one side: opens only from there (front = +Z), then like any door.")]
+        public Latch latch = Latch.None;
+        [Tooltip("The key turning in the lock (empty = generated).")]
+        public AudioClip unlockClip;
+        /// <summary>Raised when a key unlocks it.</summary>
+        public event System.Action<Door> Unlocked;
 
         [Header("Enemies")]
         public bool enemiesCanOpen = true;
@@ -58,6 +78,10 @@ namespace BodycamHorror.Environment
         /// <summary>Open or on its way open.</summary>
         public bool IsOpen => Mathf.Abs(targetAngle) > 0.01f;
         public bool IsMoving { get; private set; }
+        /// <summary>Latched and not yet opened from its open side.</summary>
+        public bool IsLatched => latch != Latch.None && !latchReleased;
+        /// <summary>Would not open for somebody standing here: locked, or latched on the other side.</summary>
+        public bool IsBarred(Vector3 from) => locked || (IsLatched && !FromLatchSide(from));
         /// <summary>Middle of the closed door, world space.</summary>
         public Vector3 Centre => transform.TransformPoint(centreLocal);
 
@@ -69,6 +93,7 @@ namespace BodycamHorror.Environment
         bool swingFading;
         Vector3 centreLocal = new Vector3(0.5f, 1f, 0f);
         float angle, fromAngle, targetAngle, lastOpenAngle, progress, duration = 1f, scanTimer;
+        bool latchReleased;
 
         void Awake()
         {
@@ -126,7 +151,28 @@ namespace BodycamHorror.Environment
         public static bool EnemyPassable(Collider c)
         {
             Door d = Of(c);
-            return d && d.enemiesCanOpen && !d.locked;
+            return d && d.enemiesCanOpen && !d.locked && !d.IsLatched;
+        }
+
+        bool FromLatchSide(Vector3 from)
+        {
+            bool front = transform.InverseTransformPoint(from).z >= 0f;
+            return latch == Latch.FrontOnly ? front : latch == Latch.BackOnly ? !front : true;
+        }
+
+        /// <summary>A player tries a locked door: if their key ring holds its key it unlocks (and opens).
+        /// False when it is not locked by a key, or they do not have it.</summary>
+        public bool TryUnlock(GameObject player, Vector3 from)
+        {
+            if (!locked || string.IsNullOrEmpty(keyId)) return false;
+            KeyRing ring = KeyRing.Of(player);
+            if (!ring || !ring.Has(keyId)) return false;
+            if (keyUsedUp) ring.UseUp(keyId);
+            locked = false;
+            Play(unlockClip ? unlockClip : generatedUnlock ? generatedUnlock : (generatedUnlock = ProceduralAudio.DoubleClick(0.14f, 700f, 0.6f)), 0.8f, 1f);
+            Unlocked?.Invoke(this);
+            Open(from);
+            return true;
         }
 
         /// <summary>Where the key prompt goes: the handle on the viewer's side.</summary>
@@ -156,13 +202,14 @@ namespace BodycamHorror.Environment
 
         public bool Open(Vector3 from, bool thrown = false)
         {
-            if (locked)
+            if (IsBarred(from))
             {
                 Play(lockedClip ? lockedClip : generatedLocked ? generatedLocked : (generatedLocked = ProceduralAudio.DoubleClick(0.09f, 900f, 0.5f)), 0.7f, 1f);
                 return false;
             }
+            latchReleased |= latch != Latch.None;   // the bolt is drawn: from now on it opens from either side
             float side = transform.InverseTransformPoint(from).z >= 0f ? 1f : -1f;
-            float target = (swingBothWays ? side : 1f) * openAngle;
+            float target = (swingBothWays ? side : reverseSwing ? -1f : 1f) * openAngle;
             if (IsOpen && Mathf.Approximately(target, targetAngle)) return true;
             Begin(target, thrown ? enemyOpenTime : openTime);
             PlaySwing(openClip ? openClip : generatedOpen ? generatedOpen : (generatedOpen = ProceduralAudio.DoorOpen()),
@@ -226,7 +273,7 @@ namespace BodycamHorror.Environment
                 }
             }
 
-            if (closing && enemiesCanOpen && !locked)
+            if (closing && enemiesCanOpen && !locked && !IsLatched)
             {
                 scanTimer -= dt;
                 if (scanTimer <= 0f)

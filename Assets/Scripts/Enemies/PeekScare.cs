@@ -13,7 +13,8 @@ namespace BodycamHorror.Enemies
     /// jamb), out of sight, and slowly leans out from behind it to look at the player. It waits until the
     /// player actually sees it — in the middle part of the view, nothing solid in between — then, after a
     /// beat, a loud sting and its scream hit at once, it holds the stare for a moment, ducks back behind
-    /// the corner and runs off along <see cref="fleePath"/>. Nothing to fight; it is not there before or after.
+    /// the corner and runs off along <see cref="fleePath"/> (or, with <see cref="duckTime"/> set, just snaps
+    /// back out of sight). Nothing to fight; it is not there before or after.
     /// This transform: where it stands hidden, on the floor, facing the way it will look out.
     /// </summary>
     public class PeekScare : MonoBehaviour
@@ -32,6 +33,18 @@ namespace BodycamHorror.Enemies
         public float peekLean = 16f;
         [Tooltip("Seconds to lean all the way out: slow is worse.")]
         public float peekTime = 1.6f;
+        [Tooltip("Put it in place (hidden) when the level starts instead of when the pickup is taken, so it is " +
+                 "never seen popping in, nor its shadow.")]
+        public bool spawnAtStart;
+        [Tooltip("How far (m) back behind the corner it waits before it leans out.")]
+        public float hideDistance;
+        [Tooltip("Seconds after it is set off (the door starts to open) before it leans out.")]
+        public float peekDelay;
+        [Tooltip("Lean from the waist: the legs and hips stay standing behind the corner and only the upper body " +
+                 "bends out. Needs a humanoid model and Idle Speed 0 (it holds one pose from the idle clip).")]
+        public bool bendAtWaist;
+        [Tooltip("With Bend At Waist: how much of the tilt the neck takes back out (0 = the head tilts with the body, 1 = stays upright).")]
+        [Range(0f, 1f)] public float headUpright = 0.5f;
 
         [Header("Being seen")]
         [Tooltip("How far into the view it must be: 0 = anywhere on screen, 0.35 = the middle part.")]
@@ -48,6 +61,10 @@ namespace BodycamHorror.Enemies
         public float giveUpAfter = 0f;
 
         [Header("Flight")]
+        [Tooltip("Above 0: instead of running off, it snaps back behind the corner this fast (s) and is gone.")]
+        public float duckTime;
+        [Tooltip("How far (m) it pulls back behind the corner while ducking.")]
+        public float duckDistance = 0.4f;
         [Tooltip("Floor points it runs through, in order; the last is where it vanishes.")]
         public Vector3[] fleePath;
         public float speed = 7.5f;
@@ -63,6 +80,10 @@ namespace BodycamHorror.Enemies
         public Material modelMaterial;
         public float modelScale = 0.7f;
         public AnimationClip idleClip;
+        [Tooltip("Speed of the idle while it watches. 0 = frozen still on Idle Time.")]
+        public float idleSpeed = 0.6f;
+        [Tooltip("Where in the idle clip it starts (s). Below 0 = anywhere.")]
+        public float idleTime = -1f;
         public AnimationClip runClip;
         public float runAnimationSpeed = 1.2f;
 
@@ -79,19 +100,31 @@ namespace BodycamHorror.Enemies
         public float stepInterval = 0.26f;
         public float stepPitch = 0.72f;
 
+        [Header("Silence")]
+        [Tooltip("Taking the pickup cuts every other sound in the level (ambience, lamp hum, drips...): only the " +
+                 "player, the door and the monster are heard until it is over.")]
+        public bool silenceWorld = true;
+        [Tooltip("Seconds after the sting before the level's sounds come back.")]
+        public float restoreAfterSting = 3f;
+
         [Header("The moment")]
         [Tooltip("A lamp near it that stutters while it goes (optional).")]
         public Light flickerLight;
         [Tooltip("Fear given to the player (0-1). 0.65 and up rings the ears, 0.8 is a full panic heartbeat.")]
         [Range(0f, 1f)] public float stress = 0.85f;
 
-        enum Phase { Idle, Waiting, Watching, Reacting, Holding, Fleeing, Done }
+        enum Phase { Idle, Waiting, Watching, Reacting, Holding, Fleeing, Ducking, Done }
 
         Phase phase;
         Transform player;
         Camera eye;
         GameObject monster;
         Transform head;
+        Animator animator;
+        Transform[] spine;           // bent by hand when it leans from the waist (the animator is off then)
+        Quaternion[] spineRest;
+        Transform neck;
+        Quaternion neckRest;
         AudioSource voice, feet, sting;
         PlayableGraph graph;
         float timer, peekTimer, stepTimer, lightIntensity, runTime;
@@ -99,13 +132,64 @@ namespace BodycamHorror.Enemies
         static AudioClip generatedStinger;
 
         void OnEnable() => WeaponPickup.Taken += OnTaken;
-        void OnDisable() => WeaponPickup.Taken -= OnTaken;
+
+        void OnDisable()
+        {
+            WeaponPickup.Taken -= OnTaken;
+            Unsilence();
+        }
+
+        // ------------------------------------------------------------------ the silence
+
+        readonly System.Collections.Generic.List<AudioSource> muted = new System.Collections.Generic.List<AudioSource>();
+        readonly System.Collections.Generic.HashSet<AudioSource> spared = new System.Collections.Generic.HashSet<AudioSource>();
+        bool silent;
+        float silenceScan, restoreTimer = -1f;
+
+        /// <summary>Everything in the level goes quiet; the click of the pickup itself is let finish.</summary>
+        void Silence(Vector3 pickupAt)
+        {
+            silent = true;
+            spared.Clear();
+            foreach (var a in FindObjectsByType<AudioSource>(FindObjectsSortMode.None))
+                if (a.isPlaying && !a.loop && (a.transform.position - pickupAt).sqrMagnitude < 0.25f) spared.Add(a);
+            SilenceScan();
+        }
+
+        /// <summary>Mutes whatever plays now that is not the player, the door or the monster (run on and on,
+        /// so sounds that start during the silence are cut too).</summary>
+        void SilenceScan()
+        {
+            foreach (var a in FindObjectsByType<AudioSource>(FindObjectsSortMode.None))
+            {
+                if (a.mute || spared.Contains(a)) continue;
+                Transform t = a.transform;
+                if (t.IsChildOf(transform) || (monster && t.IsChildOf(monster.transform)) ||
+                    (player && t.IsChildOf(player)) || (door && t.IsChildOf(door.transform))) continue;
+                a.mute = true;
+                muted.Add(a);
+            }
+        }
+
+        void Unsilence()
+        {
+            silent = false;
+            restoreTimer = -1f;
+            foreach (var a in muted) if (a) a.mute = false;
+            muted.Clear();
+            spared.Clear();
+        }
 
         void Start()
         {
             var controller = FindAnyObjectByType<BodycamPlayerController>();
             if (controller) player = controller.transform;
             if (flickerLight) lightIntensity = flickerLight.intensity;
+            if (spawnAtStart)
+            {
+                Spawn();
+                Pose(0f);   // waiting out of sight behind the corner
+            }
         }
 
         void OnTaken(WeaponPickup taken, GameObject by)
@@ -114,13 +198,29 @@ namespace BodycamHorror.Enemies
             if (by) player = by.transform;
             phase = Phase.Waiting;
             timer = appearDelay;
+            if (silenceWorld) Silence(taken ? taken.transform.position : transform.position);
         }
 
         void Update()
         {
             float dt = Time.deltaTime;
+            if (silent)
+            {
+                silenceScan -= dt;
+                if (silenceScan <= 0f)
+                {
+                    silenceScan = 0.1f;
+                    SilenceScan();
+                }
+                if (restoreTimer >= 0f && (restoreTimer -= dt) <= 0f) Unsilence();
+            }
             switch (phase)
             {
+                case Phase.Idle:
+                    // waiting from the start: there only while the door hides it, so a player who wanders
+                    // round there early does not find it standing about
+                    if (monster) Show(!door || (!door.IsOpen && !PastDoor()));
+                    break;
                 case Phase.Waiting:
                     timer -= dt;
                     if (timer <= 0f) Appear();
@@ -144,6 +244,9 @@ namespace BodycamHorror.Enemies
                 case Phase.Fleeing:
                     Run(dt);
                     break;
+                case Phase.Ducking:
+                    Duck(dt);
+                    break;
             }
         }
 
@@ -153,7 +256,33 @@ namespace BodycamHorror.Enemies
         {
             phase = Phase.Watching;
             timer = 0f;
-            peekTimer = 0f;
+            peekTimer = -peekDelay;
+            if (!monster) Spawn();
+            Show(true);
+            if (door && !door.IsOpen) door.Open(monster.transform.position);   // the creak is the cue to look up
+        }
+
+        bool shown = true;
+
+        void Show(bool on)
+        {
+            if (on == shown || !monster) return;
+            shown = on;
+            foreach (var r in monster.GetComponentsInChildren<Renderer>(true)) r.enabled = on;
+        }
+
+        /// <summary>The player is on the far side of the door (the monster's side).</summary>
+        bool PastDoor()
+        {
+            if (!player || !door) return false;
+            float playerSide = door.transform.InverseTransformPoint(player.position).z;
+            float monsterSide = door.transform.InverseTransformPoint(transform.position).z;
+            return playerSide * monsterSide > 0f;
+        }
+
+        /// <summary>Makes the monster (model, voice, feet) where it stands hidden.</summary>
+        void Spawn()
+        {
             monster = new GameObject("PeekMonster");
             monster.transform.SetPositionAndRotation(transform.position, transform.rotation);
 
@@ -167,14 +296,17 @@ namespace BodycamHorror.Enemies
                     if (modelMaterial) r.sharedMaterial = modelMaterial;
                     if (r is SkinnedMeshRenderer smr) smr.updateWhenOffscreen = true;
                 }
-                var animator = model.GetComponentInChildren<Animator>();
+                animator = model.GetComponentInChildren<Animator>();
                 if (animator)
                 {
                     animator.applyRootMotion = false;
                     animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                     head = animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.Head) : null;
                 }
-                Play(idleClip, 0.6f);   // slowed: it is holding still, watching
+                if (bendAtWaist && animator && animator.isHuman && idleClip && idleSpeed <= 0f)
+                    HoldPose();   // one still pose, bent at the waist by hand
+                else
+                    Play(idleClip, idleSpeed, idleTime);   // slowed (or still): it is watching
             }
             else
             {
@@ -193,30 +325,103 @@ namespace BodycamHorror.Enemies
             sting.spatialBlend = 0f;
             sting.priority = 0;
             sting.bypassReverbZones = true;
-
-            if (door && !door.IsOpen) door.Open(monster.transform.position);   // the creak is the cue to look up
         }
 
-        /// <summary>Leans out from behind the corner, slowly, easing in and out.</summary>
+        /// <summary>Leans out from behind the corner, easing in and out (after Peek Delay).</summary>
         void Peek(float dt)
         {
             if (!monster) return;
             peekTimer += dt;
-            float k = peekTime > 0f ? Mathf.SmoothStep(0f, 1f, peekTimer / peekTime) : 1f;
+            float t = Mathf.Max(peekTimer, 0f);
+            Pose(peekTime > 0f ? Mathf.SmoothStep(0f, 1f, t / peekTime) : 1f);
+        }
+
+        /// <summary>0 = standing hidden behind the corner (Hide Distance back), 1 = leaning all the way out.</summary>
+        void Pose(float k)
+        {
+            if (!monster) return;
             Vector3 offset = new Vector3(peekOffset.x, 0f, peekOffset.z);
-            monster.transform.position = transform.position + offset * k;
+            Vector3 back = offset.sqrMagnitude > 0.0001f ? -offset.normalized : -transform.right;
+            monster.transform.position = transform.position + back * (hideDistance * (1f - k)) + offset * k;
+            if (spine != null)
+            {
+                monster.transform.rotation = transform.rotation;   // standing straight behind the corner
+                Bend(peekLean * k);
+                return;
+            }
             Vector3 axis = offset.sqrMagnitude > 0.0001f ? Vector3.Cross(Vector3.up, offset.normalized) : transform.forward;
             monster.transform.rotation = Quaternion.AngleAxis(peekLean * k, axis) * transform.rotation;
         }
 
-        void Play(AnimationClip clip, float speed)
+        /// <summary>Freezes the model in the idle clip's pose at Idle Time with the animator off, so the
+        /// spine can be bent by hand without the animation putting it straight again.</summary>
+        void HoldPose()
+        {
+            if (graph.IsValid()) graph.Destroy();
+            idleClip.SampleAnimation(animator.gameObject, Mathf.Clamp(idleTime, 0f, idleClip.length));
+            animator.enabled = false;
+            var bones = new System.Collections.Generic.List<Transform>();
+            foreach (var b in new[] { HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest })
+            {
+                Transform t = animator.GetBoneTransform(b);
+                if (t) bones.Add(t);
+            }
+            if (bones.Count == 0) return;
+            spine = bones.ToArray();
+            spineRest = new Quaternion[spine.Length];
+            for (int i = 0; i < spine.Length; i++) spineRest[i] = spine[i].localRotation;
+            neck = animator.GetBoneTransform(HumanBodyBones.Neck);
+            if (neck) neckRest = neck.localRotation;
+        }
+
+        /// <summary>Tilts the upper body this many degrees out round the corner (towards Peek Offset),
+        /// spread down the spine; the head keeps its own pose on top.</summary>
+        void Bend(float degrees)
+        {
+            Vector3 offset = new Vector3(peekOffset.x, 0f, peekOffset.z);
+            Vector3 axis = offset.sqrMagnitude > 0.0001f ? Vector3.Cross(Vector3.up, offset.normalized) : monster.transform.forward;
+            Quaternion share = Quaternion.AngleAxis(degrees / spine.Length, axis);
+            for (int i = 0; i < spine.Length; i++)
+            {
+                spine[i].localRotation = spineRest[i];
+                spine[i].rotation = share * spine[i].rotation;   // the parent is already bent: each adds its share
+            }
+            if (neck)
+            {
+                // the neck takes part of the tilt back out, so the head stays nearer upright
+                neck.localRotation = neckRest;
+                neck.rotation = Quaternion.AngleAxis(-degrees * headUpright, axis) * neck.rotation;
+            }
+        }
+
+        /// <summary>Snaps back behind the corner, fast, then is gone.</summary>
+        void Duck(float dt)
+        {
+            if (!monster) { phase = Phase.Done; return; }
+            timer += dt;
+            float u = Mathf.Clamp01(timer / Mathf.Max(duckTime, 0.01f));
+            float e = 1f - (1f - u) * (1f - u);   // quick out of the pose, settling at the end
+            Vector3 offset = new Vector3(peekOffset.x, 0f, peekOffset.z);
+            Vector3 back = offset.sqrMagnitude > 0.0001f ? -offset.normalized : -monster.transform.right;
+            monster.transform.position = transform.position + offset * (1f - e) + back * (duckDistance * e);
+            if (spine != null) Bend(peekLean * (1f - e));
+            else
+            {
+                Vector3 axis = offset.sqrMagnitude > 0.0001f ? Vector3.Cross(Vector3.up, offset.normalized) : transform.forward;
+                monster.transform.rotation = Quaternion.AngleAxis(peekLean * (1f - e), axis) * transform.rotation;
+            }
+            if (flickerLight) Flicker();
+            if (u >= 1f) Vanish(4f);   // out of sight: let the scream ring out before it is removed
+        }
+
+        void Play(AnimationClip clip, float speed, float time = -1f)
         {
             if (graph.IsValid()) graph.Destroy();
             var animator = monster ? monster.GetComponentInChildren<Animator>() : null;
             if (!animator || !clip) return;
             var playable = AnimationPlayableUtilities.PlayClip(animator, clip, out graph);
             playable.SetSpeed(speed);
-            playable.SetTime(Random.Range(0f, clip.length));
+            playable.SetTime(time >= 0f ? Mathf.Min(time, clip.length) : Random.Range(0f, clip.length));
         }
 
         AudioSource Source(string name, float near, float far)
@@ -243,8 +448,12 @@ namespace BodycamHorror.Enemies
         {
             if (!eye || !eye.isActiveAndEnabled) eye = Camera.main;
             if (!eye || !monster) return false;
-            // the head or the shoulder, whichever shows round the corner
-            return Visible(LookPoint) || Visible(monster.transform.position + monster.transform.up * 1.2f);
+            // the head or the shoulder, whichever shows round the corner; also the side of the head that
+            // comes out first, so a head half round the jamb counts too
+            Vector3 outward = new Vector3(peekOffset.x, 0f, peekOffset.z);
+            outward = outward.sqrMagnitude > 0.0001f ? outward.normalized : Vector3.zero;
+            return Visible(LookPoint) || Visible(LookPoint + outward * 0.09f) ||
+                   Visible(monster.transform.position + monster.transform.up * 1.2f);
         }
 
         bool Visible(Vector3 point)
@@ -274,6 +483,7 @@ namespace BodycamHorror.Enemies
         {
             phase = Phase.Holding;
             timer = holdAfterSting;
+            if (silent) restoreTimer = Mathf.Max(restoreAfterSting, 0.01f);
             AudioClip clip = stinger ? stinger : generatedStinger ? generatedStinger : (generatedStinger = ProceduralAudio.ScareStinger());
             sting.PlayOneShot(clip, stingerVolume);
             if (scream)
@@ -287,6 +497,13 @@ namespace BodycamHorror.Enemies
 
         void Flee()
         {
+            if (duckTime > 0f)
+            {
+                phase = Phase.Ducking;
+                timer = 0f;
+                return;
+            }
+            if (animator && !animator.enabled) animator.enabled = true;   // it was holding a pose
             phase = Phase.Fleeing;
             waypoint = 0;
             runTime = 0f;

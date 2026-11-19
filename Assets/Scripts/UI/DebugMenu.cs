@@ -13,7 +13,7 @@ namespace BodycamHorror.UI
     /// (PlayerPrefs). Read by PlayerShooting and BodycamPlayerController (walk and run speed are
     /// set in m/s, not as multipliers). Installs itself.
     /// The sliders are split into sections (tabs along the top); a section can also carry actions, such as
-    /// handing the player the flashlight when they have none yet.
+    /// handing the player the flashlight when they have none yet, or jumping to a place in the level (Level section).
     /// </summary>
     public class DebugMenu : MonoBehaviour
     {
@@ -25,8 +25,15 @@ namespace BodycamHorror.UI
             public float min, max, step, reset, floor, value;
         }
 
-        enum Section { Weapons, Flashlight, Camera, Movement }
-        static readonly string[] SectionNames = { "Оружие", "Фонарик", "Камера", "Движение" };
+        enum Section { Weapons, Flashlight, Camera, Movement, Level }
+        static readonly string[] SectionNames = { "Оружие", "Фонарик", "Камера", "Движение", "Уровень" };
+
+        /// <summary>Places to jump to (Level section): the scene object to find, and a feet point and facing in its own space.</summary>
+        static readonly (string label, string anchor, Vector3 local, float yaw)[] Teleports =
+        {
+            // the bottom of the PvE landing, just in from the leg's door, looking up the landing to the iron door
+            ("Телепорт: площадка с ключами", "PvE_Landing", new Vector3(2.25f, 0.05f, 1.4f), 0f),
+        };
 
         static readonly Row[] Rows =
         {
@@ -118,7 +125,7 @@ namespace BodycamHorror.UI
             float pad = 18f * k, rowH = 44f * k, w = 700f * k, tabH = 40f * k, actionH = 48f * k;
             int count = 0;
             foreach (var r in Rows) if (r.section == shown) count++;
-            int actions = shown == Section.Flashlight ? 1 : 0;
+            int actions = shown == Section.Flashlight || shown == Section.Weapons ? 1 : shown == Section.Level ? Teleports.Length : 0;
             var panel = new Rect(16f * k, 16f * k, w, pad * 2f + 44f * k + tabH + 14f * k + rowH * count + actionH * actions + 34f * k);
             Fill(panel, new Color(0.05f, 0.055f, 0.06f, 0.88f));
 
@@ -142,6 +149,33 @@ namespace BodycamHorror.UI
                 if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), label, action)) GiveFlashlight(light);
                 GUI.enabled = was;
                 y += actionH;
+            }
+
+            if (shown == Section.Weapons)
+            {
+                var shooting = FindAnyObjectByType<PlayerShooting>(FindObjectsInactive.Include);
+                var pistol = shooting ? shooting.FindWeapon<Pistol>() : null;
+                bool has = pistol && shooting.Owns(pistol);
+                bool was = GUI.enabled;
+                GUI.enabled = pistol && !has;
+                string label = !pistol ? "Пистолета нет у игрока" : has ? "Пистолет уже есть" : "Выдать пистолет";
+                if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), label, action)) shooting.Give(pistol, true);
+                GUI.enabled = was;
+                y += actionH;
+            }
+
+            if (shown == Section.Level)
+            {
+                foreach (var tp in Teleports)
+                {
+                    var anchor = GameObject.Find(tp.anchor);
+                    bool was = GUI.enabled;
+                    GUI.enabled = anchor;
+                    string label = anchor ? tp.label : tp.label + " (нет в сцене)";
+                    if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), label, action)) TeleportTo(anchor.transform, tp.local, tp.yaw);
+                    GUI.enabled = was;
+                    y += actionH;
+                }
             }
 
             foreach (var r in Rows)
@@ -174,6 +208,26 @@ namespace BodycamHorror.UI
             var pistol = shooting ? shooting.FindWeapon<Pistol>() : null;
             if (pistol) pistol.HasLight = true;
             light.SetOn(true);
+        }
+
+        /// <summary>Moves the player to a point given in <paramref name="anchor"/>'s space, facing its <paramref name="yaw"/>,
+        /// and closes the panel so they can walk on at once.</summary>
+        void TeleportTo(Transform anchor, Vector3 local, float yaw)
+        {
+            var player = FindAnyObjectByType<BodycamPlayerController>();
+            if (!player) return;
+            // still lying on the floor in the wake-up intro: cut it short (disabling it gives back input, eyes and ears)
+            var intro = player.GetComponent<WakeUpIntro>();
+            if (intro && intro.IsPlaying)
+            {
+                intro.enabled = false;
+                if (player.cameraPivot) player.cameraPivot.localPosition = new Vector3(0f, player.StandingEyeHeight, 0f);
+            }
+            player.Teleport(anchor.TransformPoint(local), anchor.eulerAngles.y + yaw);
+            open = IsOpen = false;
+            Save();
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
         }
 
         void Styles(float k)

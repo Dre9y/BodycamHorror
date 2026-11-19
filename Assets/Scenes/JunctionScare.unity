@@ -1977,6 +1977,9 @@ MonoBehaviour:
   edgeBlur: 0.007
   edgeBlurStart: 0.45
   motionBlur: 0.06
+  eyelids: 0
+  daze: 0
+  dazeBlur: 0.014
 --- !u!114 &330585549
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2583,6 +2586,9 @@ MonoBehaviour:
   hazeMaterial: {fileID: 2100000, guid: b45e69105b27f0148b684d399f423d01, type: 2}
   hazeDensity: 0.0007
   hazeWisps: 0.5
+  haloIntensity: 16
+  haloSpread: 0.5
+  haloRange: 16
   spillIntensity: 5
   spillAngle: 120
   spillRange: 10
@@ -6066,7 +6072,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Player.PlayerHealth
   hitsToDie: 2
   recoveryTime: 12
-  hitGrace: 0.35
+  invulnerableTime: 2
   stressPerHit: 0.3
   traumaPerDamage: 0.02
   player: {fileID: 0}
@@ -6365,6 +6371,10 @@ MonoBehaviour:
   stepInterval: 0.07
   stepPitch: 1
   proceduralSkitter: 1
+  scurryLoop: {fileID: 8300000, guid: e1898f0df235a91478eca49abb840e4d, type: 3}
+  scurryVolume: 0.8
+  scurryPitch: 1.25
+  scurryFadeOut: 0.35
   flickerLight: {fileID: 454116788}
   stress: 0.45
 --- !u!4 &973822080

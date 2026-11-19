@@ -22,6 +22,13 @@ namespace BodycamHorror.Enemies
         public bool faceForward = false;
         [Tooltip("Blind and deaf: they stand about whatever the player does, until they get hurt. For lighting and animation tests.")]
         public bool passive = false;
+        [Tooltip("Head-banger: spawns exactly here, facing the spawner's forward (blue arrow), banging its head on the " +
+                 "wall in front until it notices the player. Put the spawner about 0.45 m from the wall (model scale 0.7); " +
+                 "best with Count = 1.")]
+        public bool bangHeadOnWall = false;
+        [Tooltip("Head-banger: its knocks are heard only while the player is inside this world-space box " +
+                 "(size 0 = everywhere). Shown as a cyan box.")]
+        public Bounds bangHearZone;
         public LayerMask groundMask = ~((1 << 2) | (1 << 8));   // not Ignore Raycast or Hitbox
 
         [Header("Look (empty = box placeholder)")]
@@ -65,14 +72,16 @@ namespace BodycamHorror.Enemies
             int roamers = Mathf.RoundToInt(count * roamerShare);
             for (int i = 0; i < count; i++)
             {
-                Vector2 r = Random.insideUnitCircle * radius;
+                Vector2 r = bangHeadOnWall ? Vector2.zero : Random.insideUnitCircle * radius;
                 Vector3 pos = transform.position + new Vector3(r.x, 0f, r.y);
                 if (Physics.Raycast(pos + Vector3.up * 3f, Vector3.down, out RaycastHit g, 10f, groundMask, QueryTriggerInteraction.Ignore))
                     pos = g.point + Vector3.up * 0.02f;
                 var go = new GameObject("Infected");
-                go.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, faceForward ? transform.eulerAngles.y : Random.Range(0f, 360f), 0f));
+                go.transform.SetPositionAndRotation(pos, Quaternion.Euler(0f, faceForward || bangHeadOnWall ? transform.eulerAngles.y : Random.Range(0f, 360f), 0f));
                 var inf = go.AddComponent<Infected>();
-                inf.temper = i < roamers ? Infected.Temper.Roamer : Infected.Temper.Idler;
+                inf.temper = i < roamers && !bangHeadOnWall ? Infected.Temper.Roamer : Infected.Temper.Idler;
+                inf.bangsHeadOnWall = bangHeadOnWall;
+                inf.bangHearZone = bangHearZone;
                 if (passive)
                 {
                     inf.aggroRange = 0f;
@@ -96,6 +105,24 @@ namespace BodycamHorror.Enemies
         {
             Gizmos.color = new Color(0.8f, 0.2f, 0.1f, 0.6f);
             Gizmos.DrawWireSphere(transform.position, radius);
+            if (!bangHeadOnWall) return;
+            if (bangHearZone.size != Vector3.zero)
+            {
+                Gizmos.color = new Color(0.2f, 0.9f, 1f, 0.6f);
+                Gizmos.DrawWireCube(bangHearZone.center, bangHearZone.size);
+                Gizmos.color = new Color(0.8f, 0.2f, 0.1f, 0.6f);
+            }
+            // the head-banger: its body, which way it faces, and where the wall should be (forehead at ~0.45 m)
+            Vector3 foot = transform.position, fwd = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+            Vector3 right = Vector3.Cross(Vector3.up, fwd);
+            Gizmos.DrawWireCube(foot + Vector3.up * 0.9f, new Vector3(0.5f, 1.8f, 0.5f));
+            Gizmos.DrawLine(foot + Vector3.up * 1.5f, foot + Vector3.up * 1.5f + fwd * 0.45f);
+            Gizmos.color = new Color(1f, 0.85f, 0.2f, 0.8f);
+            Vector3 wall = foot + fwd * 0.45f;
+            Gizmos.DrawLine(wall - right * 0.4f, wall + right * 0.4f);
+            Gizmos.DrawLine(wall - right * 0.4f + Vector3.up * 1.8f, wall + right * 0.4f + Vector3.up * 1.8f);
+            Gizmos.DrawLine(wall - right * 0.4f, wall - right * 0.4f + Vector3.up * 1.8f);
+            Gizmos.DrawLine(wall + right * 0.4f, wall + right * 0.4f + Vector3.up * 1.8f);
         }
     }
 }

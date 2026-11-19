@@ -48,7 +48,13 @@ namespace BodycamHorror.Enemies
         Quaternion[] blendFrom;
         Vector3 blendHipsFrom;
         float blendT, blendTime;
-        bool blending, hitPlaying;
+        bool blending, hitPlaying, wallBangPlaying;
+        static readonly int WallBangState = Animator.StringToHash("WallBang");
+        // the head hits the wall at these points of the head-bang clip (frames 36 and 67 of 96), the second harder
+        static readonly float[] BangHits = { 36f / 96f, 67f / 96f };
+        static readonly float[] BangVolumes = { 0.9f, 1f };
+        static AudioClip[] bangClips;
+        float bangClipTime = -1f;
         Transform aHips, aSpine, aChest, aNeck, aHead;
         Transform aArmL, aForeL, aHandL, aArmR, aForeR, aHandR, aThighL, aShinL, aFootL, aThighR, aShinR, aFootR;
 
@@ -481,6 +487,24 @@ namespace BodycamHorror.Enemies
             animator.SetFloat("LocoSpeed", speed > 3f ? Mathf.Clamp(speed / runClipReferenceSpeed, 0.6f, 1.1f) : 1f);
             animator.SetBool("Biting", crawling && state == Infected.State.Attack);
 
+            // head against the wall until it notices the player, then back to the usual moves
+            bool bang = brain.BangingWall && animator.HasState(0, WallBangState);
+            if (bang)
+            {
+                // checked every frame: a Play issued in the same frame as another one can lose
+                AnimatorStateInfo now = animator.GetCurrentAnimatorStateInfo(0);
+                if (now.shortNameHash != WallBangState && animator.GetNextAnimatorStateInfo(0).shortNameHash != WallBangState)
+                    animator.Play(WallBangState, 0, Random.value);
+                wallBangPlaying = true;
+                if (now.shortNameHash == WallBangState) BangSounds(now.normalizedTime % 1f);
+                else bangClipTime = -1f;
+            }
+            else if (wallBangPlaying)
+            {
+                wallBangPlaying = false;
+                animator.CrossFadeInFixedTime("Locomotion", 0.3f, 0, 0f);
+            }
+
             // the reaction clips are far longer than the stagger: back to moving once it is over
             if (hitPlaying && state != Infected.State.Stumble)
             {
@@ -511,6 +535,7 @@ namespace BodycamHorror.Enemies
                 twitchTarget = Random.value < 0.6f ? Quaternion.identity
                     : Quaternion.Euler(Random.Range(-12f, 12f), Random.Range(-30f, 30f), Random.Range(-25f, 25f));
             }
+            if (wallBangPlaying) twitchTarget = Quaternion.identity;   // the clip moves the head on its own
             twitch = Quaternion.Slerp(twitch, twitchTarget, 1f - Mathf.Exp(-25f * dt));
             if (aNeck) Rotate(aNeck, root * twitch * Quaternion.Inverse(root));
             KeepBlades();
@@ -528,6 +553,30 @@ namespace BodycamHorror.Enemies
                 if (t >= 1f) blending = false;
             }
             FollowHead();
+        }
+
+        /// <summary>A dull knock each time the head-bang clip brings the forehead to the wall.</summary>
+        void BangSounds(float t)
+        {
+            float last = bangClipTime;
+            bangClipTime = t;
+            if (last < 0f) return;
+            for (int i = 0; i < BangHits.Length; i++)
+            {
+                float hit = BangHits[i];
+                bool crossed = last <= t ? last < hit && hit <= t : last < hit || hit <= t;   // the clip may loop between frames
+                if (!crossed || !brain.BangHeard) continue;
+                if (bangClips == null)
+                {
+                    var found = new List<AudioClip>();
+                    foreach (AudioClip c in Resources.LoadAll<AudioClip>("Audio/Monster"))
+                        if (c.name.StartsWith("head_bang")) found.Add(c);
+                    bangClips = found.ToArray();
+                }
+                if (bangClips.Length == 0 || !aHead) return;
+                AudioSource a = Audio.SpatialSound.PlayAt(bangClips[Random.Range(0, bangClips.Length)], aHead.position, BangVolumes[i], 5f, 45f);
+                if (a) a.pitch = Random.Range(0.93f, 1.05f);
+            }
         }
 
         /// <summary>

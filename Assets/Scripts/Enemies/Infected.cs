@@ -66,6 +66,11 @@ namespace BodycamHorror.Enemies
         [Header("While unaware")]
         [Tooltip("Idler stands on the spot, Roamer walks around the location.")]
         public Temper temper = Temper.Idler;
+        [Tooltip("Stands facing the way it was placed and bangs its head on the wall in front until it first notices " +
+                 "the player (animated bodies only). Place it with its forehead about at the wall.")]
+        public bool bangsHeadOnWall;
+        [Tooltip("Its knocks are heard only while the player is inside this world-space box (size 0 = everywhere).")]
+        public Bounds bangHearZone;
         [Tooltip("Seconds between looking in a new direction while standing.")]
         public Vector2 idleLookInterval = new Vector2(3f, 9f);
         public float idleTurnSpeed = 35f;
@@ -171,6 +176,10 @@ namespace BodycamHorror.Enemies
         public State CurrentState => state;
         public bool IsDead => state == State.Dead;
         public bool IsAlerted => alerted;
+        /// <summary>At the wall, banging its head: before it has ever noticed the player.</summary>
+        public bool BangingWall => bangsHeadOnWall && !everAlerted && state == State.Idle;
+        /// <summary>Whether the player is where its knocks carry (see <see cref="bangHearZone"/>).</summary>
+        public bool BangHeard => bangHearZone.size == Vector3.zero || (player && bangHearZone.Contains(player.position));
         public HuntPhase Hunt => hunt;
         /// <summary>Chasing / attacking / stumbling after the player (used for the arms-out pose).</summary>
         public bool IsHunting => alerted && hunt != HuntPhase.Search && (state == State.Chase || state == State.Stumble);
@@ -194,7 +203,10 @@ namespace BodycamHorror.Enemies
 
         State state = State.Idle;
         float health, stateTimer, runSpeed, senseTimer, attackCooldownTimer, shoveTimer, voiceTimer, crowdTimer;
-        bool alerted, attackHitDone, crippled;
+        bool alerted, everAlerted, attackHitDone, crippled;
+        bool bangSpotSet;
+        Vector3 bangSpot;
+        Quaternion bangFacing;
         readonly Dictionary<HumanBodyBones, float> limbDamage = new Dictionary<HumanBodyBones, float>();
         Vector3 moveDir = Vector3.forward;
         float avoidTimer, avoidSide;
@@ -248,6 +260,9 @@ namespace BodycamHorror.Enemies
             voice.maxDistance = 35f;
             Audio.SoundOcclusion.Attach(voice, transform, 1.4f);
             voiceVariant = Random.Range(0, 4);
+
+            var moan = gameObject.AddComponent<Audio.MonsterMoan>();   // rare, never on top of another monster's
+            moan.canMoan = () => !invulnerable && state != State.Dead && state != State.Scream && !BangingWall;   // the head-banger is silent at the wall
 
             health = maxHealth;
             runSpeed = Random.Range(runSpeedRange.x, runSpeedRange.y);
@@ -335,7 +350,7 @@ namespace BodycamHorror.Enemies
             if (voiceTimer <= 0f)
             {
                 voiceTimer = alerted ? Random.Range(1.8f, 4.5f) : Random.Range(5f, 11f);
-                if (state != State.Fallen) Say("growl", alerted ? 0.9f : 0.5f, Random.Range(0.85f, 1.12f));
+                if (state != State.Fallen && !BangingWall) Say("growl", alerted ? 0.9f : 0.5f, Random.Range(0.85f, 1.12f));
             }
         }
 
@@ -409,6 +424,7 @@ namespace BodycamHorror.Enemies
             if (state == State.Dead) return;
             bool wasAlerted = alerted;
             alerted = true;
+            everAlerted = true;
             MarkPlayerSeen();
             if (state == State.Idle)
             {
@@ -429,7 +445,28 @@ namespace BodycamHorror.Enemies
 
         void OnGunshot()
         {
+            if (BangingWall) return;   // lost in banging its head: a shot does not reach it (a noise trap close by does)
             if (player && Vector3.Distance(rb.position, player.position) < gunshotAlertRange) Alert(true, false);
+        }
+
+        /// <summary>
+        /// Woken by a noise close by (a <see cref="Environment.NoiseTrap"/>): it turns round to the player and
+        /// screams before it runs, however near or far the player is. Does nothing if it is already hunting.
+        /// </summary>
+        public void WakeByNoise()
+        {
+            if (state == State.Dead || alerted) return;
+            bool idle = state == State.Idle;
+            alerted = true;
+            everAlerted = true;
+            MarkPlayerSeen();
+            if (idle && body && body.IsAnimated)
+            {
+                SetState(State.Scream);   // stands and turns to the prey while it screams
+                body.TriggerScream();
+            }
+            else if (idle) SetState(State.Chase);
+            Say("shriek", 1f, Random.Range(0.9f, 1.15f));
         }
 
         // ------------------------------------------------------------------ movement
@@ -441,7 +478,8 @@ namespace BodycamHorror.Enemies
             switch (state)
             {
                 case State.Idle:
-                    if (temper == Temper.Roamer) WalkBetweenSpots(dt, false);
+                    if (BangingWall) HoldBangSpot();
+                    else if (temper == Temper.Roamer) WalkBetweenSpots(dt, false);
                     else StandAround(dt, idleTurnSpeed);
                     break;
                 case State.Chase: Chase(dt); break;
@@ -456,6 +494,21 @@ namespace BodycamHorror.Enemies
             }
             if (!rb.isKinematic && (rb.constraints & RigidbodyConstraints.FreezeRotationX) != 0)
                 rb.angularVelocity = Vector3.zero;   // only our own turning steers the yaw
+        }
+
+        /// <summary>Keeps the head-banger on the spot it was placed at, facing the wall: the clip is made for that
+        /// distance, and a nudge (the spawn settling, a body brushing past) would push the head into the wall or off it.</summary>
+        void HoldBangSpot()
+        {
+            if (!bangSpotSet)
+            {
+                bangSpot = rb.position;
+                bangFacing = rb.rotation;
+                bangSpotSet = true;
+            }
+            Vector3 off = Flat(bangSpot - rb.position);
+            rb.linearVelocity = new Vector3(off.x * 10f, rb.linearVelocity.y, off.z * 10f);
+            rb.MoveRotation(bangFacing);
         }
 
         /// <summary>Stays put and every so often turns its head and shoulders somewhere else, slowly.</summary>

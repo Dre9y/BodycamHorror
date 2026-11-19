@@ -41,6 +41,7 @@ namespace BodycamHorror.EditorTools
         // the light room: off the right side of the corridor, through a door near the player's end
         const float DoorZ0 = 4.8f, DoorZ1 = 6.2f, DoorHeight = 2.2f;
         const float LightRoomSize = 7f;
+        const float HeadBangerWallGap = 0.45f;   // spawner to wall, so the head-bang clip lands its forehead on it
         const float LightRoomZ0 = 2f;
         static readonly Vector2 LightRoomCentre = new Vector2(CorridorHalfWidth + Wall + LightRoomSize * 0.5f, LightRoomZ0 + LightRoomSize * 0.5f);   // x, z
 
@@ -108,6 +109,10 @@ namespace BodycamHorror.EditorTools
                 SetUpStander(second, "Infected_Room", new Vector3(0f, 0f, roomCentre));
                 var third = Object.Instantiate(spawner);
                 SetUpStander(third, "Infected_LightRoom", new Vector3(LightRoomCentre.x, 0f, LightRoomCentre.y), 270f);
+                // banging its head on the corridor's left wall: forehead about at the wall (see InfectedSpawner)
+                var banger = Object.Instantiate(spawner);
+                SetUpStander(banger, "Infected_HeadBanger", new Vector3(-CorridorHalfWidth + HeadBangerWallGap, 0f, 9f), 270f);
+                banger.bangHeadOnWall = true;
             }
 
             GameLook.ApplyAtmosphere();

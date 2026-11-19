@@ -136,6 +136,11 @@ namespace BodycamHorror.Enemies
             model = animator ? animator.transform : null;
             BuildGraph();
 
+            var moan = gameObject.AddComponent<Audio.MonsterMoan>();   // rare, never on top of another monster's
+            moan.mouth = head;
+            moan.height = 2f;
+            moan.canMoan = () => phase == Phase.Hunting;
+
             // the steps: fully placed in the room, loud close up and falling away steeply, so it can be found by ear
             stepSource = gameObject.AddComponent<AudioSource>();
             stepSource.playOnAwake = false;

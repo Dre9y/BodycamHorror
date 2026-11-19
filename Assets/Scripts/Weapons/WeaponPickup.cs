@@ -44,13 +44,25 @@ namespace BodycamHorror.Weapons
         [Range(0f, 1f)] public float volume = 0.7f;
 
         /// <summary>Where the key prompt goes.</summary>
-        public Vector3 PromptPoint => transform.position + Vector3.up * promptHeight;
+        public Vector3 PromptPoint => Centre + Vector3.up * promptHeight;
+        /// <summary>Middle of the gun as drawn (the model need not sit on this object's origin).</summary>
+        public Vector3 Centre => transform.TransformPoint(centreLocal);
 
         float glowIntensity;
+        Vector3 centreLocal;
 
         void Awake()
         {
             if (glow) glowIntensity = glow.intensity;
+            bool any = false;
+            Bounds b = default;
+            foreach (var r in GetComponentsInChildren<Renderer>())
+            {
+                if (r is ParticleSystemRenderer) continue;
+                if (!any) { b = r.bounds; any = true; }
+                else b.Encapsulate(r.bounds);
+            }
+            centreLocal = any ? transform.InverseTransformPoint(b.center) : Vector3.zero;
         }
 
         void OnEnable() => All.Add(this);

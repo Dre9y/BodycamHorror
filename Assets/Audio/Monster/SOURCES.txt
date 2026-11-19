@@ -2,3 +2,14 @@ Monster sounds. CC0 (public domain) from Freesound: free for any use, no credit 
 
 monster_scream  trimmed and levelled from "Zombie Demon Scream" by Wakerone
                 https://freesound.org/s/435651/  (Freesound high-quality MP3 preview)
+
+distorted_screech  "Distorted Screech" by jsabcyan, https://freesound.org/s/873698/
+                   (added as downloaded; licence not checked here - see the Freesound page)
+
+creature_scurry_loop  0.8 s seamless loop cut from "Creature Scurry" by ryantheblockhead,
+                      https://freesound.org/s/872940/ (2.35-3.15 s, the 3.15-3.30 s tail crossfaded
+                      over the start, mono, +2.9 dB; licence not checked here - see the Freesound page)
+
+creature_moan  (Assets/Resources/Audio/Monster/creature_moan.wav) "Creature Moan" by juliusmabe,
+               https://freesound.org/s/445196/ (added as downloaded; licence not checked here - see the Freesound page).
+               Played by MonsterMoan on Infected, Manthing and CryingHead: rare, one monster at a time.

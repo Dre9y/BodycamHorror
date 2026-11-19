@@ -99,6 +99,7 @@ namespace BodycamHorror.EditorTools
                 enemy.idleClip = idle;
                 enemy.moveClip = move;
                 enemy.shriek = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_scream.wav");
+                enemy.scurryLoop = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/creature_scurry_loop.wav");
 
                 Directory.CreateDirectory(PrefabDir);
                 var prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);

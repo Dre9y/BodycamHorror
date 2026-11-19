@@ -60,6 +60,12 @@ namespace BodycamHorror.Enemies
         public float stepPitch = 0.72f;
         [Tooltip("No step recordings: use generated skittering (fingers and tendrils on tile).")]
         public bool proceduralSkitter;
+        [Tooltip("A looping scurry played the whole run instead of single steps (overrides Steps and Procedural Skitter).")]
+        public AudioClip scurryLoop;
+        [Range(0f, 1f)] public float scurryVolume = 0.8f;
+        public float scurryPitch = 1.25f;
+        [Tooltip("Seconds the scurry takes to die away once it is gone.")]
+        public float scurryFadeOut = 0.35f;
 
         [Header("The moment")]
         [Tooltip("A lamp that stutters while it passes (optional).")]
@@ -170,7 +176,17 @@ namespace BodycamHorror.Enemies
             feet = Source("Feet", 2f, 30f);
             stepTimer = 0f;
             stepClips = steps != null ? System.Array.FindAll(steps, c => c) : new AudioClip[0];
-            if (stepClips.Length == 0 && proceduralSkitter)
+            if (scurryLoop)
+            {
+                stepClips = new AudioClip[0];   // the loop is the feet
+                feet.clip = scurryLoop;
+                feet.loop = true;
+                feet.volume = scurryVolume;
+                feet.pitch = scurryPitch;
+                feet.time = Random.Range(0f, scurryLoop.length);
+                feet.Play();
+            }
+            else if (stepClips.Length == 0 && proceduralSkitter)
             {
                 stepClips = new AudioClip[6];
                 for (int i = 0; i < stepClips.Length; i++) stepClips[i] = ProceduralAudio.Skitter(i);
@@ -233,9 +249,21 @@ namespace BodycamHorror.Enemies
                 if (flickerLight) flickerLight.intensity = lightIntensity;
                 if (graph.IsValid()) graph.Destroy();
                 foreach (var r in monster.GetComponentsInChildren<Renderer>()) r.enabled = false;
+                if (feet && feet.loop && feet.isPlaying) StartCoroutine(FadeOut(feet, scurryFadeOut));
                 Destroy(monster, 3f);
                 Finish();
             }
+        }
+
+        static System.Collections.IEnumerator FadeOut(AudioSource source, float time)
+        {
+            float start = source.volume;
+            for (float t = 0f; t < time && source; t += Time.deltaTime)
+            {
+                source.volume = start * (1f - t / Mathf.Max(time, 0.01f));
+                yield return null;
+            }
+            if (source) source.Stop();
         }
 
         // ------------------------------------------------------------------ crawl path

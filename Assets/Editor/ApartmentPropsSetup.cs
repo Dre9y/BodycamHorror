@@ -22,7 +22,7 @@ namespace BodycamHorror.EditorTools
         const string MaterialDir = "Assets/Generated/Materials/Props";
         const string PrefabDir = "Assets/Prefabs/Props";
 
-        enum Hull { Box, Mesh }
+        internal enum Hull { Box, Mesh }
 
         [MenuItem("BodycamHorror/Set Up Apartment Props")]
         public static void SetUp()
@@ -126,7 +126,7 @@ namespace BodycamHorror.EditorTools
 
         /// <summary>One prefab per mesh of a set made together (one texture): CardboardBoxes.fbx holds
         /// Box_Closed, Box_Open, Box_Small, Box_Crushed, each with its origin at its own foot.</summary>
-        static void Split(string name)
+        internal static void Split(string name)
         {
             var model = AssetDatabase.LoadAssetAtPath<GameObject>($"{ModelDir}/{name}.fbx");
             var mat = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialDir}/{name}_Mat.mat");
@@ -145,7 +145,7 @@ namespace BodycamHorror.EditorTools
         }
 
         /// <summary>Replaces a prefab's colliders with these boxes (centre, size in the prefab's space).</summary>
-        static void SetBoxes(string name, params (Vector3 center, Vector3 size)[] boxes)
+        internal static void SetBoxes(string name, params (Vector3 center, Vector3 size)[] boxes)
         {
             string path = $"{PrefabDir}/{name}.prefab";
             var root = PrefabUtility.LoadPrefabContents(path);
@@ -161,7 +161,7 @@ namespace BodycamHorror.EditorTools
             PrefabUtility.UnloadPrefabContents(root);
         }
 
-        static void FitBox(string name, Vector3 center, Vector3 size)
+        internal static void FitBox(string name, Vector3 center, Vector3 size)
         {
             string path = $"{PrefabDir}/{name}.prefab";
             var root = PrefabUtility.LoadPrefabContents(path);
@@ -172,7 +172,7 @@ namespace BodycamHorror.EditorTools
 
         /// <summary>Largest a prop's maps are imported at, when it is less than they were baked at: small things
         /// seen close need no 2048 (a 10 cm mug at 1024 is ~10 texels per millimetre).</summary>
-        static readonly System.Collections.Generic.Dictionary<string, int> MaxSize = new System.Collections.Generic.Dictionary<string, int>
+        internal static readonly System.Collections.Generic.Dictionary<string, int> MaxSize = new System.Collections.Generic.Dictionary<string, int>
         {
             { "Mug", 512 }, { "Clipboard", 1024 }, { "WallShelf", 1024 }, { "Newspaper", 1024 },
         };
@@ -208,7 +208,7 @@ namespace BodycamHorror.EditorTools
             importer.SaveAndReimport();
         }
 
-        static void Make(string name, Hull hull)
+        internal static void Make(string name, Hull hull)
         {
             string model = $"{ModelDir}/{name}.fbx";
             if (!File.Exists(model)) { Debug.LogWarning("Missing " + model); return; }

@@ -31,9 +31,9 @@ namespace BodycamHorror.EditorTools
         const string ScenePath = "Assets/Scenes/Level.unity";
         const string SourceScenePath = "Assets/Scenes/LightingTest.unity";
 
-        const float Height = 2.7f;      // a panel block's low ceiling
+        internal const float Height = 2.7f;      // a panel block's low ceiling
         const float Wall = 0.3f;
-        const float PanelHeight = 1.45f;   // oil paint up to here, plaster above
+        internal const float PanelHeight = 1.45f;   // oil paint up to here, plaster above
 
         // the outer shell, inside faces
         const float RoomW = 9f, RoomD = 8f;
@@ -48,35 +48,51 @@ namespace BodycamHorror.EditorTools
         const float WindowZ0 = 5.2f, WindowZ1 = 6.9f, SillY = 0.9f, WindowTopY = 2.1f;   // wide: from anywhere along the desk the outer doorway shows through it
         // the corridor outside the outer door
         const float CorridorX1 = RoomW + Wall + 2.2f, CorridorZ0 = 3.6f, CorridorZ1 = 10f;
-        // the passage south out of the corridor's near end, down to the start room
-        const float PassX0 = RoomW + Wall + 0.45f, PassX1 = CorridorX1 - 0.45f, PassTop = 2.2f;
+        // the passage south out of the corridor's near end, down to the start room: as wide as the corridor,
+        // its left side the big room's right wall
+        const float PassX0 = RoomW + Wall, PassX1 = CorridorX1, PassTop = 2.2f;
         // the start room (room 1), below the passage and off to its left; its door is where the passage comes in
         // it lies below the big room's bottom-left corner; a low corridor runs east from its right-hand door
         // and turns up into the passage
         const float Room1X0 = -2.8f, Room1X1 = 1.8f, Room1Z0 = -6.8f, Room1Z1 = -3f;
-        const float LowZ0 = -5.6f, LowZ1 = -4.3f;   // the low corridor, inside faces
+        const float LowZ0 = -6.05f, LowZ1 = -3.85f;   // the low corridor, inside faces (as wide as the corridor)
         const float Room1DoorZ = LowZ0 + (LowZ1 - LowZ0 - DoorBuilder.OpeningWidth) * 0.5f;
         // the locked door: straight ahead at the corridor's far end (the big room's door is the turn to the
         // left on the way), in the middle of its end wall, onto a dark passage that goes on up and turns right
         // (the way on, opened later)
         const float LockedDoorX = (RoomW + Wall + CorridorX1) * 0.5f - DoorBuilder.OpeningWidth * 0.5f;
-        const float NorthX0 = PassX0, NorthX1 = PassX1, NorthZ1 = 13f, NorthLegZ0 = 11.6f, NorthLegX1 = 15f;
+        // behind the locked door: a small lived-in flat (a room in a communal flat), and out of its right wall a
+        // door onto the long corridor ("the leg") with the head-banger at its far end
+        const float FlatX0 = 7.5f, FlatX1 = 13.5f, FlatZ0 = CorridorZ1 + Wall, FlatZ1 = 14.8f;   // inside faces
+        // out of the flat a zigzag: a short link right, a turn up, then the leg right to the dead end, so the
+        // head-banger only comes into view (and earshot) round the second corner
+        const float LinkX0 = FlatX1 + Wall, LinkZ0 = 11.6f, LinkZ1 = 13f;   // the link, inside faces
+        const float ZigX0 = 15.6f, ZigX1 = 17f;                            // the stretch up, inside faces
+        const float NorthLegZ0 = 16.2f, NorthZ1 = 17.6f;                   // the leg, inside faces along Z
+        const float LegX0 = ZigX1;                                         // the leg proper starts past the turn
+        const float FlatDoorZ = (LinkZ0 + LinkZ1) * 0.5f - DoorBuilder.OpeningWidth * 0.5f;
+        // the leg runs right to a dead end, where a zombie bangs its head on the end wall under a lamp; an open
+        // door just before the end, in the leg's bottom wall (on the zombie's right), leads down into the annex room
+        const float NorthLegX1 = LegX0 + 24.4f;
+        // the open door in the leg's bottom wall now leads onto the PvE landing, which took the place of the old annex
+        // room. The landing lives in the scene as hand-edited objects (root "PvE_Landing", first laid out by
+        // PveLandingGreyboxBuilder): Rebuild Shell and Annex leaves it alone, a full Build Level Scene wipes it
+        const float AnnexDoorX = NorthLegX1 - 0.1f - DoorBuilder.OpeningWidth;
 
-        static Material wallPaint, wallPlaster, floorMat, ceilingMat;
-        static Material wood, woodDark, woodPaint, fabric, fabricDark, paper, grime, wet, rust, enamel, cardboard, rubbish, carpet, glass;
+        /// <summary>Middle of the open door's hole in the leg's bottom wall, on the floor, on the wall's far (south) face.</summary>
+        internal static Vector3 LegDoorwayFarSide => new Vector3(AnnexDoorX + DoorBuilder.OpeningWidth * 0.5f, 0f, NorthLegZ0 - Wall);
+        /// <summary>The leg's bottom wall runs from x = ZigX1 to here (its outer end).</summary>
+        internal const float LegBottomWallX1 = NorthLegX1 + Wall;
+        const string HeadBangerPrefab = "Assets/Prefabs/Blender/Enemies/Zombie_HeadBanger.prefab";
+        const string ApartmentDoorPrefab = "Assets/Prefabs/Props/ApartmentDoor.prefab";
+
+        internal static Material wallPaint, wallPlaster, floorMat, ceilingMat;
+        internal static Material wood, woodDark, woodPaint, fabric, fabricDark, paper, grime, wet, rust, enamel, cardboard, rubbish, carpet, glass;
 
         [MenuItem("BodycamHorror/Build Level Scene")]
         public static void Build()
         {
-            const string mats = LightingTestSceneBuilder.MaterialDir, tex = LightingTestSceneBuilder.TextureDir;
-            // darker and greyer than the test scenes: the place is old and dirty
-            wallPaint = EnvironmentTextures.ScannedMaterial("PaintedPlaster011", mats, tex, new Color(0.62f, 0.7f, 0.68f), 1.2f);
-            wallPlaster = EnvironmentTextures.ScannedMaterial("PaintedPlaster015", mats, tex, new Color(0.72f, 0.72f, 0.68f), 1.2f);
-            floorMat = EnvironmentTextures.ScannedMaterial("Tiles110", mats, tex, new Color(0.6f, 0.6f, 0.58f), 1f);
-            ceilingMat = EnvironmentTextures.ScannedMaterial("Plaster007", mats, tex, new Color(0.7f, 0.7f, 0.66f), 1.2f);
-            LightingTestSceneBuilder.wallPaint = wallPaint;
-            LightingTestSceneBuilder.wallPlaster = wallPlaster;
-            MakeMaterials();
+            LoadMaterials();
 
             EditorSceneManager.OpenScene(SourceScenePath, OpenSceneMode.Single);   // never copy over the scene that is open
             if (File.Exists(ScenePath))
@@ -133,6 +149,7 @@ namespace BodycamHorror.EditorTools
             Leaks(level);
             WeaponPickup pickup = PlacePistol(pistol);
             Lights(level);
+            BuildAnnex(level, LightingTestSceneBuilder.BuildLampPrefab());
             PlaceScare(pickup);
 
             GameLook.ApplyAtmosphere();
@@ -150,7 +167,61 @@ namespace BodycamHorror.EditorTools
             Debug.Log("Level scene built: " + ScenePath);
         }
 
+        /// <summary>
+        /// Rebuilds, in the open Level scene, only what this builder owns outright and the corridors changed:
+        /// the shell (walls, floors, ceilings), the litter and puddles, the leak streaks, the passage's lamps and
+        /// the annex (apartment doors, the dead end with the head-banger, the open door).
+        /// The PvE landing behind that door is hand-edited in the scene and is left alone.
+        /// Everything else, with whatever was tuned by hand in the scene, stays as it is.
+        /// Menu: BodycamHorror > Level: Rebuild Shell and Annex (keeps hand edits).
+        /// </summary>
+        [MenuItem("BodycamHorror/Level: Rebuild Shell and Annex (keeps hand edits)")]
+        public static void RebuildShellAndAnnex()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                Debug.LogError("Level: leave Play Mode first, the rebuild has to be saved into the scene.");
+                return;
+            }
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            if (scene.path != ScenePath) scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var levelObject = GameObject.Find("Level");
+            if (!levelObject) { Debug.LogError("Level: no 'Level' object in " + ScenePath); return; }
+            Transform level = levelObject.transform;
+            LoadMaterials();
+
+            foreach (string path in new[] { "Shell", "Rubbish", "Leaks", "Annex", "Lights/Lamp_LowCorner", "Lights/WallLamp_Passage" })
+            {
+                Transform old = level.Find(path);
+                if (old) Object.DestroyImmediate(old.gameObject);
+            }
+            BuildShell(level);
+            Rubbish(level);
+            Leaks(level);
+            GameObject lampPrefab = LightingTestSceneBuilder.BuildLampPrefab();
+            Transform lights = level.Find("Lights") ? level.Find("Lights") : Group(level, "Lights");
+            PassageLights(lights, lampPrefab);
+            BuildAnnex(level, lampPrefab);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log("Level: shell, corridors and annex rebuilt in " + ScenePath);
+        }
+
         // ------------------------------------------------------------------ materials
+
+        internal static void LoadMaterials()
+        {
+            const string mats = LightingTestSceneBuilder.MaterialDir, tex = LightingTestSceneBuilder.TextureDir;
+            // darker and greyer than the test scenes: the place is old and dirty
+            wallPaint = EnvironmentTextures.ScannedMaterial("PaintedPlaster011", mats, tex, new Color(0.62f, 0.7f, 0.68f), 1.2f);
+            wallPlaster = EnvironmentTextures.ScannedMaterial("PaintedPlaster015", mats, tex, new Color(0.72f, 0.72f, 0.68f), 1.2f);
+            floorMat = EnvironmentTextures.ScannedMaterial("Tiles110", mats, tex, new Color(0.6f, 0.6f, 0.58f), 1f);
+            ceilingMat = EnvironmentTextures.ScannedMaterial("Plaster007", mats, tex, new Color(0.7f, 0.7f, 0.66f), 1.2f);
+            LightingTestSceneBuilder.wallPaint = wallPaint;
+            LightingTestSceneBuilder.wallPlaster = wallPlaster;
+            MakeMaterials();
+        }
 
         static void MakeMaterials()
         {
@@ -255,7 +326,7 @@ namespace BodycamHorror.EditorTools
             // the corridor outside: runs along Z past the outer door, both ends closed
             WallZ("Corridor_Far", shell, CorridorZ0 - w, CorridorZ1 + w, CorridorX1, CorridorX1 + w);
             WallX("Corridor_EndNear", shell, RoomW + w, CorridorX1, CorridorZ0 - w, CorridorZ0, new Hole(PassX0, PassX1, 0f, PassTop));
-            WallX("Corridor_EndFar", shell, RoomW, CorridorX1, CorridorZ1, CorridorZ1 + w, DoorHole(LockedDoorX));
+            // the corridor's far end is the flat's bottom wall, with the padlocked door in it (see the flat below)
             // its near side is the big room's right wall; past the room's top corner it needs a wall of its own
             WallZ("Corridor_Near", shell, RoomD + w, CorridorZ1, RoomW, RoomW + w);
 
@@ -263,7 +334,8 @@ namespace BodycamHorror.EditorTools
             float passZ0 = LowZ1 + w, passZ1 = CorridorZ0 - w;
             LightingTestSceneBuilder.Box("Floor_Passage", shell, new Vector3(PassX0 - w, -w, passZ0), new Vector3(PassX1 + w, 0f, passZ1), floorMat, tile, tile);
             LightingTestSceneBuilder.Box("Ceiling_Passage", shell, new Vector3(PassX0 - w, Height, passZ0), new Vector3(PassX1 + w, Height + w, passZ1), ceilingMat, ceilingTile, ceilingTile);
-            WallZ("Passage_Left", shell, LowZ1, passZ1, PassX0 - w, PassX0);
+            // its left side: own wall below the big room, the big room's right wall from there up
+            WallZ("Passage_Left", shell, LowZ1, -w, PassX0 - w, PassX0);
             WallZ("Passage_Right", shell, LowZ0, passZ1, PassX1, PassX1 + w);
 
             // the low corridor: east from the start room's door, under the big room, to the passage's foot
@@ -281,17 +353,29 @@ namespace BodycamHorror.EditorTools
             WallZ("Room1_Left", shell, Room1Z0, Room1Z1, Room1X0 - w, Room1X0);
             WallZ("Room1_Right", shell, Room1Z0, Room1Z1, Room1X1, Room1X1 + w, DoorHole(Room1DoorZ));
 
-            // behind the locked door: on up from the corridor's far end, then right (towards room 4), closed off for now
-            float northZ0 = CorridorZ1 + w;
-            LightingTestSceneBuilder.Box("Floor_North", shell, new Vector3(NorthX0 - w, -w, northZ0), new Vector3(NorthX1 + w, 0f, NorthZ1 + w), floorMat, tile, tile);
-            LightingTestSceneBuilder.Box("Floor_NorthLeg", shell, new Vector3(NorthX1 + w, -w, NorthLegZ0 - w), new Vector3(NorthLegX1 + w, 0f, NorthZ1 + w), floorMat, tile, tile);
-            LightingTestSceneBuilder.Box("Ceiling_North", shell, new Vector3(NorthX0 - w, Height, northZ0), new Vector3(NorthX1 + w, Height + w, NorthZ1 + w), ceilingMat, ceilingTile, ceilingTile);
-            LightingTestSceneBuilder.Box("Ceiling_NorthLeg", shell, new Vector3(NorthX1 + w, Height, NorthLegZ0 - w), new Vector3(NorthLegX1 + w, Height + w, NorthZ1 + w), ceilingMat, ceilingTile, ceilingTile);
-            WallZ("North_Left", shell, northZ0, NorthZ1 + w, NorthX0 - w, NorthX0);
-            WallZ("North_Right", shell, northZ0, NorthLegZ0 - w, NorthX1, NorthX1 + w);
-            WallX("North_Top", shell, NorthX0, NorthLegX1 + w, NorthZ1, NorthZ1 + w);
-            WallX("North_LegBottom", shell, NorthX1 + w, NorthLegX1 + w, NorthLegZ0 - w, NorthLegZ0);
-            WallZ("North_LegEnd", shell, NorthLegZ0, NorthZ1, NorthLegX1, NorthLegX1 + w);
+            // behind the locked door: the flat, its bottom wall shared with the corridor's far end
+            LightingTestSceneBuilder.Box("Floor_Flat", shell, new Vector3(FlatX0 - w, -w, CorridorZ1), new Vector3(FlatX1 + w, 0f, FlatZ1 + w), floorMat, tile, tile);
+            LightingTestSceneBuilder.Box("Ceiling_Flat", shell, new Vector3(FlatX0 - w, Height, CorridorZ1), new Vector3(FlatX1 + w, Height + w, FlatZ1 + w), ceilingMat, ceilingTile, ceilingTile);
+            WallX("Flat_Bottom", shell, FlatX0 - w, FlatX1 + w, CorridorZ1, FlatZ0, DoorHole(LockedDoorX));
+            WallX("Flat_Top", shell, FlatX0 - w, FlatX1 + w, FlatZ1, FlatZ1 + w);
+            WallZ("Flat_Left", shell, FlatZ0, FlatZ1, FlatX0 - w, FlatX0);
+            WallZ("Flat_Right", shell, FlatZ0, FlatZ1, FlatX1, FlatX1 + w, DoorHole(FlatDoorZ));   // the door onto the leg
+
+            // the zigzag: the link right out of the flat, the stretch up, then the leg right to the dead end
+            LightingTestSceneBuilder.Box("Floor_Link", shell, new Vector3(LinkX0, -w, LinkZ0 - w), new Vector3(ZigX1 + w, 0f, LinkZ1), floorMat, tile, tile);
+            LightingTestSceneBuilder.Box("Ceiling_Link", shell, new Vector3(LinkX0, Height, LinkZ0 - w), new Vector3(ZigX1 + w, Height + w, LinkZ1), ceilingMat, ceilingTile, ceilingTile);
+            LightingTestSceneBuilder.Box("Floor_Zig", shell, new Vector3(ZigX0 - w, -w, LinkZ1), new Vector3(ZigX1 + w, 0f, NorthLegZ0 - w), floorMat, tile, tile);
+            LightingTestSceneBuilder.Box("Ceiling_Zig", shell, new Vector3(ZigX0 - w, Height, LinkZ1), new Vector3(ZigX1 + w, Height + w, NorthLegZ0 - w), ceilingMat, ceilingTile, ceilingTile);
+            WallX("Link_Bottom", shell, LinkX0, ZigX1 + w, LinkZ0 - w, LinkZ0);
+            WallX("Link_Top", shell, LinkX0, ZigX0 - w, LinkZ1, LinkZ1 + w);
+            WallZ("Zig_Left", shell, LinkZ1, NorthZ1 + w, ZigX0 - w, ZigX0);           // up the stretch and closing the leg's left end
+            WallZ("Zig_Right", shell, LinkZ0, NorthLegZ0 - w, ZigX1, ZigX1 + w);
+            LightingTestSceneBuilder.Box("Floor_NorthLeg", shell, new Vector3(ZigX0 - w, -w, NorthLegZ0 - w), new Vector3(NorthLegX1 + w, 0f, NorthZ1 + w), floorMat, tile, tile);
+            LightingTestSceneBuilder.Box("Ceiling_NorthLeg", shell, new Vector3(ZigX0 - w, Height, NorthLegZ0 - w), new Vector3(NorthLegX1 + w, Height + w, NorthZ1 + w), ceilingMat, ceilingTile, ceilingTile);
+            WallX("North_Top", shell, ZigX0 - w, NorthLegX1 + w, NorthZ1, NorthZ1 + w);
+            // the leg's bottom wall, with the open door in it near the end: through it, the PvE landing
+            WallX("North_LegBottom", shell, ZigX1, NorthLegX1 + w, NorthLegZ0 - w, NorthLegZ0, DoorHole(AnnexDoorX));
+            WallZ("North_LegEnd", shell, NorthLegZ0, NorthZ1, NorthLegX1, NorthLegX1 + w);   // the wall the zombie bangs its head on
         }
 
         static void BuildDoors(Transform level)
@@ -673,10 +757,7 @@ namespace BodycamHorror.EditorTools
             // the start room: one weak bulb between where the player lies and the door: seen over the head on
             // waking, and once up it is what lights the door (a lamp right over the head only fogs the view)
             HangingLamp(lampPrefab, lights, "Lamp_StartRoom", new Vector3(Room1X1 - 1.0f, Height, (LowZ0 + LowZ1) * 0.5f), 0.55f, true);
-            // the low corridor: dark along its length, a dim lamp at the far corner where it turns up
-            HangingLamp(lampPrefab, lights, "Lamp_LowCorner", new Vector3((PassX0 + PassX1) * 0.5f, Height, (LowZ0 + LowZ1) * 0.5f), 0.25f, true);
-            // the passage: a single dim bulkhead lamp on its right wall halfway, the corridor's end lamp beyond it
-            WallLamp(lights, "WallLamp_Passage", new Vector3(PassX1, 1.85f, 0.2f), -90f, 1.43f, true);
+            PassageLights(lights, lampPrefab);
             // the locked door at the corridor's end: a steady lamp just in front of it, its light turned onto the
             // padlock, so from the turn into the big room the lock reads at once
             float lockX = LockedDoorX + DoorBuilder.OpeningWidth * 0.5f;
@@ -690,6 +771,236 @@ namespace BodycamHorror.EditorTools
                     l.transform.rotation = Quaternion.LookRotation(padlock - l.transform.position);
                     l.spotAngle = Mathf.Min(l.spotAngle, 90f);
                 }
+        }
+
+        static void PassageLights(Transform lights, GameObject lampPrefab)
+        {
+            // the low corridor: dark along its length, a dim lamp at the far corner where it turns up
+            HangingLamp(lampPrefab, lights, "Lamp_LowCorner", new Vector3((PassX0 + PassX1) * 0.5f, Height, (LowZ0 + LowZ1) * 0.5f), 0.25f, true);
+            // the passage: a single dim bulkhead lamp on its right wall halfway, the corridor's end lamp beyond it
+            WallLamp(lights, "WallLamp_Passage", new Vector3(PassX1, 1.85f, 0.2f), -90f, 1.43f, true);
+        }
+
+        // ------------------------------------------------------------------ the annex
+
+        /// <summary>
+        /// Closed flat doors along the way from the start room (Blender's apartment door, shut for good, on the
+        /// wall), and beyond the padlocked door: the leg's dead end, where a zombie stands with its back to the
+        /// way in and bangs its head on the end wall under a lamp; on its right an open door into the annex room.
+        /// </summary>
+        static void BuildAnnex(Transform level, GameObject lampPrefab)
+        {
+            var annex = Group(level, "Annex");
+            FurnishFlat(annex, lampPrefab);
+
+            // the flat's door onto the leg: a plain flat door, shut; its front into the flat
+            DoorBuilder.Place(new Vector3(FlatX1 + Wall * 0.5f, 0f, FlatDoorZ), Vector3.forward, false, annex).name = "Door_FlatToLeg";
+
+            // flat doors, their backs against the wall: front (+Z of the model) into the corridor
+            var flats = Group(annex, "ApartmentDoors");
+            const float inset = 0.02f;   // the frame's back sinks into the plaster
+            PlaceModel(ApartmentDoorPrefab, flats, "ApartmentDoor_Passage", new Vector3(PassX0 + inset, 0f, -2.0f), 90f);
+            PlaceModel(ApartmentDoorPrefab, flats, "ApartmentDoor_Corner", new Vector3(PassX1 - inset, 0f, (LowZ0 + LowZ1) * 0.5f + 0.3f), -90f);
+            PlaceModel(ApartmentDoorPrefab, flats, "ApartmentDoor_Low", new Vector3(7.75f, 0f, LowZ0 + inset), 0f);
+
+            // the open door into the annex room, its front to the leg
+            var door = DoorBuilder.Place(new Vector3(AnnexDoorX, 0f, NorthLegZ0 - Wall * 0.5f), Vector3.right, false, annex);
+            door.name = "Door_Annex";
+            var d = door.GetComponent<Door>();
+            if (d)
+            {
+                d.startOpen = true;
+                EditorUtility.SetDirty(d);
+            }
+
+            // the head-banger: facing the end wall, back to the way in, forehead about at the wall
+            float legMidZ = (NorthLegZ0 + NorthZ1) * 0.5f;
+            var bangerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(HeadBangerPrefab);
+            if (bangerPrefab)
+            {
+                var banger = (GameObject)PrefabUtility.InstantiatePrefab(bangerPrefab, annex);
+                // a little under the floor: the spawner looks for ground from 3 m above itself, which must stay under the ceiling
+                banger.transform.SetPositionAndRotation(new Vector3(NorthLegX1 - 0.45f, -0.5f, legMidZ), Quaternion.Euler(0f, 90f, 0f));
+                // its knocks are heard only once round the zigzag's second corner, in the leg itself
+                var spawner = banger.GetComponent<InfectedSpawner>();
+                spawner.bangHearZone = new Bounds(new Vector3((ZigX0 + NorthLegX1) * 0.5f, 1f, legMidZ),
+                                                  new Vector3(NorthLegX1 - ZigX0, 4f, NorthZ1 - NorthLegZ0 + 0.2f));
+                EditorUtility.SetDirty(spawner);
+            }
+            else Debug.LogWarning("Level: no head-banger prefab at " + HeadBangerPrefab);
+
+            // a bare bulb right over it: from the far end of the leg it is a lit figure at the end of a dark tunnel
+            HangingLamp(lampPrefab, annex, "Lamp_HeadBanger", new Vector3(NorthLegX1 - 0.7f, Height, legMidZ), 0.6f, false);
+            // at the leg's start, on its top wall just past the turn: a bulkhead lamp barely alive, so the first steps
+            // in are not pitch black and the far bulb still reads as the only real light
+            WallLamp(annex, "WallLamp_LegStart", new Vector3(LegX0 + 1.0f, 1.85f, NorthZ1), 180f, 0.25f, false);
+
+            // a little past halfway down the leg: empty bottles by the top wall, the trap across the whole width.
+            // Walking through knocks them over; the crash turns the head-banger round (it ignores the gunshot at the lock)
+            const float trapX = LegX0 + 6f;   // as far into the leg as where it was tried out
+            BottleTrap(annex, new Vector3(trapX, 0f, legMidZ));
+        }
+
+        /// <summary>
+        /// The flat behind the padlocked door: one room someone lived in and left in a hurry. A bed in the top left
+        /// corner, a wardrobe on the left wall, a table with a chair (another knocked over), a sofa facing an old
+        /// TV, a fridge by the door, a rug, a shelf, a radiator, litter. The way through (padlocked door at the
+        /// bottom to the door onto the leg on the right) is kept clear. Primitives and the Blender props for now.
+        /// </summary>
+        static void FurnishFlat(Transform parent, GameObject lampPrefab)
+        {
+            var flat = Group(parent, "Flat");
+            float x0 = FlatX0, x1 = FlatX1, z0 = FlatZ0, z1 = FlatZ1;
+
+            // bed in the top left corner: frame, mattress, pillow, a blanket half off
+            var bed = Group(flat, "Bed");
+            Prop(bed, "Frame", new Vector3(x0 + 0.05f, 0f, z1 - 0.95f), new Vector3(x0 + 2.05f, 0.32f, z1 - 0.05f), woodDark);
+            Prop(bed, "Headboard", new Vector3(x0 + 0.05f, 0f, z1 - 0.95f), new Vector3(x0 + 0.1f, 0.85f, z1 - 0.05f), woodDark);
+            Prop(bed, "Mattress", new Vector3(x0 + 0.12f, 0.32f, z1 - 0.9f), new Vector3(x0 + 2.0f, 0.48f, z1 - 0.1f), fabric, 0f, false);
+            Prop(bed, "Pillow", new Vector3(x0 + 0.18f, 0.48f, z1 - 0.75f), new Vector3(x0 + 0.62f, 0.58f, z1 - 0.25f), paper, 4f, false);
+            Prop(bed, "Blanket", new Vector3(x0 + 0.8f, 0.48f, z1 - 0.95f), new Vector3(x0 + 1.95f, 0.53f, z1 - 0.15f), fabricDark, -6f, false);
+            Prop(bed, "Blanket_Hang", new Vector3(x0 + 1.1f, 0.05f, z1 - 1.0f), new Vector3(x0 + 1.9f, 0.5f, z1 - 0.96f), fabricDark, -6f, false);
+
+            // wardrobe on the left wall, one door ajar
+            var wardrobe = Group(flat, "Wardrobe");
+            float wz0 = z0 + 1.3f, wz1 = z0 + 2.55f;
+            Prop(wardrobe, "Body", new Vector3(x0, 0f, wz0), new Vector3(x0 + 0.58f, 2.0f, wz1), woodDark);
+            Prop(wardrobe, "Seam", new Vector3(x0 + 0.58f, 0.05f, (wz0 + wz1) * 0.5f - 0.005f), new Vector3(x0 + 0.59f, 1.95f, (wz0 + wz1) * 0.5f + 0.005f), fabricDark, 0f, false);
+            var leaf = Prop(wardrobe, "Door_Ajar", new Vector3(x0 + 0.58f, 0.05f, wz1 - 0.6f), new Vector3(x0 + 0.6f, 1.95f, wz1), wood, 0f, false);
+            leaf.transform.RotateAround(new Vector3(x0 + 0.59f, 0f, wz1), Vector3.up, -25f);
+            Prop(wardrobe, "Coat", new Vector3(x0 + 0.6f, 0.9f, wz1 - 0.45f), new Vector3(x0 + 0.66f, 1.7f, wz1 - 0.1f), fabric, 0f, false);
+
+            // table with a chair at it, the other one knocked over; a mug and a bottle on it, a shelf above
+            float tx0 = x0 + 1.2f, tx1 = x0 + 2.2f, tz0 = z0 + 1.9f, tz1 = z0 + 2.7f;
+            var table = Group(flat, "Table");
+            Prop(table, "Top", new Vector3(tx0, 0.72f, tz0), new Vector3(tx1, 0.76f, tz1), wood);
+            for (int i = 0; i < 4; i++)
+            {
+                float lx = i % 2 == 0 ? tx0 + 0.04f : tx1 - 0.09f, lz = i < 2 ? tz0 + 0.04f : tz1 - 0.09f;
+                Prop(table, "Leg" + i, new Vector3(lx, 0f, lz), new Vector3(lx + 0.05f, 0.72f, lz + 0.05f), wood, 0f, false);
+            }
+            Prop(table, "Cloth", new Vector3(tx0 + 0.1f, 0.76f, tz0 + 0.05f), new Vector3(tx1 - 0.05f, 0.765f, tz1 - 0.1f), carpet, 3f, false);
+            Bare(PlaceModel(MugPrefab, table, "Mug", new Vector3(tx0 + 0.35f, 0.765f, tz0 + 0.3f), 40f));
+            Cylinder(table, "Bottle", new Vector3(tx1 - 0.25f, 0.765f + 0.13f, tz1 - 0.3f), 0.035f, 0.26f, glass, false);
+            Chair(flat, "Chair", new Vector3((tx0 + tx1) * 0.5f, 0f, tz0 - 0.35f), 180f, false);
+            Chair(flat, "Chair_Fallen", new Vector3(tx1 + 0.45f, 0f, tz1 + 0.3f), 250f, true);
+            PlaceModel(WallShelfPrefab, flat, "Shelf", new Vector3(x0 + 3.0f, 1.5f, z1), 180f);
+
+            // the sofa against the top wall, facing the TV across a rug
+            PlaceModel(SofaPrefab, flat, "Sofa", new Vector3(x1 - 1.7f, 0f, z1 - 0.45f), 180f);
+            Prop(flat, "Rug", new Vector3(x1 - 2.9f, 0f, z0 + 1.2f), new Vector3(x1 - 0.6f, 0.006f, z1 - 1.0f), carpet, 2f, false);
+            // an old TV on a low cabinet at the bottom wall, right of the padlocked door
+            var tv = Group(flat, "TV");
+            float cx = x1 - 1.6f;
+            Prop(tv, "Cabinet", new Vector3(cx - 0.55f, 0f, z0 + 0.02f), new Vector3(cx + 0.55f, 0.5f, z0 + 0.47f), woodDark);
+            Prop(tv, "Set", new Vector3(cx - 0.3f, 0.5f, z0 + 0.06f), new Vector3(cx + 0.3f, 0.95f, z0 + 0.5f), fabricDark);
+            // the set is still on, showing nothing: a cold flickering glow onto the rug and the sofa
+            Material screen = LightingTestSceneBuilder.EmissiveMaterial("Level_TVScreen", new Color(0.55f, 0.65f, 0.85f), 1.6f);
+            var screenGo = Prop(tv, "Screen", new Vector3(cx - 0.23f, 0.56f, z0 + 0.5f), new Vector3(cx + 0.17f, 0.9f, z0 + 0.505f), screen, 0f, false);
+            screenGo.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+            var tvLight = new GameObject("Light").AddComponent<Light>();
+            tvLight.transform.SetParent(tv, false);
+            tvLight.transform.SetPositionAndRotation(new Vector3(cx - 0.03f, 0.75f, z0 + 0.6f), Quaternion.LookRotation(new Vector3(0f, -0.25f, 1f)));
+            tvLight.type = LightType.Spot;
+            tvLight.color = new Color(0.6f, 0.72f, 1f);
+            tvLight.intensity = 1.6f;
+            tvLight.range = 4.5f;
+            tvLight.spotAngle = 120f;
+            tvLight.innerSpotAngle = 60f;
+            tvLight.shadows = LightShadows.None;
+            ViewModelLighting.AlsoLightViewModel(tvLight);
+            var tvFlicker = tvLight.gameObject.AddComponent<LightFlicker>();
+            tvFlicker.kind = LightFlicker.Kind.Screen;
+            tvFlicker.glow = screenGo.GetComponent<Renderer>();
+            Cylinder(tv, "Antenna", new Vector3(cx + 0.1f, 1.1f, z0 + 0.25f), 0.006f, 0.32f, rust, false).transform.rotation = Quaternion.Euler(0f, 0f, 25f);
+
+            // the fridge in the bottom left corner, a radiator under where a window would be
+            PlaceModel(FridgePrefab, flat, "Fridge", new Vector3(x0 + 0.36f, 0f, z0 + 0.36f), 0f);
+            Radiator(flat, "Radiator", new Vector3(x0 + 0.85f, 0.12f, z0 + 0.04f), 8);
+
+            // litter: papers, a box, a bag of rubbish
+            PlaceModel(BoxOpenPrefab, flat, "Box", new Vector3(x1 - 0.5f, 0f, z1 - 1.5f), 20f);
+            RubbishPile(flat, "Litter", new Vector3(x0 + 2.6f, 0f, z0 + 1.0f), 0.6f, 10, 4242);
+            RubbishPile(flat, "Litter_Bed", new Vector3(x0 + 1.4f, 0f, z1 - 1.4f), 0.5f, 8, 4343);
+
+            // the ceiling lamp in the middle: enough to make out the room, the door on the right in its light
+            HangingLamp(lampPrefab, flat, "Lamp_Flat", new Vector3((x0 + x1) * 0.5f + 0.6f, Height, (z0 + z1) * 0.5f), 0.6f, false);
+
+            // a bedside lamp on a nightstand by the bed: a warm pool in the dark corner
+            var stand = Group(flat, "Nightstand");
+            float nx = x0 + 2.4f, nz = z1 - 0.3f;
+            Prop(stand, "Body", new Vector3(nx - 0.22f, 0f, nz - 0.22f), new Vector3(nx + 0.22f, 0.5f, nz + 0.22f), woodDark);
+            var bedside = PlaceModel(DeskLampPrefab, stand, "Lamp", new Vector3(nx, 0.5f, nz + 0.05f), 200f);
+            Light warm = bedside.GetComponentInChildren<Light>();
+            if (warm)
+            {
+                warm.type = LightType.Spot;
+                warm.color = new Color(1f, 0.7f, 0.42f);
+                warm.intensity = 1.5f;
+                warm.range = 3.2f;
+                warm.spotAngle = 120f;
+                warm.innerSpotAngle = 70f;
+                warm.shadows = LightShadows.Soft;
+                warm.shadowNearPlane = 0.05f;
+                ViewModelLighting.AlsoLightViewModel(warm);
+            }
+        }
+
+        /// <summary>A few empty bottles at the top wall that the player knocks over (<see cref="NoiseTrap"/>).
+        /// The trap's box spans the corridor; the bottles are its children.</summary>
+        static void BottleTrap(Transform parent, Vector3 at)
+        {
+            var go = new GameObject("NoiseTrap_Bottles");
+            go.transform.SetParent(parent, false);
+            go.transform.position = at;
+            var trap = go.AddComponent<NoiseTrap>();
+            float legWidth = NorthZ1 - NorthLegZ0;
+            trap.triggerSize = new Vector3(0.8f, 2f, legWidth);
+            trap.kick = new Vector3(1.6f, 0.5f, -0.4f);   // on along the corridor, away from the wall
+            trap.sound = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/ChainRoom/lamp_break_drop.mp3");
+            trap.volume = 1f;
+
+            Material bottleGlass = LightingTestSceneBuilder.SimpleMaterial("Level_BottleGlass", new Color(0.1f, 0.22f, 0.1f, 0.55f), 0f, 0.9f);
+            MakeTransparent(bottleGlass);
+            float wallSide = legWidth * 0.5f - 0.12f;   // against the top wall
+            var bottles = new System.Collections.Generic.List<Rigidbody>
+            {
+                Bottle(go.transform, "Bottle0", new Vector3(-0.1f, 0f, wallSide), bottleGlass, false),
+                Bottle(go.transform, "Bottle1", new Vector3(0.06f, 0f, wallSide - 0.05f), bottleGlass, false),
+                Bottle(go.transform, "Bottle2", new Vector3(0.2f, 0f, wallSide + 0.01f), bottleGlass, false),
+                Bottle(go.transform, "Bottle3", new Vector3(0.0f, 0f, wallSide - 0.25f), bottleGlass, true),
+            };
+            trap.things = bottles.ToArray();
+            EditorUtility.SetDirty(trap);
+        }
+
+        /// <summary>An empty bottle: body and neck, a capsule collider, a light rigidbody (held still by the trap).</summary>
+        static Rigidbody Bottle(Transform parent, string name, Vector3 localFloor, Material material, bool lying)
+        {
+            const float bodyH = 0.2f, neckH = 0.09f, r = 0.037f;
+            var root = new GameObject(name).transform;
+            root.SetParent(parent, false);
+            var b = Cylinder(root, "Body", Vector3.zero, r, bodyH, material, false);
+            b.transform.localPosition = new Vector3(0f, bodyH * 0.5f, 0f);
+            var n = Cylinder(root, "Neck", Vector3.zero, r * 0.38f, neckH, material, false);
+            n.transform.localPosition = new Vector3(0f, bodyH + neckH * 0.5f, 0f);
+            foreach (Renderer rend in root.GetComponentsInChildren<Renderer>()) { rend.gameObject.isStatic = false; rend.shadowCastingMode = ShadowCastingMode.Off; }
+            var col = root.gameObject.AddComponent<CapsuleCollider>();
+            col.radius = r;
+            col.height = bodyH + neckH;
+            col.center = new Vector3(0f, (bodyH + neckH) * 0.5f, 0f);
+            var rb = root.gameObject.AddComponent<Rigidbody>();
+            rb.mass = 0.35f;
+            rb.isKinematic = true;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            if (lying)
+            {
+                root.localPosition = localFloor + new Vector3(0f, r, 0f);
+                root.localRotation = Quaternion.Euler(0f, 35f, 90f);
+            }
+            else root.localPosition = localFloor;
+            return rb;
         }
 
         /// <summary>The oval bulkhead lamp (BodycamHorror > Set Up Utility Props) on a wall: its back on the wall

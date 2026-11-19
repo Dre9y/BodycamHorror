@@ -123,6 +123,12 @@ namespace BodycamHorror.Enemies
         [Range(0f, 1f)] public float sobVolume = 0.85f;
         public Vector2 sobPause = new Vector2(0.3f, 2.4f);
         [Range(0f, 1f)] public float skitterVolume = 0.4f;
+        [Tooltip("A looping scurry of legs played while it runs, louder and quicker the faster it goes. " +
+                 "Set: replaces the single taps. Empty: the taps.")]
+        public AudioClip scurryLoop;
+        [Range(0f, 1f)] public float scurryVolume = 0.6f;
+        [Tooltip("How fast the scurry swells in and dies away (volume per second).")]
+        public float scurryFade = 6f;
         public LayerMask environmentMask = ~((1 << 2) | (1 << 8));   // not Ignore Raycast or Hitbox
 
         public State CurrentState => state;
@@ -138,7 +144,9 @@ namespace BodycamHorror.Enemies
 
         Rigidbody rb;
         SphereCollider body;
-        AudioSource voice, feet;
+        AudioSource voice, feet, scurry;
+        SoundOcclusion scurryOcclusion;
+        float scurryLevel;
 
         BodycamPlayerController player;
         BodycamCameraRig playerRig;
@@ -181,7 +189,20 @@ namespace BodycamHorror.Enemies
             }
 
             voice = MakeSource("Voice", 1.5f, 24f);
+            var moan = gameObject.AddComponent<Audio.MonsterMoan>();   // rare, never on top of another monster's
+            moan.height = 0.3f;
+            moan.canMoan = () => state != State.Dead && state != State.Bite;
+            moan.mayStart = () => !voice.isPlaying;   // not over its own sobbing
             feet = MakeSource("Feet", 1f, 14f);
+            if (scurryLoop)
+            {
+                scurry = MakeSource("Scurry", 1f, 14f);
+                scurry.clip = scurryLoop;
+                scurry.loop = true;
+                scurryOcclusion = scurry.GetComponent<SoundOcclusion>();
+                if (scurryOcclusion) scurryOcclusion.Volume = 0f;   // the occlusion owns the volume
+                else scurry.volume = 0f;
+            }
 
             if (model)
             {
@@ -261,7 +282,7 @@ namespace BodycamHorror.Enemies
             leapThinkTimer -= dt;
             biteCooldownTimer -= dt;
 
-            if (state == State.Dead) { UpdateDeath(dt); return; }
+            if (state == State.Dead) { Scurry(dt, 0f); UpdateDeath(dt); return; }
 
             bool sees = player && CanSeePlayer();
             if (sees) { lastSeenPos = player.transform.position; lastSeenTime = Time.time; }
@@ -677,12 +698,39 @@ namespace BodycamHorror.Enemies
         void Skitter(float dt)
         {
             float ground = Flat(rb.linearVelocity).magnitude;
+            if (scurry)
+            {
+                // the loop: in with the running, a little quicker and louder the faster it goes
+                bool running = ground >= 0.5f && Grounded();
+                Scurry(dt, running ? Mathf.Clamp01(ground / strideSpeed) : 0f);
+                if (running) scurry.pitch = Mathf.Lerp(scurry.pitch, Mathf.Clamp(ground / strideSpeed, 0.85f, 1.3f), dt * 4f);
+                return;
+            }
             if (ground < 0.5f || !Grounded()) return;
             skitterTimer -= dt;
             if (skitterTimer > 0f) return;
             skitterTimer = Random.Range(0.05f, 0.11f) * Mathf.Clamp(strideSpeed / ground, 0.5f, 2f);
             feet.pitch = Random.Range(0.85f, 1.2f);
             feet.PlayOneShot(skitterClips[Random.Range(0, skitterClips.Length)], skitterVolume * Random.Range(0.6f, 1f));
+        }
+
+        /// <summary>Eases the scurry loop towards this much of its volume; stops it once silent.</summary>
+        void Scurry(float dt, float target)
+        {
+            if (!scurry) return;
+            scurryLevel = Mathf.MoveTowards(scurryLevel, target, scurryFade * dt);
+            float v = scurryVolume * scurryLevel;
+            if (scurryOcclusion) scurryOcclusion.Volume = v;
+            else scurry.volume = v;
+            if (scurryLevel > 0.001f)
+            {
+                if (!scurry.isPlaying)
+                {
+                    scurry.time = Random.Range(0f, scurry.clip.length);   // never starts on the same leg
+                    scurry.Play();
+                }
+            }
+            else if (scurry.isPlaying) scurry.Stop();
         }
 
         // ------------------------------------------------------------------ damage

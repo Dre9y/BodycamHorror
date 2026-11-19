@@ -184,6 +184,7 @@ namespace BodycamHorror.EditorTools
             scare.stepInterval = 0.07f;
             scare.stepPitch = 1f;
             scare.stepVolume = 0.7f;
+            scare.scurryLoop = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/creature_scurry_loop.wav");
             if (junctionLamp) scare.flickerLight = junctionLamp.GetComponentInChildren<Light>();
             EditorUtility.SetDirty(scare);
             EditorUtility.SetDirty(scare.transform);

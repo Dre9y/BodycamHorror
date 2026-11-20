@@ -41,7 +41,7 @@ namespace BodycamHorror.UI
 
         void OnGUI()
         {
-            if (!GameSettings.ShowFps || Event.current.type != EventType.Repaint || text.Length == 0) return;
+            if (!GameSettings.ShowFps || MainMenu.IsActive || Event.current.type != EventType.Repaint || text.Length == 0) return;
             float k = Screen.height / 1080f;
             if (!Mathf.Approximately(k, styleScale) || style == null)
             {

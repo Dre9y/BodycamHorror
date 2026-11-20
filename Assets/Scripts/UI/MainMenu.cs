@@ -5,12 +5,13 @@ using UnityEngine.SceneManagement;
 namespace BodycamHorror.UI
 {
     /// <summary>
-    /// The main menu: a black screen, the title in white a little above the middle, and under it
-    /// Start Game and Exit. A music loop plays under it.
-    /// Start Game: the words dissolve into the black; then the lore comes up in white in the middle, stays ten
-    /// seconds and fades out again, the music fading out with it (Enter / Space / click skips it). The first
+    /// The main menu, drawn over a 3D shot (a pistol on the wet floor of a dark corridor, a figure far down it).
+    /// The scene comes up out of black; on the right the title, and under it Play, Settings and Exit.
+    /// Settings: the same options as the pause menu's settings page (<see cref="GameSettings"/>).
+    /// Play: the words and the picture go down to black; then the lore comes up in white in the middle, stays
+    /// ten seconds and fades out again, the music fading out with it (Enter / Space / click skips it). The first
     /// level loads behind all this and opens on black too (the wake-up cutscene), so it follows straight on.
-    /// Mouse, or keyboard / gamepad (up and down to pick, Enter / Space / A to choose).
+    /// Mouse, or keyboard / gamepad (up and down to pick, Enter / Space / A to choose, Escape / B back).
     /// Drawn with IMGUI like the rest of the game's menus.
     /// </summary>
     [DefaultExecutionOrder(-1100)]   // before the pause menu reads Escape
@@ -21,15 +22,27 @@ namespace BodycamHorror.UI
 
         [Header("Words")]
         public string title = "BLOCK 13";
-        public string startLabel = "START GAME";
-        public string exitLabel = "EXIT";
+        public string startLabel = "ИГРАТЬ";
+        public string settingsLabel = "НАСТРОЙКИ";
+        public string exitLabel = "ВЫХОД";
+        public string backLabel = "НАЗАД";
+        public Font titleFont;
+        public Font itemFont;
+        [Tooltip("Left edge of the title and items, as a share of the screen width.")]
+        [Range(0.4f, 0.85f)] public float columnX = 0.64f;
         [Tooltip("Where the title sits, as a share of the screen height from the top.")]
-        [Range(0.2f, 0.6f)] public float titleY = 0.4f;
+        [Range(0.05f, 0.4f)] public float titleY = 0.16f;
+        [Tooltip("Where the first item sits, as a share of the screen height from the top.")]
+        [Range(0.2f, 0.7f)] public float itemsY = 0.33f;
+        [Tooltip("Gap between items, as a share of the screen height.")]
+        [Range(0.05f, 0.25f)] public float itemGap = 0.155f;
 
         [Header("Start")]
         [Tooltip("The scene the game starts in.")]
         public string firstScene = "Level";
-        [Tooltip("Seconds for the words to dissolve into black.")]
+        [Tooltip("Seconds for the picture to come up out of black when the menu opens.")]
+        public float sceneFadeIn = 3f;
+        [Tooltip("Seconds for the words and the picture to go down to black.")]
         public float textFadeTime = 1.6f;
         [Tooltip("Seconds for the music to die away when there is no lore (with lore it plays on under it and goes with it).")]
         public float musicFadeTime = 2.2f;
@@ -60,21 +73,23 @@ namespace BodycamHorror.UI
         public float musicFadeInTime = 2f;
 
         enum State { Menu, Starting, Leaving }
+        enum Page { Main, Settings }
 
         State state;
+        Page page;
         int selected;
         float alpha = 1f;          // the words
         float loreAlpha;           // the lore card
         float skipAt = -1f;        // when the lore was skipped (time since start), or -1
-        float appear;              // 0..1 as the menu first comes up
+        float opened;              // seconds since the menu opened
         float startTime, fadeIn;
+        float[] hover = new float[8];   // 0..1 per row: how lit it is (eases after the selection)
         Vector2 lastMouse = new Vector2(-1f, -1f);
-        const int ItemCount = 2;
         AudioSource source;
         AsyncOperation loading;
-        InputAction up, down, choose;
-        static Texture2D black;
-        GUIStyle titleStyle, itemStyle, loreStyle;
+        InputAction up, down, choose, back;
+        static Texture2D white;
+        GUIStyle titleStyle, itemStyle, rowStyle, valueStyle, loreStyle;
         float styleHeight = -1f;
 
         void Awake()
@@ -101,38 +116,48 @@ namespace BodycamHorror.UI
             choose.AddBinding("<Keyboard>/numpadEnter");
             choose.AddBinding("<Keyboard>/space");
             choose.AddBinding("<Gamepad>/buttonSouth");
+            back = new InputAction("MenuBack", InputActionType.Button, "<Keyboard>/escape");
+            back.AddBinding("<Keyboard>/backspace");
+            back.AddBinding("<Gamepad>/buttonEast");
 
             Time.timeScale = 1f;
+            AudioListener.pause = false;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
 
-        void OnEnable() { up.Enable(); down.Enable(); choose.Enable(); }
-        void OnDisable() { up.Disable(); down.Disable(); choose.Disable(); }
+        void OnEnable() { up.Enable(); down.Enable(); choose.Enable(); back.Enable(); }
+        void OnDisable() { up.Disable(); down.Disable(); choose.Disable(); back.Disable(); }
 
         void OnDestroy()
         {
             IsActive = false;
-            up?.Dispose(); down?.Dispose(); choose?.Dispose();
+            up?.Dispose(); down?.Dispose(); choose?.Dispose(); back?.Dispose();
         }
+
+        int RowCount => page == Page.Main ? 3 : 6;
 
         void Update()
         {
+            IsActive = true;   // again each frame: a script reload in the editor clears statics under a live menu
             float dt = Time.unscaledDeltaTime;
-            appear = Mathf.MoveTowards(appear, 1f, dt / 1.2f);
+            opened += dt;
+            for (int i = 0; i < hover.Length; i++)
+                hover[i] = Mathf.MoveTowards(hover[i], i == selected && state == State.Menu ? 1f : 0f, dt / 0.18f);
 
             if (state == State.Menu)
             {
                 fadeIn += dt;
                 if (source) source.volume = musicVolume * Mathf.Clamp01(fadeIn / Mathf.Max(musicFadeInTime, 0.01f));
-                if (up.WasPressedThisFrame()) selected = (selected + ItemCount - 1) % ItemCount;
-                if (down.WasPressedThisFrame()) selected = (selected + 1) % ItemCount;
+                if (up.WasPressedThisFrame()) selected = (selected + RowCount - 1) % RowCount;
+                if (down.WasPressedThisFrame()) selected = (selected + 1) % RowCount;
                 if (choose.WasPressedThisFrame()) Choose(selected);
+                if (back.WasPressedThisFrame() && page == Page.Settings) OpenPage(Page.Main, 1);
                 return;
             }
 
-            // leaving: the words go and the music dies away, then the lore comes up out of the black, stays,
-            // and goes again; then the level is let in (it opens on black too)
+            // leaving: the words and the picture go and the music dies away, then the lore comes up out of the
+            // black, stays, and goes again; then the level is let in (it opens on black too)
             float since = Time.unscaledTime - startTime;
             alpha = 1f - Mathf.Clamp01(since / Mathf.Max(textFadeTime, 0.01f));
             bool hasLore = !string.IsNullOrEmpty(lore);
@@ -180,11 +205,37 @@ namespace BodycamHorror.UI
             }
         }
 
-        void Choose(int item)
+        void OpenPage(Page p, int select)
+        {
+            page = p;
+            selected = select;
+        }
+
+        void Choose(int row)
         {
             if (state != State.Menu) return;
-            if (item == 0) StartGame();
-            else Quit();
+            if (page == Page.Main)
+            {
+                if (row == 0) StartGame();
+                else if (row == 1) OpenPage(Page.Settings, 0);
+                else Quit();
+                return;
+            }
+            switch (row)
+            {
+                case 0: GameSettings.VSync = !GameSettings.VSync; break;
+                case 1: if (!GameSettings.VSync) GameSettings.FpsCap = NextCap(GameSettings.FpsCap); break;
+                case 2: GameSettings.ShowFps = !GameSettings.ShowFps; break;
+                case 3: GameSettings.EarRinging = !GameSettings.EarRinging; break;
+                case 4: GameSettings.FlashlightColorIndex = GameSettings.FlashlightColorIndex + 1; break;
+                default: OpenPage(Page.Main, 1); break;
+            }
+        }
+
+        static int NextCap(int cap)
+        {
+            int i = System.Array.IndexOf(GameSettings.FpsCaps, cap);
+            return GameSettings.FpsCaps[(i + 1) % GameSettings.FpsCaps.Length];
         }
 
         void StartGame()
@@ -214,16 +265,19 @@ namespace BodycamHorror.UI
 
         void OnGUI()
         {
-            if (!black)
+            if (!white)
             {
-                black = new Texture2D(1, 1);
-                black.SetPixel(0, 0, Color.black);
-                black.Apply();
+                white = new Texture2D(1, 1);
+                white.SetPixel(0, 0, Color.white);
+                white.Apply();
             }
             GUI.depth = -100;
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), black);
             MakeStyles();
             float h = Screen.height, w = Screen.width;
+
+            // the picture: up out of black when the menu opens, down to black when the game starts
+            float picture = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(opened / Mathf.Max(sceneFadeIn, 0.01f))) * alpha;
+            if (picture < 1f) Fill(new Rect(0, 0, w, h), new Color(0f, 0f, 0f, 1f - picture));
 
             if (loreAlpha > 0f)
             {
@@ -234,34 +288,125 @@ namespace BodycamHorror.UI
                 GUI.color = Color.white;
             }
             if (alpha <= 0f) return;
-            float a = alpha * Mathf.SmoothStep(0f, 1f, appear);
+            // the words come in after the picture has started to show
+            float a = alpha * Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((opened - sceneFadeIn * 0.45f) / 1.4f));
+            if (a <= 0f) return;
 
-            // the title, a little above the middle
-            var titleRect = new Rect(0f, h * titleY - h * 0.08f, w, h * 0.16f);
-            GUI.color = new Color(1f, 1f, 1f, a);
+            float x = w * columnX, colWidth = w * 0.95f - x;
+
+            // the title: a faint unsteady glow, like the lamp it sits beside
+            float flicker = 0.9f + 0.1f * Mathf.PerlinNoise(Time.unscaledTime * 2.3f, 0.5f);
+            if (Random.value < 0.006f) flicker *= 0.55f;
+            // one line, made smaller if the column is too narrow for it
+            titleStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.115f);
+            float tw = titleStyle.CalcSize(new GUIContent(title)).x;
+            if (tw > colWidth) titleStyle.fontSize = Mathf.Max(8, Mathf.FloorToInt(titleStyle.fontSize * colWidth / tw));
+            var titleRect = new Rect(x - h * 0.01f, h * titleY - h * 0.09f, colWidth + h * 0.02f, h * 0.18f);
+            GUI.color = new Color(0f, 0f, 0f, a * 0.55f);
+            GUI.Label(new Rect(titleRect.x + h * 0.004f, titleRect.y + h * 0.006f, titleRect.width, titleRect.height), title, titleStyle);
+            GUI.color = new Color(0.86f, 0.85f, 0.8f, a * flicker);
             GUI.Label(titleRect, title, titleStyle);
 
-            // the items under it
-            string[] items = { startLabel, exitLabel };
-            float itemH = h * 0.055f, top = h * (titleY + 0.17f);
             Vector2 mouse = Event.current.mousePosition;
             bool mouseMoved = Event.current.type == EventType.Repaint && (mouse - lastMouse).sqrMagnitude > 0.5f;
             if (Event.current.type == EventType.Repaint) lastMouse = mouse;
-            for (int i = 0; i < items.Length; i++)
+
+            if (page == Page.Main)
             {
-                var r = new Rect(w * 0.5f - h * 0.25f, top + i * itemH * 1.25f, h * 0.5f, itemH);
-                // the mouse picks only when it moves, so it does not fight the keys
-                if (state == State.Menu && mouseMoved && r.Contains(mouse)) selected = i;
-                bool on = selected == i && state == State.Menu;
-                GUI.color = new Color(1f, 1f, 1f, a * (on ? 1f : 0.45f));
-                GUI.Label(r, on ? "—  " + items[i] + "  —" : items[i], itemStyle);
-                if (state == State.Menu && Event.current.type == EventType.MouseDown && Event.current.button == 0 && r.Contains(mouse))
+                string[] items = { startLabel, settingsLabel, exitLabel };
+                for (int i = 0; i < items.Length; i++)
                 {
-                    Event.current.Use();
-                    Choose(i);
+                    float y = h * (itemsY + i * itemGap);
+                    var r = new Rect(x, y - h * 0.045f, colWidth, h * 0.09f);
+                    if (Item(r, items[i], null, i, a, mouseMoved, mouse)) Choose(i);
+                }
+            }
+            else
+            {
+                bool vsync = GameSettings.VSync;
+                int cap = GameSettings.FpsCap;
+                string[] labels = { "Вертикальная синхронизация", "Ограничение кадров", "Счётчик кадров", "Писк в ушах при страхе", "Цвет фонарика", backLabel };
+                string[] values =
+                {
+                    vsync ? "Вкл" : "Выкл",
+                    vsync ? "по монитору" : cap <= 0 ? "нет" : cap.ToString(),
+                    GameSettings.ShowFps ? "Вкл" : "Выкл",
+                    GameSettings.EarRinging ? "Вкл" : "Выкл",
+                    GameSettings.FlashlightColors[GameSettings.FlashlightColorIndex].name,
+                    null,
+                };
+                float rowH = h * 0.068f, top = h * itemsY - h * 0.02f;
+                for (int i = 0; i < labels.Length; i++)
+                {
+                    float y = top + i * rowH + (i == labels.Length - 1 ? rowH * 0.6f : 0f);
+                    var r = new Rect(x, y - rowH * 0.5f, colWidth, rowH);
+                    bool enabled = !(i == 1 && vsync);
+                    if (Item(r, labels[i], values[i], i, a * (enabled ? 1f : 0.5f), mouseMoved, mouse) && enabled) Choose(i);
                 }
             }
             GUI.color = Color.white;
+        }
+
+        /// <summary>One row: dim, lit when picked, with a thin rough line drawn under it as it lights.
+        /// Returns whether it was clicked.</summary>
+        bool Item(Rect r, string label, string value, int i, float a, bool mouseMoved, Vector2 mouse)
+        {
+            bool main = value == null && page == Page.Main;
+            // the mouse picks only when it moves, so it does not fight the keys
+            if (state == State.Menu && mouseMoved && r.Contains(mouse)) selected = i;
+            float lit = Mathf.SmoothStep(0f, 1f, hover[i]);
+            GUIStyle style = main ? itemStyle : rowStyle;
+            float shift = lit * r.height * 0.18f;   // the picked one steps out a little to the right
+
+            GUI.color = new Color(0.82f, 0.82f, 0.78f, a * Mathf.Lerp(0.42f, 1f, lit));
+            GUI.Label(new Rect(r.x + shift, r.y, r.width - shift, r.height), label, style);
+            if (value != null)
+            {
+                GUI.color = new Color(0.82f, 0.82f, 0.78f, a * Mathf.Lerp(0.35f, 0.85f, lit));
+                GUI.Label(new Rect(r.x, r.y, r.width, r.height), value, valueStyle);
+            }
+
+            // the line under it: a hand-drawn stroke with a step in it, drawn out from the left as it lights
+            if (lit > 0.01f && Event.current.type == EventType.Repaint)
+            {
+                float baseY = r.yMax - r.height * (main ? 0.12f : 0.14f);
+                float len = r.width * (main ? 0.78f : 1f) * lit;
+                float th = Mathf.Max(1f, Screen.height / 540f);
+                Color c = new Color(0.86f, 0.86f, 0.82f, a * 0.85f * lit);
+                const int segs = 26;
+                for (int s = 0; s < segs; s++)
+                {
+                    float u0 = s / (float)segs, u1 = (s + 1) / (float)segs;
+                    if (u0 * r.width * (main ? 0.78f : 1f) > len) break;
+                    float yOff = Wobble(u0, i) * r.height * 0.05f;
+                    Fill(new Rect(r.x + u0 * r.width * (main ? 0.78f : 1f), baseY + yOff,
+                                  (u1 - u0) * r.width * (main ? 0.78f : 1f) + 1f, th), c);
+                }
+            }
+
+            if (state == State.Menu && Event.current.type == EventType.MouseDown && Event.current.button == 0 && r.Contains(mouse))
+            {
+                Event.current.Use();
+                selected = i;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>The stroke's shape: high at the start, a step down past a third of the way, a little shake.</summary>
+        static float Wobble(float u, int row)
+        {
+            float step = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.36f, 0.44f, u)) * (row % 2 == 0 ? 1f : 0.7f);
+            float shake = Mathf.PerlinNoise(u * 9f, row * 3.1f) - 0.5f;
+            return -1f + step * 2f + shake * 0.5f;
+        }
+
+        static void Fill(Rect r, Color c)
+        {
+            Color old = GUI.color;
+            GUI.color = c;
+            GUI.DrawTexture(r, white);
+            GUI.color = old;
         }
 
         void MakeStyles()
@@ -270,21 +415,29 @@ namespace BodycamHorror.UI
             styleHeight = Screen.height;
             titleStyle = new GUIStyle(GUI.skin.label)
             {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = Mathf.RoundToInt(Screen.height * 0.1f),
-                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = Mathf.RoundToInt(Screen.height * 0.115f),
+                font = titleFont,
+                wordWrap = false,
+                clipping = TextClipping.Overflow,
             };
             titleStyle.normal.textColor = Color.white;
             itemStyle = new GUIStyle(GUI.skin.label)
             {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = Mathf.RoundToInt(Screen.height * 0.032f),
+                alignment = TextAnchor.MiddleLeft,
+                fontSize = Mathf.RoundToInt(Screen.height * 0.046f),
+                font = itemFont,
+                wordWrap = false,
+                clipping = TextClipping.Overflow,
             };
             itemStyle.normal.textColor = Color.white;
+            rowStyle = new GUIStyle(itemStyle) { fontSize = Mathf.RoundToInt(Screen.height * 0.027f) };
+            valueStyle = new GUIStyle(rowStyle) { alignment = TextAnchor.MiddleRight };
             loreStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
                 fontSize = Mathf.RoundToInt(Screen.height * 0.03f),
+                font = itemFont,
                 wordWrap = true,
             };
             loreStyle.normal.textColor = new Color(0.9f, 0.9f, 0.88f);

@@ -95,11 +95,16 @@ namespace BodycamHorror.Player
         public bool IsOn { get; private set; }
         /// <summary>The gun the light is on right now (null = chest).</summary>
         public Firearm MountedOn { get; private set; }
+        /// <summary>Dead for a while (<see cref="Blackout"/>): nothing switches it on until it comes back by itself.</summary>
+        public bool InBlackout => blackoutLeft > 0f;
 
         Light beam, halo, spill, handFill, darkFill;
         Color appliedColor = new Color(-1f, 0f, 0f);
         Quaternion smoothed;
         bool smoothInit;
+        float blackoutLeft, blackoutDie, blinkTimer, lockOnReturn, toggleLockedUntil;
+        int blinkSteps;
+        bool blackoutWasOn;
         float flicker, seed, closeDim = 1f, appliedSize = -1f, appliedAngle = -1f, appliedSpillSize = -1f, appliedSpillAngle = -1f;
         InputAction toggleAction;
         AudioSource audioSource;
@@ -231,10 +236,86 @@ namespace BodycamHorror.Player
         /// <summary>Makes the light stutter for a moment (bad contact after a knock).</summary>
         public void Flicker(float seconds) => flicker = Mathf.Max(flicker, seconds);
 
+        /// <summary>
+        /// The light dies for <paramref name="seconds"/>: a short stutter, then dark, and the switch does nothing (a press only
+        /// changes whether it comes back on). Afterwards it comes back as the player left it, catching with a flicker.
+        /// </summary>
+        /// <param name="blinks">Before it dies it blinks out and back this many times (a lit light only).</param>
+        public void Blackout(float seconds, int blinks = 0)
+        {
+            if (blackoutLeft <= 0f)
+            {
+                blackoutWasOn = IsOn;
+                blinkSteps = IsOn && blinks > 0 ? blinks * 2 + 1 : 0;
+                blinkTimer = Random.Range(0.06f, 0.12f);
+                blackoutDie = blinkSteps > 0 ? 0f : 0.22f;
+            }
+            blackoutLeft = Mathf.Max(blackoutLeft, seconds + blinkSteps * 0.2f);
+        }
+
+        /// <summary>
+        /// A blackout that was meant to last until something happens: it now ends in <paramref name="seconds"/>
+        /// (and starts one of that length if there is none).
+        /// </summary>
+        /// <param name="forceOn">It comes back on whatever the switch was left at, and the switch is locked for
+        /// <paramref name="lockAfter"/> seconds (a press mashed in the dark must not put it straight out again).</param>
+        public void EndBlackoutIn(float seconds, bool forceOn = false, float lockAfter = 1f)
+        {
+            if (blackoutLeft <= 0f) Blackout(seconds);
+            blinkSteps = 0;
+            blackoutLeft = seconds;
+            if (forceOn) { blackoutWasOn = true; lockOnReturn = lockAfter; }
+        }
+
+        /// <summary>The switch does nothing for <paramref name="seconds"/>.</summary>
+        public void LockToggle(float seconds) => toggleLockedUntil = Mathf.Max(toggleLockedUntil, Time.time + seconds);
+
+        public bool ToggleLocked => Time.time < toggleLockedUntil;
+
+        /// <summary>In a blackout, and past its blinks: the light is out for good until it comes back.</summary>
+        public bool IsDead => blackoutLeft > 0f && blinkSteps == 0 && blackoutDie <= 0f;
+
+        void UpdateBlackout()
+        {
+            if (blackoutLeft <= 0f) return;
+            blackoutLeft -= Time.deltaTime;
+            if (blinkSteps > 0)
+            {
+                // out, back, out, back ... each a little longer than the last, then gone
+                blinkTimer -= Time.deltaTime;
+                if (blinkTimer <= 0f)
+                {
+                    blinkSteps--;
+                    bool on = blinkSteps % 2 == 1;   // even steps left: out, odd: back on; the last (0) is out for good
+                    SetOn(on, false);
+                    blinkTimer = on ? Random.Range(0.15f, 0.3f) : Random.Range(0.07f, 0.14f);
+                }
+                return;
+            }
+            if (blackoutDie > 0f)
+            {
+                blackoutDie -= Time.deltaTime;
+                if (IsOn) flicker = Mathf.Max(flicker, blackoutDie);   // it stutters ...
+                if (blackoutDie <= 0f && IsOn) SetOn(false, false);    // ... and goes
+            }
+            if (blackoutLeft > 0f) return;
+            if (blackoutWasOn && owned) { SetOn(true, false); Flicker(0.6f); }
+            if (lockOnReturn > 0f) { LockToggle(lockOnReturn); lockOnReturn = 0f; }
+        }
+
         void LateUpdate()
         {
             // at a door the same key works the door instead
-            if (toggleAction.WasPressedThisFrame() && !PlayerInteractor.HasTarget && owned && !UI.PauseMenu.IsOpen) SetOn(!IsOn);
+            if (toggleAction.WasPressedThisFrame() && !PlayerInteractor.HasTarget && owned && !UI.PauseMenu.IsOpen && !ToggleLocked)
+            {
+                if (!InBlackout) SetOn(!IsOn);
+                else
+                {
+                    blackoutWasOn = !blackoutWasOn;   // the switch clicks, the light stays dead
+                    if (audioSource) audioSource.PlayOneShot(clickClip ? clickClip : (clickClip = ProceduralAudio.DoubleClick(0.035f, 2600f, 0.45f)), clickVolume);
+                }
+            }
+            UpdateBlackout();
 
             Firearm gun = mountOnWeapon && shooting && shooting.isActiveAndEnabled ? shooting.CurrentWeapon : null;
             if (gun && gun.muzzle && gun.HasLight)

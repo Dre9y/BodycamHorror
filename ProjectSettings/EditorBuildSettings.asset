@@ -17,5 +17,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/ChainRoom.unity
     guid: f8982a77465ec9c40997840bffc32fea
+  - enabled: 1
+    path: Assets/Scenes/LightFear_Greybox.unity
+    guid: 6ea53aae19e3ffc44963e2dc8f7d18c4
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

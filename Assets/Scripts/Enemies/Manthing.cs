@@ -221,6 +221,8 @@ namespace BodycamHorror.Enemies
         public Vector2 restAfterRetreat = new Vector2(6f, 10f);
         [Tooltip("Not getting anywhere on its way for this long (s) and, out of the player's view, it is simply put where it was going.")]
         public float stuckTime = 1.5f;
+        [Tooltip("It never runs off to wait within this far (m) of a safe zone's edge: the lights are where the player has to go.")]
+        public float safeZoneAvoid = 8f;
 
         [Header("Turning to stone (the flashlight finds it)")]
         [Tooltip("Played on it each time the flashlight catches it. Empty: a crackle of stone made at start-up.")]
@@ -229,7 +231,7 @@ namespace BodycamHorror.Enemies
 
         [Header("Enraged (the flashlight held on it, out of the light)")]
         [Tooltip("The flashlight on it this long (s) with the player outside a safe zone, and it snaps: screams, kills the light and comes.")]
-        public float aggressionTime = 3.5f;
+        public float aggressionTime = 4.5f;
         [Tooltip("It stands screaming this long (s) before it comes.")]
         public float enrageWindup = 0.8f;
         [Tooltip("Coming at the player at this speed (m/s), the light does not stop it.")]
@@ -313,7 +315,10 @@ namespace BodycamHorror.Enemies
 
         [Header("The end")]
         public float killDistance = 1.15f;
+        [Tooltip("Its scream: stared down from a safe zone, when it snaps, when it is shot off.")]
         public AudioClip scream;
+        [Tooltip("The scream in the player's face at the end (the screamer). Empty: the scream.")]
+        public AudioClip killScream;
         public float screamTime = 1.1f;
         public float fadeTime = 0.6f;
 
@@ -1152,7 +1157,7 @@ namespace BodycamHorror.Enemies
                     {
                         // into the light, or it took too long: it breaks off, and the flashlight comes back once it is gone
                         BeginRetreat(false);
-                        if (torch) torch.EndBlackoutIn(repelBlackout);
+                        if (torch) torch.EndBlackoutIn(repelBlackout, true);
                         break;
                     }
                     Howl();
@@ -1223,7 +1228,7 @@ namespace BodycamHorror.Enemies
                     if (scream) Audio.SpatialSound.PlayAt(scream, mouth, 1f, 4f, 70f);
                     BeginRetreat(false);
                     // the light goes as it turns: where it runs to is only heard
-                    if (torch) torch.EndBlackoutIn(repelBlackout);
+                    if (torch) torch.EndBlackoutIn(repelBlackout, true);
                 }
                 else
                 {
@@ -1592,7 +1597,7 @@ namespace BodycamHorror.Enemies
                 };
                 if (!CoverFinder.Find(req, burned, null, out CoverSpot spot)) return false;
                 bool dark = LightAt(spot.position + Vector3.up * bodySize * 0.6f) < litThreshold * 0.6f
-                            && !PathPassesPlayer(spot.position);
+                            && !PathPassesPlayer(spot.position) && !NearSafeZone(spot.position);
                 if (dark && HasRoom(spot.position, 0.1f)) { goal = spot.position; goalSet = true; return true; }
                 burned.Add(new CoverFinder.Burned { position = spot.position, until = Time.time + 20f });
             }
@@ -1600,9 +1605,20 @@ namespace BodycamHorror.Enemies
         }
 
         /// <summary>
+        /// Within <see cref="safeZoneAvoid"/> of a safe zone's edge: the lights are where the player has to go, so it never
+        /// runs off to wait there (it only comes to them to prowl).
+        /// </summary>
+        bool NearSafeZone(Vector3 p)
+        {
+            foreach (SafeZone z in SafeZone.All)
+                if (z && Mathf.Abs(p.y - z.Centre.y) < 3f && Flat(p - z.Centre).magnitude < z.radius + safeZoneAvoid) return true;
+            return false;
+        }
+
+        /// <summary>
         /// Somewhere a long walk from the player (<paramref name="walk"/> metres along the floor, not as the crow flies):
         /// another room, or the far end of the hall. The farther, out of their sight and in the dark the better; never by a
-        /// way that goes past them, never in a safe zone. <paramref name="mustHide"/>: out of their sight or nothing.
+        /// way that goes past them, never near a safe zone. <paramref name="mustHide"/>: out of their sight or nothing.
         /// </summary>
         bool PickFarAway(Vector2 walk, bool mustHide)
         {
@@ -1617,7 +1633,7 @@ namespace BodycamHorror.Enemies
                 Vector3 p = (i % 3 == 0 ? me : from) + new Vector3(d.x, 0f, d.y);
                 if (!NavMesh.SamplePosition(p, out NavMeshHit hit, 2.5f, NavMesh.AllAreas)) continue;
                 Vector3 q = hit.position;
-                if (SafeZone.At(q, 0.8f) || Doorway.At(q, 0.3f)) continue;
+                if (NearSafeZone(q) || Doorway.At(q, 0.3f)) continue;   // never by the lights the player is making for
                 if (!NavMesh.CalculatePath(from, q, NavMesh.AllAreas, fromPlayer) || fromPlayer.status != NavMeshPathStatus.PathComplete) continue;
                 float walkFromPlayer = Length(fromPlayer);
                 if (walkFromPlayer < walk.x || walkFromPlayer > walk.y * 1.4f) continue;
@@ -1698,7 +1714,7 @@ namespace BodycamHorror.Enemies
                 Vector2 d = Random.insideUnitCircle * retreatDistance.y;
                 Vector3 p = (i % 2 == 0 ? from : me) + new Vector3(d.x, 0f, d.y);
                 if (!NavMesh.SamplePosition(p, out NavMeshHit hit, 2f, NavMesh.AllAreas)) continue;
-                if (SafeZone.At(hit.position, 0.5f)) continue;
+                if (NearSafeZone(hit.position)) continue;
                 if (PathPassesPlayer(hit.position)) continue;
                 float score = Flat(hit.position - from).magnitude;
                 if (LightAt(hit.position + Vector3.up * bodySize * 0.6f) < litThreshold * 0.6f) score += 4f;
@@ -2161,7 +2177,8 @@ namespace BodycamHorror.Enemies
             if (flat.sqrMagnitude < 0.01f) flat = player.transform.forward;
             transform.position = new Vector3(eye.position.x, player.transform.position.y, eye.position.z) + flat * 0.75f;
             transform.rotation = Quaternion.LookRotation(-flat, Vector3.up);
-            if (scream) Audio.SpatialSound.PlayAt(scream, eye.position + flat * 0.5f, 1f, 1f, 100f);
+            AudioClip faceScream = killScream ? killScream : scream;
+            if (faceScream) Audio.SpatialSound.PlayAt(faceScream, eye.position + flat * 0.5f, 1f, 1f, 100f);
             if (rig) rig.AddTrauma(1f);
 
             float t = 0f;

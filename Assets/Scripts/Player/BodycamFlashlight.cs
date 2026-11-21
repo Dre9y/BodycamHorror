@@ -102,7 +102,7 @@ namespace BodycamHorror.Player
         Color appliedColor = new Color(-1f, 0f, 0f);
         Quaternion smoothed;
         bool smoothInit;
-        float blackoutLeft, blackoutDie, blinkTimer;
+        float blackoutLeft, blackoutDie, blinkTimer, lockOnReturn, toggleLockedUntil;
         int blinkSteps;
         bool blackoutWasOn;
         float flicker, seed, closeDim = 1f, appliedSize = -1f, appliedAngle = -1f, appliedSpillSize = -1f, appliedSpillAngle = -1f;
@@ -257,12 +257,20 @@ namespace BodycamHorror.Player
         /// A blackout that was meant to last until something happens: it now ends in <paramref name="seconds"/>
         /// (and starts one of that length if there is none).
         /// </summary>
-        public void EndBlackoutIn(float seconds)
+        /// <param name="forceOn">It comes back on whatever the switch was left at, and the switch is locked for
+        /// <paramref name="lockAfter"/> seconds (a press mashed in the dark must not put it straight out again).</param>
+        public void EndBlackoutIn(float seconds, bool forceOn = false, float lockAfter = 1f)
         {
-            if (blackoutLeft <= 0f) { Blackout(seconds); return; }
+            if (blackoutLeft <= 0f) Blackout(seconds);
             blinkSteps = 0;
             blackoutLeft = seconds;
+            if (forceOn) { blackoutWasOn = true; lockOnReturn = lockAfter; }
         }
+
+        /// <summary>The switch does nothing for <paramref name="seconds"/>.</summary>
+        public void LockToggle(float seconds) => toggleLockedUntil = Mathf.Max(toggleLockedUntil, Time.time + seconds);
+
+        public bool ToggleLocked => Time.time < toggleLockedUntil;
 
         /// <summary>In a blackout, and past its blinks: the light is out for good until it comes back.</summary>
         public bool IsDead => blackoutLeft > 0f && blinkSteps == 0 && blackoutDie <= 0f;
@@ -292,12 +300,13 @@ namespace BodycamHorror.Player
             }
             if (blackoutLeft > 0f) return;
             if (blackoutWasOn && owned) { SetOn(true, false); Flicker(0.6f); }
+            if (lockOnReturn > 0f) { LockToggle(lockOnReturn); lockOnReturn = 0f; }
         }
 
         void LateUpdate()
         {
             // at a door the same key works the door instead
-            if (toggleAction.WasPressedThisFrame() && !PlayerInteractor.HasTarget && owned && !UI.PauseMenu.IsOpen)
+            if (toggleAction.WasPressedThisFrame() && !PlayerInteractor.HasTarget && owned && !UI.PauseMenu.IsOpen && !ToggleLocked)
             {
                 if (!InBlackout) SetOn(!IsOn);
                 else

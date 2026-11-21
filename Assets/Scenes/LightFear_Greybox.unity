@@ -12122,6 +12122,7 @@ MonoBehaviour:
   twitchSpeed: 70
   headSwayAngle: 22
   headSwayPeriod: 5.5
+  headWatchSpeed: 12
   twitchAngle: 32
   corridorWidth: 1.9
   doorWidth: 1.25
@@ -12164,9 +12165,10 @@ MonoBehaviour:
   fleeWalk: {x: 11, y: 28}
   restAfterRetreat: {x: 6, y: 10}
   stuckTime: 1.5
-  petrifyClip: {fileID: 0}
+  safeZoneAvoid: 8
+  petrifyClip: {fileID: 8300000, guid: e14a61e43f6391948b04c5df7b4502f6, type: 3}
   petrifyVolume: 0.9
-  aggressionTime: 3.5
+  aggressionTime: 4.5
   enrageWindup: 0.8
   enrageSpeed: 5
   jerkEvery: {x: 0.15, y: 0.5}
@@ -12219,10 +12221,15 @@ MonoBehaviour:
   hidingBreathVolume: 0.12
   breathRange: 9
   joltRange: 6
+  lookFearMax: 0.95
+  lookFearTime: 3
+  lookFearEbb: 0.5
+  lookFearCone: 0.35
   fearFar: 16
   fearNear: 1.5
   killDistance: 2.07
   scream: {fileID: 8300000, guid: 5707389f09153974191e93e3c4ce47d2, type: 3}
+  killScream: {fileID: 8300000, guid: 198b94714d705374dbd01dec49f63094, type: 3}
   screamTime: 1.1
   fadeTime: 0.6
 --- !u!4 &197575997

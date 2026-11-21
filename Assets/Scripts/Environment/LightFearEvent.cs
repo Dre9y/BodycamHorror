@@ -268,6 +268,7 @@ namespace BodycamHorror.Environment
             yield return new WaitForSeconds(0.12f);
             torch.SetOn(true, true);
             torch.Flicker(0.9f);
+            torch.LockToggle(1f);   // a panicked press must not put it straight out again
         }
 
         /// <summary>One lamp bursts: a very loud crack of glass where it hangs, and it is dark for good.</summary>

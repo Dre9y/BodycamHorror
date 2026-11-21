@@ -95,11 +95,15 @@ namespace BodycamHorror.Player
         public bool IsOn { get; private set; }
         /// <summary>The gun the light is on right now (null = chest).</summary>
         public Firearm MountedOn { get; private set; }
+        /// <summary>Dead for a while (<see cref="Blackout"/>): nothing switches it on until it comes back by itself.</summary>
+        public bool InBlackout => blackoutLeft > 0f;
 
         Light beam, halo, spill, handFill, darkFill;
         Color appliedColor = new Color(-1f, 0f, 0f);
         Quaternion smoothed;
         bool smoothInit;
+        float blackoutLeft, blackoutDie;
+        bool blackoutWasOn;
         float flicker, seed, closeDim = 1f, appliedSize = -1f, appliedAngle = -1f, appliedSpillSize = -1f, appliedSpillAngle = -1f;
         InputAction toggleAction;
         AudioSource audioSource;
@@ -231,10 +235,43 @@ namespace BodycamHorror.Player
         /// <summary>Makes the light stutter for a moment (bad contact after a knock).</summary>
         public void Flicker(float seconds) => flicker = Mathf.Max(flicker, seconds);
 
+        /// <summary>
+        /// The light dies for <paramref name="seconds"/>: a short stutter, then dark, and the switch does nothing (a press only
+        /// changes whether it comes back on). Afterwards it comes back as the player left it, catching with a flicker.
+        /// </summary>
+        public void Blackout(float seconds)
+        {
+            if (blackoutLeft <= 0f) { blackoutWasOn = IsOn; blackoutDie = 0.22f; }
+            blackoutLeft = Mathf.Max(blackoutLeft, seconds);
+        }
+
+        void UpdateBlackout()
+        {
+            if (blackoutLeft <= 0f) return;
+            blackoutLeft -= Time.deltaTime;
+            if (blackoutDie > 0f)
+            {
+                blackoutDie -= Time.deltaTime;
+                if (IsOn) flicker = Mathf.Max(flicker, blackoutDie);   // it stutters ...
+                if (blackoutDie <= 0f && IsOn) SetOn(false, false);    // ... and goes
+            }
+            if (blackoutLeft > 0f) return;
+            if (blackoutWasOn && owned) { SetOn(true, false); Flicker(0.6f); }
+        }
+
         void LateUpdate()
         {
             // at a door the same key works the door instead
-            if (toggleAction.WasPressedThisFrame() && !PlayerInteractor.HasTarget && owned && !UI.PauseMenu.IsOpen) SetOn(!IsOn);
+            if (toggleAction.WasPressedThisFrame() && !PlayerInteractor.HasTarget && owned && !UI.PauseMenu.IsOpen)
+            {
+                if (!InBlackout) SetOn(!IsOn);
+                else
+                {
+                    blackoutWasOn = !blackoutWasOn;   // the switch clicks, the light stays dead
+                    if (audioSource) audioSource.PlayOneShot(clickClip ? clickClip : (clickClip = ProceduralAudio.DoubleClick(0.035f, 2600f, 0.45f)), clickVolume);
+                }
+            }
+            UpdateBlackout();
 
             Firearm gun = mountOnWeapon && shooting && shooting.isActiveAndEnabled ? shooting.CurrentWeapon : null;
             if (gun && gun.muzzle && gun.HasLight)

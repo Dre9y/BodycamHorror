@@ -129,6 +129,8 @@ namespace BodycamHorror.Enemies
         public float headSwayAngle = 22f;
         [Tooltip("... over this long (s) one way and back.")]
         public float headSwayPeriod = 5.5f;
+        [Tooltip("Looked at by the player at the edge of the light, its body stops dead and only its head turns to them, this fast (deg/s).")]
+        public float headWatchSpeed = 12f;
         [Tooltip("... by up to this much (deg).")]
         public float twitchAngle = 32f;
 
@@ -376,6 +378,8 @@ namespace BodycamHorror.Enemies
         int hits;
         bool fleeing, torchWas;
         float nextJerk, hitchUntil;
+        bool bodyHeld;
+        Quaternion headNow;
         float restUntil, stuckFor, stuckCheckAt;
         Vector3 stuckFrom;
         AudioClip petrifySound;
@@ -677,6 +681,7 @@ namespace BodycamHorror.Enemies
                 Show(iRun, At(iRun, gaitPhase));
                 return;
             }
+            bodyHeld = false;
             float stride = Mathf.Lerp(strides.x, strides.y, chargeMix) * bodySize;
             float advance = dt * speed / Mathf.Max(stride, 0.1f);
             if (mode == Mode.Enraged) advance = Frantic(advance, dt);
@@ -1012,8 +1017,8 @@ namespace BodycamHorror.Enemies
                 // its head slowly rolling, in the dim chemical light; the flashlight on it and it is stone, like anywhere else
                 if (Animated && !LegacyBody)
                 {
-                    if (torchOn) { if (!held) { LookAtPlayer(); held = true; } }
-                    else { held = false; StandAndStare(dt, 0.75f); }
+                    if (torchOn) held = true;   // stone, head and all, just as it was
+                    else { held = false; HoldAndWatch(dt); }
                 }
                 return;
             }
@@ -1097,7 +1102,8 @@ namespace BodycamHorror.Enemies
                     bool watched = OnScreen();
                     if (Time.time < pauseUntil || watched || !goalSet)
                     {
-                        StandAndStare(dt, 0.75f);
+                        if (watched) HoldAndWatch(dt);   // looked at: it stops dead as it was, only the head comes round
+                        else StandAndStare(dt, 0.75f);
                         if (!watched && Time.time >= pauseUntil && !goalSet && !PickProwlSpot(false))
                             pauseUntil = Time.time + 0.5f;   // nowhere to go just now: keep standing
                         break;
@@ -1449,8 +1455,32 @@ namespace BodycamHorror.Enemies
             return false;
         }
 
+        /// <summary>
+        /// Looked at (without the flashlight) at the edge of the light: the body stops dead in whatever it was doing, not
+        /// turning, not breathing the pose on; only the head comes round to the player, very slowly, rolling a little.
+        /// </summary>
+        void HoldAndWatch(float dt)
+        {
+            if (!head) return;
+            if (!bodyHeld) { bodyHeld = true; headNow = head.rotation; }
+            if (!cam) cam = Camera.main;
+            Vector3 eye = cam ? cam.transform.position : player.transform.position + Vector3.up * 1.6f;
+            Vector3 want = eye - head.position;
+            if (want.sqrMagnitude > 1e-4f)
+            {
+                want.Normalize();
+                Vector3 up = Vector3.ProjectOnPlane(Vector3.Lerp(headNow * headUp, Vector3.up, 0.6f), want);
+                if (up.sqrMagnitude < 1e-4f) up = Vector3.up;
+                Quaternion target = Quaternion.LookRotation(want, up) * Quaternion.Inverse(Quaternion.LookRotation(headFace, headUp));
+                headNow = Quaternion.RotateTowards(headNow, target, headWatchSpeed * dt);
+            }
+            head.rotation = headNow;   // set afresh each frame (the pose is not evaluated): the sway does not pile up
+            HeadSway(dt, 0.5f);
+        }
+
         void StandAndStare(float dt, float tall)
         {
+            bodyHeld = false;
             FaceTowards(player.transform.position, dt, 0.5f);
             corridorK = Mathf.MoveTowards(corridorK, 0f, dt * 2f);
             doorK = Mathf.MoveTowards(doorK, 0f, dt * 2f);
@@ -1467,14 +1497,14 @@ namespace BodycamHorror.Enemies
         /// Standing at the edge of the light: the head, turned to the player, slowly rolls over to one side and back and
         /// nods, never quite in time (two slow waves and a drift).
         /// </summary>
-        void HeadSway(float dt)
+        void HeadSway(float dt, float amount = 1f)
         {
             if (!head || headSwayAngle <= 0f) return;
             swayTime += dt;
-            float p = Mathf.Max(headSwayPeriod, 0.5f);
-            float roll = Mathf.Sin(swayTime * Mathf.PI * 2f / p) * headSwayAngle
-                       + (Mathf.PerlinNoise(swayTime * 0.15f, 3.1f) - 0.5f) * headSwayAngle * 0.8f;
-            float nod = Mathf.Sin(swayTime * Mathf.PI * 2f / (p * 1.63f) + 1.3f) * headSwayAngle * 0.35f;
+            float p = Mathf.Max(headSwayPeriod, 0.5f), a = headSwayAngle * amount;
+            float roll = Mathf.Sin(swayTime * Mathf.PI * 2f / p) * a
+                       + (Mathf.PerlinNoise(swayTime * 0.15f, 3.1f) - 0.5f) * a * 0.8f;
+            float nod = Mathf.Sin(swayTime * Mathf.PI * 2f / (p * 1.63f) + 1.3f) * a * 0.35f;
             Vector3 face = head.rotation * headFace;
             Vector3 side = Vector3.Cross(Vector3.up, face);
             if (side.sqrMagnitude < 1e-4f) side = transform.right;

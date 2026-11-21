@@ -253,6 +253,17 @@ namespace BodycamHorror.Player
             blackoutLeft = Mathf.Max(blackoutLeft, seconds + blinkSteps * 0.2f);
         }
 
+        /// <summary>
+        /// A blackout that was meant to last until something happens: it now ends in <paramref name="seconds"/>
+        /// (and starts one of that length if there is none).
+        /// </summary>
+        public void EndBlackoutIn(float seconds)
+        {
+            if (blackoutLeft <= 0f) { Blackout(seconds); return; }
+            blinkSteps = 0;
+            blackoutLeft = seconds;
+        }
+
         /// <summary>In a blackout, and past its blinks: the light is out for good until it comes back.</summary>
         public bool IsDead => blackoutLeft > 0f && blinkSteps == 0 && blackoutDie <= 0f;
 

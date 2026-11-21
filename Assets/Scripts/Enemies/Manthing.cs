@@ -228,12 +228,12 @@ namespace BodycamHorror.Enemies
         [Header("Enraged (the flashlight held on it, out of the light)")]
         [Tooltip("The flashlight on it this long (s) with the player outside a safe zone, and it snaps: screams, kills the light and comes.")]
         public float aggressionTime = 3.5f;
-        [Tooltip("The flashlight dies for this long (s) when it snaps.")]
-        public Vector2 enrageBlackout = new Vector2(1.6f, 2.4f);
         [Tooltip("It stands screaming this long (s) before it comes.")]
         public float enrageWindup = 0.8f;
         [Tooltip("Coming at the player at this speed (m/s), the light does not stop it.")]
-        public float enrageSpeed = 2.8f;
+        public float enrageSpeed = 5f;
+        [Tooltip("Enraged, its gallop jerks (a jump in the stride, or a hitch) every so often (s).")]
+        public Vector2 jerkEvery = new Vector2(0.15f, 0.5f);
         [Tooltip("Shots that have to hit it before it breaks off, howling, and runs.")]
         public int hitsToRepel = 3;
         [Tooltip("Each hit stops it for this long (s).")]
@@ -375,6 +375,7 @@ namespace BodycamHorror.Enemies
         float aggression, enrageGo, staggerUntil, nextHowl, petrifyAt;
         int hits;
         bool fleeing, torchWas;
+        float nextJerk, hitchUntil;
         float restUntil, stuckFor, stuckCheckAt;
         Vector3 stuckFrom;
         AudioClip petrifySound;
@@ -677,7 +678,9 @@ namespace BodycamHorror.Enemies
                 return;
             }
             float stride = Mathf.Lerp(strides.x, strides.y, chargeMix) * bodySize;
-            gaitPhase = (gaitPhase + dt * speed / Mathf.Max(stride, 0.1f)) % 1f;
+            float advance = dt * speed / Mathf.Max(stride, 0.1f);
+            if (mode == Mode.Enraged) advance = Frantic(advance, dt);
+            gaitPhase = (gaitPhase + advance) % 1f;
             chargeMix = Mathf.MoveTowards(chargeMix, gait == Gait.Charge ? 1f : 0f, dt * 2.5f);
             int low = iCrawlRun >= 0 ? iCrawlRun : iWalk;
             ClearPose();
@@ -711,10 +714,27 @@ namespace BodycamHorror.Enemies
         /// How upright it goes: hunched in the open, dropping onto its hands every so often (quick down, slower up, so it
         /// lurches), on all fours in a corridor or a doorway, and never taller than the ceiling over it lets it.
         /// </summary>
+        /// <summary>
+        /// Enraged: the gallop on all fours played in fits, as if frames were missing: the pace lurching faster and slower,
+        /// now and then a jump ahead in the stride, now and then a hitch where it hangs for a moment.
+        /// </summary>
+        float Frantic(float advance, float dt)
+        {
+            if (Time.time < hitchUntil) return 0f;                                     // hung for a beat
+            if (Time.time >= nextJerk)
+            {
+                nextJerk = Time.time + Random.Range(jerkEvery.x, jerkEvery.y);
+                if (Random.value < 0.4f) hitchUntil = Time.time + Random.Range(0.05f, 0.12f);
+                else return advance + Random.Range(0.08f, 0.22f);                        // a jump in the stride
+            }
+            return advance * Mathf.Lerp(0.5f, 1.9f, Mathf.PerlinNoise(Time.time * 3.1f, 7.3f));
+        }
+
         void UpdateUpright(float dt, bool moving, float ceilingRoom)
         {
             float want = uprightShare;
             bool dropping = false;
+            if (mode == Mode.Enraged) { want = 0f; moving = false; }   // on all fours, flat out
             if (moving)
             {
                 if (Time.time >= nextHandDrop)
@@ -769,12 +789,13 @@ namespace BodycamHorror.Enemies
             {
                 if (moving && Time.time >= nextTwitch)
                 {
-                    nextTwitch = Time.time + Random.Range(twitchEvery.x, twitchEvery.y);
+                    nextTwitch = Time.time + (mode == Mode.Enraged ? Random.Range(0.12f, 0.45f) : Random.Range(twitchEvery.x, twitchEvery.y));
                     twitchTarget = Quaternion.Euler(Random.Range(-0.4f, 0.4f) * twitchAngle, Random.Range(-0.6f, 0.6f) * twitchAngle,
                                                     Random.Range(-1f, 1f) * twitchAngle);
                 }
                 if (!moving) twitchTarget = Quaternion.identity;
-                twitch = Quaternion.RotateTowards(twitch, twitchTarget, dt * (moving ? twitchSpeed : twitchSpeed * 0.5f));
+                float snap = mode == Mode.Enraged ? 900f : moving ? twitchSpeed : twitchSpeed * 0.5f;   // enraged: the head snaps about
+                twitch = Quaternion.RotateTowards(twitch, twitchTarget, dt * snap);
                 Quaternion frame = Quaternion.LookRotation(head.rotation * headFace, head.rotation * headUp);
                 head.rotation = frame * twitch * Quaternion.Inverse(frame) * head.rotation;
             }
@@ -1111,7 +1132,13 @@ namespace BodycamHorror.Enemies
                     break;
                 case Mode.Enraged:
                 {
-                    if (inZone || Time.time >= modeUntil) { BeginRetreat(false); break; }   // into the light, or it took too long: it breaks off
+                    if (inZone || Time.time >= modeUntil)
+                    {
+                        // into the light, or it took too long: it breaks off, and the flashlight comes back once it is gone
+                        BeginRetreat(false);
+                        if (torch) torch.EndBlackoutIn(repelBlackout);
+                        break;
+                    }
                     Howl();
                     if (Time.time < enrageGo || Time.time < staggerUntil)
                     {
@@ -1147,7 +1174,8 @@ namespace BodycamHorror.Enemies
             Vector3 mouth = head ? head.position : transform.position + Vector3.up * 2f;
             if (scream) Audio.SpatialSound.PlayAt(scream, mouth, 1f, 4f, 70f);
             if (rig) rig.AddTrauma(0.5f);
-            if (torch) torch.Blackout(Random.Range(enrageBlackout.x, enrageBlackout.y));
+            // the light is dead until it is shot off (or breaks off): it is fought in the dark, by its howls and the muzzle flash
+            if (torch) torch.Blackout(enrageGiveUp + 5f);
         }
 
         /// <summary>Howls, one after another, while it comes.</summary>
@@ -1179,7 +1207,7 @@ namespace BodycamHorror.Enemies
                     if (scream) Audio.SpatialSound.PlayAt(scream, mouth, 1f, 4f, 70f);
                     BeginRetreat(false);
                     // the light goes as it turns: where it runs to is only heard
-                    if (torch && repelBlackout > 0f) torch.Blackout(repelBlackout);
+                    if (torch) torch.EndBlackoutIn(repelBlackout);
                 }
                 else
                 {

@@ -5483,6 +5483,7 @@ MonoBehaviour:
   levelLights: {fileID: 1602865623}
   bashDelay: 1.6
   blackoutDelay: 0.7
+  torchShotsToWake: 2
   slam: {fileID: 8300000, guid: 50615a8b899e46949b4587916cc6f096, type: 3}
   slamVolume: 1
   riser: {fileID: 8300000, guid: 45f225cef565ecf4faa25955b5e034ed, type: 3}
@@ -12159,14 +12160,19 @@ MonoBehaviour:
   blackoutTime: {x: 2, y: 3}
   retreatSpeed: 7.5
   retreatDistance: {x: 8, y: 14}
+  retreatWalk: {x: 14, y: 32}
+  fleeWalk: {x: 11, y: 28}
+  restAfterRetreat: {x: 6, y: 10}
+  stuckTime: 1.5
   petrifyClip: {fileID: 0}
   petrifyVolume: 0.9
   aggressionTime: 3.5
-  enrageBlackout: {x: 1.6, y: 2.4}
   enrageWindup: 0.8
-  enrageSpeed: 2.8
+  enrageSpeed: 5
+  jerkEvery: {x: 0.15, y: 0.5}
   hitsToRepel: 3
   hitStagger: 0.45
+  repelBlackout: 2
   enrageHowls:
   - {fileID: 8300000, guid: 5707389f09153974191e93e3c4ce47d2, type: 3}
   - {fileID: 8300000, guid: 10d7bf71c146b9345bab3f945b61e654, type: 3}

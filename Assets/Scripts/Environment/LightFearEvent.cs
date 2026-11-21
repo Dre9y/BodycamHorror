@@ -32,6 +32,8 @@ namespace BodycamHorror.Environment
         public float bashDelay = 1.6f;
         [Tooltip("From the door flying off to the lights dying (s): long enough to see what is in the doorway.")]
         public float blackoutDelay = 0.7f;
+        [Tooltip("After the lights die the flashlight is dead too, until the player switches it on or fires this many shots.")]
+        public int torchShotsToWake = 2;
         public AudioClip slam;
         [Range(0f, 1f)] public float slamVolume = 1f;
         public AudioClip riser;
@@ -246,9 +248,26 @@ namespace BodycamHorror.Environment
             if (torch)
             {
                 torch.SetOn(false, false);
-                yield return new WaitForSeconds(0.6f);
-                torch.SetOn(true, true);
+                StartCoroutine(TorchDead(torch));
             }
+        }
+
+        /// <summary>
+        /// After the blackout the flashlight stays dead, dark, the monster loose in it: until the player thinks to switch it
+        /// back on, or fires a few shots in a panic, the recoil jarring it back to life with a stutter.
+        /// </summary>
+        IEnumerator TorchDead(BodycamFlashlight torch)
+        {
+            var shooting = player.GetComponentInChildren<Weapons.PlayerShooting>(true);
+            int shots = 0;
+            void Shot() => shots++;
+            if (shooting) shooting.Fired += Shot;
+            while (torch && !torch.IsOn && shots < torchShotsToWake) yield return null;
+            if (shooting) shooting.Fired -= Shot;
+            if (!torch || torch.IsOn) yield break;   // switched on by the player
+            yield return new WaitForSeconds(0.12f);
+            torch.SetOn(true, true);
+            torch.Flicker(0.9f);
         }
 
         /// <summary>One lamp bursts: a very loud crack of glass where it hangs, and it is dark for good.</summary>

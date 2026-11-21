@@ -211,6 +211,14 @@ namespace BodycamHorror.Enemies
         public float retreatSpeed = 7.5f;
         [Tooltip("... to a dark spot out of sight this far from the player (m).")]
         public Vector2 retreatDistance = new Vector2(7f, 15f);
+        [Tooltip("Stared down, it bolts to another room: a spot this far (m, walking) from the player, out of their sight.")]
+        public Vector2 retreatWalk = new Vector2(14f, 32f);
+        [Tooltip("Shot off, it runs to the far end of the hall or another room: this far (m, walking) from the player.")]
+        public Vector2 fleeWalk = new Vector2(11f, 28f);
+        [Tooltip("After either it stays put this long (s), giving the player a breather (unless they walk right up to it).")]
+        public Vector2 restAfterRetreat = new Vector2(6f, 10f);
+        [Tooltip("Not getting anywhere on its way for this long (s) and, out of the player's view, it is simply put where it was going.")]
+        public float stuckTime = 1.5f;
 
         [Header("Turning to stone (the flashlight finds it)")]
         [Tooltip("Played on it each time the flashlight catches it. Empty: a crackle of stone made at start-up.")]
@@ -367,6 +375,8 @@ namespace BodycamHorror.Enemies
         float aggression, enrageGo, staggerUntil, nextHowl, petrifyAt;
         int hits;
         bool fleeing, torchWas;
+        float restUntil, stuckFor, stuckCheckAt;
+        Vector3 stuckFrom;
         AudioClip petrifySound;
         Vector3 cover, peekSpot;
         readonly List<CoverFinder.Burned> burned = new List<CoverFinder.Burned>();
@@ -993,7 +1003,7 @@ namespace BodycamHorror.Enemies
         }
 
         /// <summary>Played as a living thing only right by the player at a safe zone's edge; everywhere else it is a sound in the dark.</summary>
-        bool Animated => LegacyBody || mode == Mode.Prowl || mode == Mode.Enraged || (mode == Mode.Retreat && fleeing);
+        bool Animated => LegacyBody || mode == Mode.Prowl || mode == Mode.Enraged;
 
         /// <summary>The stone crackle on its body, the moment the flashlight catches it.</summary>
         void Petrify()
@@ -1085,10 +1095,15 @@ namespace BodycamHorror.Enemies
                 case Mode.Retreat:
                 {
                     // it goes only once the light is dead (after the blinks)
-                    if (torch && torch.InBlackout && !torch.IsDead && Time.time < modeUntil - 6f) break;
+                    if (torch && torch.InBlackout && !torch.IsDead && Time.time < modeUntil - 8f) break;
                     float left = Travel(goal, retreatSpeed, Gait.Charge, dt);
                     Stamp(dt, dist, 1f, true);   // heard all the way: the player cannot see it go
-                    if (left < 0.3f || Time.time >= modeUntil) BeginAmbush();
+                    if (left < 0.3f || Time.time >= modeUntil)
+                    {
+                        // out of time on the way (out of sight): it is there anyway
+                        if (left >= 0.3f && !OnScreen()) transform.position = NavPoint(goal);
+                        BeginAmbush();
+                    }
                     break;
                 }
                 case Mode.Ambush:
@@ -1232,8 +1247,10 @@ namespace BodycamHorror.Enemies
             fleeing = !killLight;
             aggression = 0f;
             if (torch && killLight) torch.Blackout(Random.Range(blackoutTime.x, blackoutTime.y), blackoutBlinks);
-            if (!PickHideout()) PickRandomAway();
-            modeUntil = Time.time + 8f;   // never stuck bolting
+            // a long way off: another room (or the far end of the hall), so the player gets a breather
+            if (!PickFarAway(killLight ? retreatWalk : fleeWalk, killLight) && !PickHideout()) PickRandomAway();
+            stuckFor = 0f;
+            modeUntil = Time.time + 10f;   // never stuck bolting
             repathAt = 0f;
             charging = true;
         }
@@ -1250,6 +1267,7 @@ namespace BodycamHorror.Enemies
             charging = false;
             goalSet = false;
             ambushTall = Random.value < 0.5f ? 0.1f : 0.85f;   // crouched low behind the wall, or standing tall behind it
+            restUntil = Time.time + Random.Range(restAfterRetreat.x, restAfterRetreat.y);
         }
 
         /// <summary>
@@ -1261,7 +1279,7 @@ namespace BodycamHorror.Enemies
             if (dist < pounceDistance) { BeginHunt(); return; }
             if (!inZone)
             {
-                if (reactAt < 0f) reactAt = Time.time + Random.Range(ambushReact.x, ambushReact.y);
+                if (reactAt < 0f) reactAt = Mathf.Max(Time.time + Random.Range(ambushReact.x, ambushReact.y), restUntil);
                 if (Time.time >= reactAt) { BeginHunt(); return; }
             }
             else reactAt = -1f;
@@ -1514,6 +1532,76 @@ namespace BodycamHorror.Enemies
         }
 
         /// <summary>
+        /// Somewhere a long walk from the player (<paramref name="walk"/> metres along the floor, not as the crow flies):
+        /// another room, or the far end of the hall. The farther, out of their sight and in the dark the better; never by a
+        /// way that goes past them, never in a safe zone. <paramref name="mustHide"/>: out of their sight or nothing.
+        /// </summary>
+        bool PickFarAway(Vector2 walk, bool mustHide)
+        {
+            if (Time.time >= lightsRefresh) RefreshLights();
+            Vector3 me = NavPoint(transform.position), from = NavPoint(player.transform.position);
+            Vector3 eye = cam ? cam.transform.position : from + Vector3.up * 1.6f;
+            var fromPlayer = new NavMeshPath();
+            float bestScore = float.MinValue;
+            for (int i = 0; i < 80; i++)
+            {
+                Vector2 d = Random.insideUnitCircle * walk.y;
+                Vector3 p = (i % 3 == 0 ? me : from) + new Vector3(d.x, 0f, d.y);
+                if (!NavMesh.SamplePosition(p, out NavMeshHit hit, 2.5f, NavMesh.AllAreas)) continue;
+                Vector3 q = hit.position;
+                if (SafeZone.At(q, 0.8f) || Doorway.At(q, 0.3f)) continue;
+                if (!NavMesh.CalculatePath(from, q, NavMesh.AllAreas, fromPlayer) || fromPlayer.status != NavMeshPathStatus.PathComplete) continue;
+                float walkFromPlayer = Length(fromPlayer);
+                if (walkFromPlayer < walk.x || walkFromPlayer > walk.y * 1.4f) continue;
+                bool hidden = CoverFinder.IsHidden(q, eye, headHeights.x * bodySize);
+                if (mustHide && !hidden) continue;
+                if (!HasRoom(q)) continue;
+                if (PathPassesPlayer(q)) continue;
+                float score = walkFromPlayer + (hidden ? 10f : 0f) + Random.value * 3f;
+                if (LightAt(q + Vector3.up * bodySize * 0.6f) < litThreshold * 0.6f) score += 5f;
+                if (score > bestScore) { bestScore = score; goal = q; }
+            }
+            if (bestScore == float.MinValue) return false;
+            goalSet = true;
+            return true;
+        }
+
+        /// <summary>
+        /// On its way and not getting anywhere (caught on a corner, wedged in a door frame) for <see cref="stuckTime"/>:
+        /// out of the player's view it is put where it was going (or, hunting them, a stretch further along its way).
+        /// </summary>
+        void CheckStuck(Vector3 target, float left)
+        {
+            if (left < 0.6f) { stuckFor = 0f; stuckFrom = transform.position; return; }
+            if (Time.time < stuckCheckAt) return;
+            const float every = 0.5f;
+            stuckCheckAt = Time.time + every;
+            stuckFor = Flat(transform.position - stuckFrom).magnitude < 0.2f ? stuckFor + every : 0f;
+            stuckFrom = transform.position;
+            if (stuckFor < stuckTime || OnScreen()) return;
+
+            Vector3 to = NavPoint(target);
+            if (mode == Mode.Hunt || mode == Mode.Enraged)
+            {
+                // not into the player's face: a few metres further along the way
+                to = transform.position;
+                float run = 3f;
+                for (int i = corner; i < corners.Length && run > 0f; i++)
+                {
+                    Vector3 seg = corners[i] - to;
+                    float len = Flat(seg).magnitude;
+                    if (len >= run) { to += seg * (run / Mathf.Max(len, 1e-3f)); run = 0f; }
+                    else { to = corners[i]; run -= len; }
+                }
+                if (Flat(to - player.transform.position).magnitude < killDistance + 1.5f) { stuckFor = 0f; return; }
+            }
+            transform.position = to;
+            repathAt = 0f;
+            stuckFor = 0f;
+            stuckFrom = to;
+        }
+
+        /// <summary>
         /// Whether the way there is no good for getting away: no whole way there, or it goes right past the player
         /// (it never runs off through them). Leaves the way in probePath.
         /// </summary>
@@ -1522,6 +1610,7 @@ namespace BodycamHorror.Enemies
             if (!NavMesh.CalculatePath(NavPoint(transform.position), to, NavMesh.AllAreas, probePath) || probePath.status != NavMeshPathStatus.PathComplete)
                 return true;
             Vector3 p = player.transform.position;
+            if (SafeZone.At(p)) return false;   // in the light it cannot touch them anyway: skirting its edge is fine
             // never closer to them than it already is (shot at close range it starts right by them)
             float near = Mathf.Min(Mathf.Max(3f, killDistance + 1f), Flat(transform.position - p).magnitude * 0.9f);
             var c = probePath.corners;
@@ -1607,6 +1696,7 @@ namespace BodycamHorror.Enemies
             // squeezing through, it slows down a little
             float squeeze = Mathf.Max(corridorK * 0.25f, doorK * 0.4f);
             float left = MoveTo(target, speed * (1f - squeeze), dt);
+            CheckStuck(target, left);
             if (!Animated) return left;   // in the dark it is only its sound: the body is posed when the light finds it
             PoseMove(gait, speed * (1f - squeeze), dt);
             ResolveBody();

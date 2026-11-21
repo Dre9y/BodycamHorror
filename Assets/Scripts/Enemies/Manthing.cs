@@ -139,6 +139,8 @@ namespace BodycamHorror.Enemies
         public float bodyRadius = 0.2f;
         [Tooltip("Spots it stops at keep this much room (m) round the body, past what the NavMesh already keeps.")]
         public float standClearance = 0.3f;
+        [Tooltip("After every pose: the back bent out of the walls, feet put down on the floor, hands laid on the wall or floor they are in or near.")]
+        public bool fitBodyToRoom = true;
 
         [Header("Appearing")]
         public BurstingBulb appearOn;
@@ -303,6 +305,7 @@ namespace BodycamHorror.Enemies
 
         // ---- body vs walls
         CapsuleCollider probe;
+        ManthingBodyFit bodyFit;
         readonly Collider[] overlaps = new Collider[16];
 
         // ---- seeing
@@ -405,6 +408,7 @@ namespace BodycamHorror.Enemies
             probe = probeGo.AddComponent<CapsuleCollider>();
             probe.isTrigger = true;
             probe.direction = 1;
+            if (animator && fitBodyToRoom) bodyFit = new ManthingBodyFit(animator, transform, sightMask);
 
             nextHandDrop = Time.time + Random.Range(handDropEvery.x, handDropEvery.y);
             upright = uprightShare;
@@ -529,7 +533,8 @@ namespace BodycamHorror.Enemies
             feet = Bones(HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, HumanBodyBones.LeftToes, HumanBodyBones.RightToes);
             hands = Bones(HumanBodyBones.LeftHand, HumanBodyBones.RightHand);
             spineBones = Bones(HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest);
-            limbPoints = Bones(HumanBodyBones.LeftHand, HumanBodyBones.RightHand, HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm, HumanBodyBones.Head);
+            limbPoints = Bones(HumanBodyBones.LeftHand, HumanBodyBones.RightHand, HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm, HumanBodyBones.Head,
+                               HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot);
         }
 
         // ---- the mixer: a few clips at a time, each at its own moment
@@ -720,17 +725,29 @@ namespace BodycamHorror.Enemies
             twistSign = Random.value < 0.5f ? 1f : -1f;
             int best = poseOrder[0];
             float bestOverlap = float.MaxValue;
+            // judged as it will stand: pushed out of the walls and fitted into the room
+            Vector3 at = transform.position;
+            int applied = -1;
             for (int k = 0; k < poseOrder.Count && k < 6; k++)
             {
-                ApplyFreezePose(poseOrder[k]);
+                transform.position = at;
+                ApplyFreezePose(applied = poseOrder[k]);
+                ResolveBody();
+                FitBody();
                 float overlap = PoseOverlap();
                 if (overlap < bestOverlap) { bestOverlap = overlap; best = poseOrder[k]; }
                 if (overlap < 0.01f) break;
             }
-            if (lastPose != best || bestOverlap > 0.01f) ApplyFreezePose(best);
+            if (applied != best)
+            {
+                transform.position = at;
+                ApplyFreezePose(best);
+                ResolveBody();
+                FitBody();
+            }
             lastPose = best;
-            ResolveBody();
             LookAtPlayer();
+            FitBody();   // the turned neck may have put the head into the wall
         }
 
         /// <summary>One pose, evaluated onto the body: its clip moment (mixed with the second one), the lean or twist, feet on the floor.</summary>
@@ -805,7 +822,7 @@ namespace BodycamHorror.Enemies
             }
             if (limbPoints != null)
                 foreach (Transform t in limbPoints)
-                    if (t && Physics.CheckSphere(t.position + Vector3.up * 0.05f, 0.04f * bodySize, sightMask, QueryTriggerInteraction.Ignore))
+                    if (t && Physics.CheckSphere(t.position, 0.02f, sightMask, QueryTriggerInteraction.Ignore))   // in it, not resting on it
                         total += 0.15f;
             if (head)
             {
@@ -1180,8 +1197,9 @@ namespace BodycamHorror.Enemies
             leanK = Mathf.MoveTowards(leanK, 0f, dt * 3f);
             UpdateUpright(dt, false, CeilingRoom());
             PoseStill(dt, Mathf.Min(tall, upright));
-            LookAtPlayer();
             ResolveBody();
+            FitBody();
+            LookAtPlayer();
         }
 
         // ---- picking spots
@@ -1333,6 +1351,7 @@ namespace BodycamHorror.Enemies
             if (!Animated) return left;   // in the dark it is only its sound: the body is posed when the light finds it
             PoseMove(gait, speed * (1f - squeeze), dt);
             ResolveBody();
+            FitBody();
             FitHeadroom(dt);
             return left;
         }
@@ -1454,6 +1473,16 @@ namespace BodycamHorror.Enemies
             return true;
         }
 
+        /// <summary>
+        /// The pose fitted into the room without breaking it (<see cref="ManthingBodyFit"/>): the back bent out of the walls,
+        /// the feet down on the floor, the hands flat on a wall or the floor they are in or near.
+        /// </summary>
+        void FitBody()
+        {
+            if (bodyFit == null || !model) return;
+            bodyFit.Fit(model.lossyScale.y);
+        }
+
         /// <summary>Under a ceiling too low even for its hunch it shrinks (only ever while unseen); with room it grows back.</summary>
         void FitHeadroom(float dt)
         {
@@ -1500,6 +1529,7 @@ namespace BodycamHorror.Enemies
             UpdateUpright(dt, true, room);
             PoseMove(speed > (startSpeed + topSpeed) * 0.5f ? Gait.Charge : Gait.Creep, speed, dt);
             ResolveBody();
+            FitBody();
             FitHeadroom(dt);
             Stamp(dt, toPlayer.magnitude, 1f, Mathf.Clamp01(chaseTime / Mathf.Max(rampTime, 0.1f)) > 0.5f);
         }

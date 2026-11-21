@@ -12000,6 +12000,115 @@ MonoBehaviour:
   screechClip: {fileID: 8859051733462820791, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
   soleHeight: 0.053999998
   poseHeight: 1.6
+  poses:
+  - name: Lunge
+    clip: {fileID: -8683021672903812072, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.25
+    blendClip: {fileID: 0}
+    blendTime: 0
+    blend: 0
+    fit: 1
+    lean: 0
+    twist: 0
+  - name: Reach
+    clip: {fileID: -8683021672903812072, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.62
+    blendClip: {fileID: 0}
+    blendTime: 0
+    blend: 0
+    fit: 1
+    lean: 0
+    twist: 0
+  - name: Hunched stand
+    clip: {fileID: -4248474696539176537, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.1
+    blendClip: {fileID: 0}
+    blendTime: 0
+    blend: 0
+    fit: 1
+    lean: 0
+    twist: 0
+  - name: Hand drop
+    clip: {fileID: -8683021672903812072, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.1
+    blendClip: {fileID: 1740138257986107755, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    blendTime: 0.1
+    blend: 0.7
+    fit: 9
+    lean: 0
+    twist: 0
+  - name: Hand drop, other hand
+    clip: {fileID: -8683021672903812072, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.55
+    blendClip: {fileID: 1740138257986107755, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    blendTime: 0.55
+    blend: 0.65
+    fit: 9
+    lean: 0
+    twist: 0
+  - name: Crawl
+    clip: {fileID: 1740138257986107755, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0
+    blendClip: {fileID: 0}
+    blendTime: 0
+    blend: 0
+    fit: 15
+    lean: 0
+    twist: 0
+  - name: Crawl, mid-step
+    clip: {fileID: 1740138257986107755, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.5
+    blendClip: {fileID: 0}
+    blendTime: 0
+    blend: 0
+    fit: 14
+    lean: 0
+    twist: 0
+  - name: Crawl, squeezing
+    clip: {fileID: 1740138257986107755, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.25
+    blendClip: {fileID: 0}
+    blendTime: 0
+    blend: 0
+    fit: 6
+    lean: 0
+    twist: 35
+  - name: Crouched, watching
+    clip: {fileID: -8833742866596000015, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.6
+    blendClip: {fileID: 0}
+    blendTime: 0
+    blend: 0
+    fit: 15
+    lean: 0
+    twist: 0
+  - name: Gallop
+    clip: {fileID: -3608114237862294997, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.25
+    blendClip: {fileID: 0}
+    blendTime: 0
+    blend: 0
+    fit: 3
+    lean: 0
+    twist: 0
+  - name: Peek, tall
+    clip: {fileID: -4248474696539176537, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.3
+    blendClip: {fileID: 0}
+    blendTime: 0
+    blend: 0
+    fit: 16
+    lean: 32
+    twist: 0
+  - name: Peek, low
+    clip: {fileID: -8833742866596000015, guid: f7e05369c19d19248beb3c4335b030c8, type: 3}
+    time: 0.6
+    blendClip: {fileID: 0}
+    blendTime: 0
+    blend: 0
+    fit: 16
+    lean: 28
+    twist: 0
   fitUnderCeiling: 1
   headFollowsPlayer: 1
   neckShare: 0.4
@@ -12039,9 +12148,10 @@ MonoBehaviour:
   lurkBreathRange: 16
   stareTime: 3
   stareCone: 0.3
-  stareUnlitDistance: 4.5
+  torchThreshold: 0.3
   screamHold: 1.15
   screamVolume: 1
+  blackoutBlinks: 2
   blackoutTime: {x: 2, y: 3}
   retreatSpeed: 7.5
   retreatDistance: {x: 8, y: 14}

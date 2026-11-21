@@ -102,7 +102,8 @@ namespace BodycamHorror.Player
         Color appliedColor = new Color(-1f, 0f, 0f);
         Quaternion smoothed;
         bool smoothInit;
-        float blackoutLeft, blackoutDie;
+        float blackoutLeft, blackoutDie, blinkTimer;
+        int blinkSteps;
         bool blackoutWasOn;
         float flicker, seed, closeDim = 1f, appliedSize = -1f, appliedAngle = -1f, appliedSpillSize = -1f, appliedSpillAngle = -1f;
         InputAction toggleAction;
@@ -239,16 +240,39 @@ namespace BodycamHorror.Player
         /// The light dies for <paramref name="seconds"/>: a short stutter, then dark, and the switch does nothing (a press only
         /// changes whether it comes back on). Afterwards it comes back as the player left it, catching with a flicker.
         /// </summary>
-        public void Blackout(float seconds)
+        /// <param name="blinks">Before it dies it blinks out and back this many times (a lit light only).</param>
+        public void Blackout(float seconds, int blinks = 0)
         {
-            if (blackoutLeft <= 0f) { blackoutWasOn = IsOn; blackoutDie = 0.22f; }
-            blackoutLeft = Mathf.Max(blackoutLeft, seconds);
+            if (blackoutLeft <= 0f)
+            {
+                blackoutWasOn = IsOn;
+                blinkSteps = IsOn && blinks > 0 ? blinks * 2 + 1 : 0;
+                blinkTimer = Random.Range(0.06f, 0.12f);
+                blackoutDie = blinkSteps > 0 ? 0f : 0.22f;
+            }
+            blackoutLeft = Mathf.Max(blackoutLeft, seconds + blinkSteps * 0.2f);
         }
+
+        /// <summary>In a blackout, and past its blinks: the light is out for good until it comes back.</summary>
+        public bool IsDead => blackoutLeft > 0f && blinkSteps == 0 && blackoutDie <= 0f;
 
         void UpdateBlackout()
         {
             if (blackoutLeft <= 0f) return;
             blackoutLeft -= Time.deltaTime;
+            if (blinkSteps > 0)
+            {
+                // out, back, out, back ... each a little longer than the last, then gone
+                blinkTimer -= Time.deltaTime;
+                if (blinkTimer <= 0f)
+                {
+                    blinkSteps--;
+                    bool on = blinkSteps % 2 == 1;   // even steps left: out, odd: back on; the last (0) is out for good
+                    SetOn(on, false);
+                    blinkTimer = on ? Random.Range(0.15f, 0.3f) : Random.Range(0.07f, 0.14f);
+                }
+                return;
+            }
             if (blackoutDie > 0f)
             {
                 blackoutDie -= Time.deltaTime;

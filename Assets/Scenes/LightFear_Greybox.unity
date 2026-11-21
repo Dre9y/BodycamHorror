@@ -12159,6 +12159,19 @@ MonoBehaviour:
   blackoutTime: {x: 2, y: 3}
   retreatSpeed: 7.5
   retreatDistance: {x: 8, y: 14}
+  petrifyClip: {fileID: 0}
+  petrifyVolume: 0.9
+  aggressionTime: 3.5
+  enrageBlackout: {x: 1.6, y: 2.4}
+  enrageWindup: 0.8
+  enrageSpeed: 2.8
+  hitsToRepel: 3
+  hitStagger: 0.45
+  enrageHowls:
+  - {fileID: 8300000, guid: 5707389f09153974191e93e3c4ce47d2, type: 3}
+  - {fileID: 8300000, guid: 10d7bf71c146b9345bab3f945b61e654, type: 3}
+  howlEvery: {x: 0.9, y: 1.8}
+  enrageGiveUp: 14
   peekEvery: {x: 2.5, y: 6.5}
   peekTime: {x: 1.4, y: 3}
   ambushPatience: {x: 20, y: 35}

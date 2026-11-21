@@ -77,7 +77,7 @@ namespace BodycamHorror.Enemies
     /// Waits, hidden, until <see cref="appearOn"/> bursts (or appears at once without one, or on <see cref="AppearNow"/>).
     /// Lights with a <see cref="MonsterBlindLight"/> do not count as light on it.
     /// </summary>
-    public class Manthing : MonoBehaviour, PlayerStress.IFearSource
+    public class Manthing : MonoBehaviour, PlayerStress.IFearSource, Combat.IDamageable
     {
         [Header("Body (built by the scene builder)")]
         public Animator animator;
@@ -212,6 +212,31 @@ namespace BodycamHorror.Enemies
         [Tooltip("... to a dark spot out of sight this far from the player (m).")]
         public Vector2 retreatDistance = new Vector2(7f, 15f);
 
+        [Header("Turning to stone (the flashlight finds it)")]
+        [Tooltip("Played on it each time the flashlight catches it. Empty: a crackle of stone made at start-up.")]
+        public AudioClip petrifyClip;
+        [Range(0f, 1f)] public float petrifyVolume = 0.9f;
+
+        [Header("Enraged (the flashlight held on it, out of the light)")]
+        [Tooltip("The flashlight on it this long (s) with the player outside a safe zone, and it snaps: screams, kills the light and comes.")]
+        public float aggressionTime = 3.5f;
+        [Tooltip("The flashlight dies for this long (s) when it snaps.")]
+        public Vector2 enrageBlackout = new Vector2(1.6f, 2.4f);
+        [Tooltip("It stands screaming this long (s) before it comes.")]
+        public float enrageWindup = 0.8f;
+        [Tooltip("Coming at the player at this speed (m/s), the light does not stop it.")]
+        public float enrageSpeed = 2.8f;
+        [Tooltip("Shots that have to hit it before it breaks off, howling, and runs.")]
+        public int hitsToRepel = 3;
+        [Tooltip("Each hit stops it for this long (s).")]
+        public float hitStagger = 0.45f;
+        [Tooltip("Its howls while it comes, one after another. Empty: the scream.")]
+        public AudioClip[] enrageHowls;
+        [Tooltip("Pause between howls (s).")]
+        public Vector2 howlEvery = new Vector2(0.9f, 1.8f);
+        [Tooltip("Not reached in this long (s) and it breaks off anyway.")]
+        public float enrageGiveUp = 14f;
+
         [Header("Hiding, waiting")]
         [Tooltip("Peeks out from behind the wall every so often (s) ...")]
         public Vector2 peekEvery = new Vector2(2.5f, 6.5f);
@@ -276,7 +301,7 @@ namespace BodycamHorror.Enemies
         Phase phase = Phase.Waiting;
 
         /// <summary>What it is doing (with the NavMesh).</summary>
-        enum Mode { Hunt, Approach, Prowl, Scream, Retreat, Ambush }
+        enum Mode { Hunt, Approach, Prowl, Scream, Retreat, Ambush, Enraged }
         Mode mode = Mode.Hunt;
         enum Gait { Still, Creep, Charge }
 
@@ -337,6 +362,10 @@ namespace BodycamHorror.Enemies
         float modeUntil, pauseUntil, peekAt, peekUntil, reactAt = -1f, ambushTall = 0.5f;
         bool peeking, atPeek, held;
         float swayTime;
+        float aggression, enrageGo, staggerUntil, nextHowl, petrifyAt;
+        int hits;
+        bool fleeing, torchWas;
+        AudioClip petrifySound;
         Vector3 cover, peekSpot;
         readonly List<CoverFinder.Burned> burned = new List<CoverFinder.Burned>();
         float chaseTime;
@@ -416,6 +445,7 @@ namespace BodycamHorror.Enemies
             probe.isTrigger = true;
             probe.direction = 1;
             if (animator && fitBodyToRoom) bodyFit = new ManthingBodyFit(animator, transform, sightMask);
+            BuildHitboxes();
 
             nextHandDrop = Time.time + Random.Range(handDropEvery.x, handDropEvery.y);
             upright = uprightShare;
@@ -423,6 +453,50 @@ namespace BodycamHorror.Enemies
             if (appearOn && !appearOn.HasBurst) { SetVisible(false); appearOn.Burst += Appear; }
             else if (appearOnCall) SetVisible(false);
             else Appear();
+        }
+
+        /// <summary>
+        /// Something for bullets to hit (its root is out of every ray): capsules on the Hitbox layer along the back, the
+        /// head, the arms and legs, riding on the bones, so they follow whatever pose it is in.
+        /// </summary>
+        void BuildHitboxes()
+        {
+            if (!animator) return;
+            int layer = LayerMask.NameToLayer("Hitbox");
+            if (layer < 0) return;
+            Transform B(HumanBodyBones b) => animator.GetBoneTransform(b);
+            void Capsule(Transform a, Transform b, float radius)
+            {
+                if (!a || !b) return;
+                var go = new GameObject("Hitbox_" + a.name) { layer = layer };
+                go.transform.SetParent(a, false);
+                go.transform.rotation = Quaternion.FromToRotation(Vector3.up, b.position - a.position);
+                float s = Mathf.Max(go.transform.lossyScale.x, 1e-3f);   // sizes given in world metres
+                float len = Vector3.Distance(a.position, b.position) / s, r = radius / s;
+                var c = go.AddComponent<CapsuleCollider>();
+                c.direction = 1;
+                c.radius = r;
+                c.height = len + 2f * r;
+                c.center = Vector3.up * (len * 0.5f);
+            }
+            float k = bodySize;   // the model's scale: the radii below are for it at its own size
+            Capsule(B(HumanBodyBones.Hips), B(HumanBodyBones.UpperChest) ? B(HumanBodyBones.UpperChest) : B(HumanBodyBones.Chest), 0.16f * k);
+            Capsule(B(HumanBodyBones.Neck), B(HumanBodyBones.Head), 0.08f * k);
+            if (head)
+            {
+                var go = new GameObject("Hitbox_Head") { layer = layer };
+                go.transform.SetParent(head, false);
+                var c = go.AddComponent<SphereCollider>();
+                c.radius = 0.12f * k / Mathf.Max(go.transform.lossyScale.x, 1e-3f);
+            }
+            foreach (string side in new[] { "Left", "Right" })
+            {
+                HumanBodyBones Bone(string n) => (HumanBodyBones)System.Enum.Parse(typeof(HumanBodyBones), side + n);
+                Capsule(B(Bone("UpperArm")), B(Bone("LowerArm")), 0.06f * k);
+                Capsule(B(Bone("LowerArm")), B(Bone("Hand")), 0.05f * k);
+                Capsule(B(Bone("UpperLeg")), B(Bone("LowerLeg")), 0.08f * k);
+                Capsule(B(Bone("LowerLeg")), B(Bone("Foot")), 0.06f * k);
+            }
         }
 
         void OnEnable() => PlayerStress.Register(this);
@@ -881,7 +955,8 @@ namespace BodycamHorror.Enemies
             float dt = Time.deltaTime;
             if (dt <= 0f || phase == Phase.Killing) return;
 
-            bool scripted = mode == Mode.Scream || mode == Mode.Retreat;   // screaming, bolting: the light does not hold it
+            // screaming, bolting, enraged: the light does not hold it
+            bool scripted = mode == Mode.Scream || mode == Mode.Retreat || mode == Mode.Enraged;
             bool inDoorway = dashThroughDoorways && NavReady() && Doorway.At(transform.position);
             bool seenNow = !scripted && !inDoorway && CheckSeen();
             if (seenNow)
@@ -890,7 +965,11 @@ namespace BodycamHorror.Enemies
                 lastSeen = Time.time;
             }
             seen = !scripted && (seenNow || (!inDoorway && Time.time - lastSeen < unseenDelay));
+            bool torchOn = seen && !LegacyBody && TorchOn(false);
+            if (torchOn && !torchWas && Time.time >= petrifyAt) Petrify();   // the flashlight finds it: it turns to stone, audibly
+            torchWas = torchOn;
             UpdateStare(dt);
+            if (UpdateAggression(dt, torchOn)) return;
             Breathe(dt);
             if (seen)
             {
@@ -898,7 +977,7 @@ namespace BodycamHorror.Enemies
                 // its head slowly rolling, in the dim chemical light; the flashlight on it and it is stone, like anywhere else
                 if (Animated && !LegacyBody)
                 {
-                    if (TorchOn(false)) { if (!held) { LookAtPlayer(); held = true; } }
+                    if (torchOn) { if (!held) { LookAtPlayer(); held = true; } }
                     else { held = false; StandAndStare(dt, 0.75f); }
                 }
                 return;
@@ -910,7 +989,33 @@ namespace BodycamHorror.Enemies
         }
 
         /// <summary>Played as a living thing only right by the player at a safe zone's edge; everywhere else it is a sound in the dark.</summary>
-        bool Animated => LegacyBody || mode == Mode.Prowl;
+        bool Animated => LegacyBody || mode == Mode.Prowl || mode == Mode.Enraged || (mode == Mode.Retreat && fleeing);
+
+        /// <summary>The stone crackle on its body, the moment the flashlight catches it.</summary>
+        void Petrify()
+        {
+            petrifyAt = Time.time + 0.6f;
+            if (!petrifySound) petrifySound = petrifyClip ? petrifyClip : ProceduralAudio.Petrify(Random.Range(0, 1000));
+            Vector3 at = spineBones != null && spineBones.Length > 0 ? spineBones[spineBones.Length - 1].position : transform.position + Vector3.up;
+            Audio.SpatialSound.PlayAt(petrifySound, at, petrifyVolume, 2f, 25f);
+        }
+
+        /// <summary>
+        /// The flashlight held on it with the player out in the open fills its rage; full, it snaps (see <see cref="BeginEnrage"/>).
+        /// Returns true when it just snapped (nothing else this frame).
+        /// </summary>
+        bool UpdateAggression(float dt, bool torchOn)
+        {
+            if (LegacyBody || !NavReady() || (mode != Mode.Hunt && mode != Mode.Ambush) || SafeZone.At(player.transform.position))
+            {
+                aggression = Mathf.Max(0f, aggression - dt);
+                return false;
+            }
+            aggression = torchOn ? aggression + dt : Mathf.Max(0f, aggression - dt * 0.5f);
+            if (aggression < aggressionTime) return false;
+            BeginEnrage();
+            return true;
+        }
 
         /// <summary>Caught in the light: a statue in one of its poses (or, at the edge of the light, it just looks up at them).</summary>
         void OnCaught()
@@ -985,7 +1090,86 @@ namespace BodycamHorror.Enemies
                 case Mode.Ambush:
                     Ambush(dt, inZone, dist);
                     break;
+                case Mode.Enraged:
+                {
+                    if (inZone || Time.time >= modeUntil) { BeginRetreat(false); break; }   // into the light, or it took too long: it breaks off
+                    Howl();
+                    if (Time.time < enrageGo || Time.time < staggerUntil)
+                    {
+                        FaceTowards(playerPos, dt, 1f);   // screaming at them, or jolted by a hit
+                        break;
+                    }
+                    if (dist <= killDistance) { StartCoroutine(Kill()); return; }
+                    charging = true;
+                    Travel(playerPos, enrageSpeed, Gait.Charge, dt);
+                    Stamp(dt, dist, 1f, true);
+                    break;
+                }
             }
+        }
+
+        /// <summary>
+        /// The flashlight held on it out in the open too long: it screams, the flashlight dies, and it comes at the player,
+        /// howling, the light no longer holding it. Only shots stop it (<see cref="hitsToRepel"/>), or the player reaching a safe zone.
+        /// </summary>
+        void BeginEnrage()
+        {
+            mode = Mode.Enraged;
+            aggression = 0f;
+            hits = 0;
+            held = peeking = atPeek = goalSet = false;
+            leanK = 0f;
+            enrageGo = Time.time + enrageWindup;
+            staggerUntil = 0f;
+            modeUntil = Time.time + enrageGiveUp;
+            nextHowl = Time.time + enrageWindup + Random.Range(howlEvery.x, howlEvery.y);
+            repathAt = 0f;
+            if (breathSource) breathSource.Stop();
+            Vector3 mouth = head ? head.position : transform.position + Vector3.up * 2f;
+            if (scream) Audio.SpatialSound.PlayAt(scream, mouth, 1f, 4f, 70f);
+            if (rig) rig.AddTrauma(0.5f);
+            if (torch) torch.Blackout(Random.Range(enrageBlackout.x, enrageBlackout.y));
+        }
+
+        /// <summary>Howls, one after another, while it comes.</summary>
+        void Howl()
+        {
+            if (Time.time < nextHowl) return;
+            nextHowl = Time.time + Random.Range(howlEvery.x, howlEvery.y);
+            AudioClip clip = enrageHowls != null && enrageHowls.Length > 0 ? enrageHowls[Random.Range(0, enrageHowls.Length)] : scream;
+            if (!clip) return;
+            Vector3 mouth = head ? head.position : transform.position + Vector3.up * 2f;
+            var a = Audio.SpatialSound.PlayAt(clip, mouth, Random.Range(0.75f, 1f), 3f, 60f);
+            if (a) a.pitch = Random.Range(1f, 1.15f);   // never lower: the one-shot is timed for its own length
+        }
+
+        /// <summary>
+        /// Shot. Enraged, every hit jolts it to a stop for a moment, and enough of them break it off: it runs, howling.
+        /// Anywhere else a bullet only makes it angrier.
+        /// </summary>
+        public void TakeDamage(in Combat.DamageInfo info)
+        {
+            if (phase != Phase.Active) return;
+            Vector3 mouth = head ? head.position : transform.position + Vector3.up * 2f;
+            if (mode == Mode.Enraged)
+            {
+                hits++;
+                staggerUntil = Time.time + hitStagger;
+                if (hits >= hitsToRepel)
+                {
+                    if (scream) Audio.SpatialSound.PlayAt(scream, mouth, 1f, 4f, 70f);
+                    BeginRetreat(false);
+                }
+                else
+                {
+                    AudioClip clip = enrageHowls != null && enrageHowls.Length > 0 ? enrageHowls[Random.Range(0, enrageHowls.Length)] : scream;
+                    var a = clip ? Audio.SpatialSound.PlayAt(clip, mouth, 0.9f, 3f, 50f) : null;
+                    if (a) a.pitch = 1.2f;
+                    nextHowl = Mathf.Max(nextHowl, Time.time + 0.8f);
+                }
+                return;
+            }
+            if (!LegacyBody && mode != Mode.Scream && mode != Mode.Retreat) aggression += aggressionTime * 0.35f;
         }
 
         // ================================================================== modes
@@ -1025,7 +1209,7 @@ namespace BodycamHorror.Enemies
             stare = 0f;
             if (breathSource) breathSource.Stop();
             Vector3 mouth = head ? head.position : transform.position + Vector3.up * 2f;
-            if (scream) Audio.SpatialSound.PlayAt(scream, mouth, screamVolume, Random.Range(0.85f, 0.95f), 60f);
+            if (scream) Audio.SpatialSound.PlayAt(scream, mouth, screamVolume, 4f, 70f);   // (min distance: loud well out from it)
             if (rig) rig.AddTrauma(0.45f);
         }
 
@@ -1033,11 +1217,15 @@ namespace BodycamHorror.Enemies
         /// Bolts for the dark: the flashlight dies for a couple of seconds, so all there is of it is the stamping going
         /// away fast. From now on it creeps quietly.
         /// </summary>
-        void BeginRetreat()
+        /// <param name="killLight">Stared down: the flashlight blinks and dies, and it goes in the dark. False: beaten off
+        /// (shot, or the player got into the light): it just runs, seen, howling.</param>
+        void BeginRetreat(bool killLight = true)
         {
             mode = Mode.Retreat;
             stealthy = true;
-            if (torch) torch.Blackout(Random.Range(blackoutTime.x, blackoutTime.y), blackoutBlinks);
+            fleeing = !killLight;
+            aggression = 0f;
+            if (torch && killLight) torch.Blackout(Random.Range(blackoutTime.x, blackoutTime.y), blackoutBlinks);
             if (!PickHideout()) PickRandomAway();
             modeUntil = Time.time + 8f;   // never stuck bolting
             repathAt = 0f;
@@ -1047,6 +1235,7 @@ namespace BodycamHorror.Enemies
         void BeginAmbush()
         {
             mode = Mode.Ambush;
+            fleeing = false;
             cover = transform.position;
             peeking = atPeek = false;
             peekAt = Time.time + Random.Range(peekEvery.x, peekEvery.y) * 0.6f;
@@ -1310,10 +1499,28 @@ namespace BodycamHorror.Enemies
                     requirePeekHeight = (headHeights.y + 0.2f) * bodySize,
                 };
                 if (!CoverFinder.Find(req, burned, null, out CoverSpot spot)) return false;
-                bool dark = LightAt(spot.position + Vector3.up * bodySize * 0.6f) < litThreshold * 0.6f;
+                bool dark = LightAt(spot.position + Vector3.up * bodySize * 0.6f) < litThreshold * 0.6f
+                            && !PathPassesPlayer(spot.position);
                 if (dark && HasRoom(spot.position, 0.1f)) { goal = spot.position; goalSet = true; return true; }
                 burned.Add(new CoverFinder.Burned { position = spot.position, until = Time.time + 20f });
             }
+            return false;
+        }
+
+        /// <summary>
+        /// Whether the way there is no good for getting away: no whole way there, or it goes right past the player
+        /// (it never runs off through them). Leaves the way in probePath.
+        /// </summary>
+        bool PathPassesPlayer(Vector3 to)
+        {
+            if (!NavMesh.CalculatePath(NavPoint(transform.position), to, NavMesh.AllAreas, probePath) || probePath.status != NavMeshPathStatus.PathComplete)
+                return true;
+            Vector3 p = player.transform.position;
+            // never closer to them than it already is (shot at close range it starts right by them)
+            float near = Mathf.Min(Mathf.Max(3f, killDistance + 1f), Flat(transform.position - p).magnitude * 0.9f);
+            var c = probePath.corners;
+            for (int i = 1; i < c.Length; i++)
+                if (Sight.DistanceToSegment(Flat(p), Flat(c[i - 1]), Flat(c[i])) < near) return true;
             return false;
         }
 
@@ -1329,11 +1536,19 @@ namespace BodycamHorror.Enemies
                 Vector3 p = (i % 2 == 0 ? from : me) + new Vector3(d.x, 0f, d.y);
                 if (!NavMesh.SamplePosition(p, out NavMeshHit hit, 2f, NavMesh.AllAreas)) continue;
                 if (SafeZone.At(hit.position, 0.5f)) continue;
-                if (!NavMesh.CalculatePath(me, hit.position, NavMesh.AllAreas, probePath) || probePath.status != NavMeshPathStatus.PathComplete) continue;
+                if (PathPassesPlayer(hit.position)) continue;
                 float score = Flat(hit.position - from).magnitude;
                 if (LightAt(hit.position + Vector3.up * bodySize * 0.6f) < litThreshold * 0.6f) score += 4f;
                 if (cam && CoverFinder.IsHidden(hit.position, cam.transform.position, headHeights.y * bodySize)) score += 6f;
                 if (score > bestScore) { bestScore = score; goal = hit.position; }
+            }
+            // nothing that does not go past them: straight away from them, as far as the floor goes
+            if (bestScore == float.MinValue)
+            {
+                Vector3 away = Flat(me - from).normalized;
+                for (float d = retreatDistance.y; d >= 2f; d -= 2f)
+                    if (NavMesh.SamplePosition(me + away * d, out NavMeshHit hit, 1.5f, NavMesh.AllAreas)
+                        && !NavMesh.Raycast(me, hit.position, out _, NavMesh.AllAreas)) { goal = hit.position; break; }
             }
             goalSet = true;
         }
@@ -1729,7 +1944,7 @@ namespace BodycamHorror.Enemies
         public float FearFor(Vector3 eye)
         {
             if (phase == Phase.Waiting) return 0f;
-            if (phase == Phase.Killing || mode == Mode.Scream) return 1f;
+            if (phase == Phase.Killing || mode == Mode.Scream || mode == Mode.Enraged) return 1f;
             float d = Vector3.Distance(eye, transform.position + Vector3.up * 1.4f);
             float close = Mathf.InverseLerp(fearFar, fearNear, d);
             if (mode == Mode.Ambush) return Mathf.Clamp01(0.25f + 0.4f * close);   // gone quiet: dread, not panic

@@ -95,6 +95,39 @@ namespace BodycamHorror.Weapons
             return Finish("Thud", d, 0.9f, 1.4f);
         }
 
+        /// <summary>
+        /// Turning to stone: a low thump, then a crackling of stone and bone that thins out over most of a second, over a
+        /// dry grinding rumble that sinks in pitch (the light monster caught by the flashlight).
+        /// </summary>
+        public static AudioClip Petrify(int seed)
+        {
+            const float length = 0.95f;
+            int n = (int)(Rate * length);
+            var d = new float[n];
+            var rng = new System.Random(seed);
+            float lp = 0f, lp2 = 0f, crack = 0f, crackLp = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                // grinding: low-passed noise, its rumble slowing and dropping
+                float cut = Mathf.Lerp(0.05f, 0.012f, t / length);
+                lp += (noise - lp) * cut;
+                lp2 += (lp - lp2) * cut;
+                float grind = lp2 * (0.6f + 0.4f * Mathf.Sin(2f * Mathf.PI * (38f - 20f * t) * t)) * Mathf.Exp(-t * 2.2f) * 9f;
+                // crackles: sharp ticks, dense at first and thinning out
+                float density = 0.012f * Mathf.Exp(-t * 3.5f) + 0.0006f;
+                if (rng.NextDouble() < density) crack = (float)(rng.NextDouble() * 0.7 + 0.3) * (rng.NextDouble() < 0.5 ? -1f : 1f);
+                crack *= 0.93f;
+                crackLp += (crack * noise - crackLp) * 0.45f;
+                float thump = Mathf.Sin(2f * Mathf.PI * (70f - 60f * t) * t) * Mathf.Exp(-t * 18f);
+                d[i] = thump * 1.1f + grind + crackLp * 1.6f;
+            }
+            // a short fade at the end
+            for (int i = n - 2000; i < n; i++) d[i] *= (n - i) / 2000f;
+            return Finish("Petrify", d, 0.95f, 1.3f);
+        }
+
         /// <summary>Wet, rattling growl of an infected (seed varies the voice).</summary>
         public static AudioClip InfectedGrowl(int seed)
         {

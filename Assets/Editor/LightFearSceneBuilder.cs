@@ -1447,6 +1447,11 @@ namespace BodycamHorror.EditorTools
             thing.idleClip = ManthingSetup.Clip("idle standing");
             thing.screechClip = ManthingSetup.Clip("screech");
             thing.freezeClips = new AnimationClip[0];
+            thing.enrageHowls = new[]
+            {
+                AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_scream.wav"),
+                AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/distorted_screech.mp3"),
+            };
             thing.poses = Manthing.DefaultPoses(thing.runClip, thing.walkClip, thing.crawlRunClip, thing.searchClip, thing.idleClip);
             EditorUtility.SetDirty(thing);
         }

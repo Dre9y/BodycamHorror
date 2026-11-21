@@ -122,7 +122,13 @@ namespace BodycamHorror.Enemies
         [Tooltip("Ground covered by one cycle of the creep and of the charge (m, at the model's own scale).")]
         public Vector2 strides = new Vector2(0.8f, 1.9f);
         [Tooltip("The head snaps to a new tilt every so often while it moves (s) ...")]
-        public Vector2 twitchEvery = new Vector2(0.35f, 1.6f);
+        public Vector2 twitchEvery = new Vector2(1.2f, 3f);
+        [Tooltip("How fast the head turns to a new tilt (deg/s): low = a slow, deliberate turn.")]
+        public float twitchSpeed = 70f;
+        [Tooltip("Standing at the edge of a safe zone (in its dim light) its head slowly rolls this far (deg) ...")]
+        public float headSwayAngle = 22f;
+        [Tooltip("... over this long (s) one way and back.")]
+        public float headSwayPeriod = 5.5f;
         [Tooltip("... by up to this much (deg).")]
         public float twitchAngle = 32f;
 
@@ -174,7 +180,7 @@ namespace BodycamHorror.Enemies
 
         [Header("Safe zones: prowling round the edge")]
         [Tooltip("How far outside the zone's edge it prowls (m).")]
-        public Vector2 prowlStandoff = new Vector2(0.7f, 4f);
+        public Vector2 prowlStandoff = new Vector2(0.2f, 2.8f);
         [Tooltip("How far round the zone it goes in one move (deg either way).")]
         public float prowlArc = 110f;
         [Tooltip("Stands still between moves (s).")]
@@ -329,7 +335,8 @@ namespace BodycamHorror.Enemies
         Vector3 goal;
         bool goalSet, charging, stealthy;
         float modeUntil, pauseUntil, peekAt, peekUntil, reactAt = -1f, ambushTall = 0.5f;
-        bool peeking, atPeek;
+        bool peeking, atPeek, held;
+        float swayTime;
         Vector3 cover, peekSpot;
         readonly List<CoverFinder.Burned> burned = new List<CoverFinder.Burned>();
         float chaseTime;
@@ -679,7 +686,7 @@ namespace BodycamHorror.Enemies
                                                     Random.Range(-1f, 1f) * twitchAngle);
                 }
                 if (!moving) twitchTarget = Quaternion.identity;
-                twitch = Quaternion.RotateTowards(twitch, twitchTarget, dt * (moving ? 900f : 200f));   // a snap, not a turn
+                twitch = Quaternion.RotateTowards(twitch, twitchTarget, dt * (moving ? twitchSpeed : twitchSpeed * 0.5f));
                 Quaternion frame = Quaternion.LookRotation(head.rotation * headFace, head.rotation * headUp);
                 head.rotation = frame * twitch * Quaternion.Inverse(frame) * head.rotation;
             }
@@ -887,10 +894,16 @@ namespace BodycamHorror.Enemies
             Breathe(dt);
             if (seen)
             {
-                // the one time it is seen alive: at the edge of the light, close to the player, it stands and stares
-                if (Animated) StandAndStare(dt, 0.75f);
+                // the one time it is seen alive: at the edge of the light, close to the player, it stands and stares,
+                // its head slowly rolling, in the dim chemical light; the flashlight on it and it is stone, like anywhere else
+                if (Animated && !LegacyBody)
+                {
+                    if (TorchOn(false)) { if (!held) { LookAtPlayer(); held = true; } }
+                    else { held = false; StandAndStare(dt, 0.75f); }
+                }
                 return;
             }
+            held = false;
 
             if (!NavReady()) { Direct(dt); return; }
             Tick(dt);
@@ -1169,7 +1182,13 @@ namespace BodycamHorror.Enemies
         /// The flashlight on it: switched on, some part of it near the middle of the screen with nothing in the way, and
         /// that part lit by the flashlight itself (the chemical light or a lamp on it does not count).
         /// </summary>
-        bool LookedAt()
+        bool LookedAt() => TorchOn(true);
+
+        /// <summary>
+        /// The flashlight's own light on some part of it that is on screen with nothing in the way;
+        /// <paramref name="centre"/>: that part also near the middle of the screen (being stared at).
+        /// </summary>
+        bool TorchOn(bool centre)
         {
             if (!cam || samplePoints == null || !torch || !torch.IsOn || torch.InBlackout) return false;
             if (torchLights == null || Time.time >= torchLightsRefresh)
@@ -1182,7 +1201,7 @@ namespace BodycamHorror.Enemies
             {
                 Vector3 v = cam.WorldToViewportPoint(t.position);
                 if (v.z <= 0.05f) continue;
-                if (new Vector2(v.x - 0.5f, v.y - 0.5f).magnitude > stareCone) continue;
+                if (centre ? new Vector2(v.x - 0.5f, v.y - 0.5f).magnitude > stareCone : v.x < -0.02f || v.x > 1.02f || v.y < -0.02f || v.y > 1.02f) continue;
                 if (Physics.Linecast(eye, t.position, sightMask, QueryTriggerInteraction.Ignore)) continue;
                 if (LightAt(t.position, torchLights, torchThreshold) >= torchThreshold) return true;
             }
@@ -1200,6 +1219,25 @@ namespace BodycamHorror.Enemies
             ResolveBody();
             FitBody();
             LookAtPlayer();
+            HeadSway(dt);
+        }
+
+        /// <summary>
+        /// Standing at the edge of the light: the head, turned to the player, slowly rolls over to one side and back and
+        /// nods, never quite in time (two slow waves and a drift).
+        /// </summary>
+        void HeadSway(float dt)
+        {
+            if (!head || headSwayAngle <= 0f) return;
+            swayTime += dt;
+            float p = Mathf.Max(headSwayPeriod, 0.5f);
+            float roll = Mathf.Sin(swayTime * Mathf.PI * 2f / p) * headSwayAngle
+                       + (Mathf.PerlinNoise(swayTime * 0.15f, 3.1f) - 0.5f) * headSwayAngle * 0.8f;
+            float nod = Mathf.Sin(swayTime * Mathf.PI * 2f / (p * 1.63f) + 1.3f) * headSwayAngle * 0.35f;
+            Vector3 face = head.rotation * headFace;
+            Vector3 side = Vector3.Cross(Vector3.up, face);
+            if (side.sqrMagnitude < 1e-4f) side = transform.right;
+            head.rotation = Quaternion.AngleAxis(roll, face) * Quaternion.AngleAxis(nod, side.normalized) * head.rotation;
         }
 
         // ---- picking spots
@@ -1223,7 +1261,7 @@ namespace BodycamHorror.Enemies
                 Vector3 p = c + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * r;
                 if (!NavMesh.SamplePosition(p, out NavMeshHit hit, 1.2f, NavMesh.AllAreas)) continue;
                 Vector3 q = hit.position;
-                if (zone.Contains(q, 0.35f)) continue;
+                if (zone.Contains(q, 0.15f)) continue;
                 if (Doorway.At(q, 0.3f)) continue;     // never stands in a door frame
                 if (!HasRoom(q)) continue;
                 if (!NavMesh.CalculatePath(me, q, NavMesh.AllAreas, probePath) || probePath.status != NavMeshPathStatus.PathComplete) continue;

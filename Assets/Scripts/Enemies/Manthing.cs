@@ -2183,7 +2183,9 @@ namespace BodycamHorror.Enemies
 
             float t = 0f;
             Vector3 faceAt = eye.position + flat * 0.7f;
-            while (t < screamTime)
+            // in the face for as long as it screams (the fade to black takes the last of it)
+            float hold = Mathf.Max(screamTime, faceScream ? faceScream.length - fadeTime : 0f);
+            while (t < hold)
             {
                 t += Time.deltaTime;
                 if (iScreech >= 0) Show(iScreech, 0.4f + t);

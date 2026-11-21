@@ -297,10 +297,18 @@ namespace BodycamHorror.Enemies
         [Tooltip("Within this distance (m) every step jolts the camera a little.")]
         public float joltRange = 6f;
 
-        [Header("Fear")]
-        [Tooltip("Fear it holds from this far away (m) ...")]
+        [Header("Fear (from looking at it)")]
+        [Tooltip("The most fear looking at it can bring (0-1).")]
+        [Range(0f, 1f)] public float lookFearMax = 0.95f;
+        [Tooltip("Looked at this long (s), the fear is about two thirds of the way up; twice as long, nearly all of it.")]
+        public float lookFearTime = 3f;
+        [Tooltip("Looking away, the time looked at runs back at this rate (1 = as fast as it built up).")]
+        public float lookFearEbb = 1.2f;
+        [Tooltip("How near the middle of the screen (share of the screen from the centre) counts as looking at it.")]
+        [Range(0.05f, 0.7f)] public float lookFearCone = 0.35f;
+        [Tooltip("Its steps quicken from this far away (m) ...")]
         public float fearFar = 16f;
-        [Tooltip("... climbing to the most at this distance.")]
+        [Tooltip("... to the quickest at this distance.")]
         public float fearNear = 1.5f;
 
         [Header("The end")]
@@ -380,6 +388,7 @@ namespace BodycamHorror.Enemies
         float nextJerk, hitchUntil;
         bool bodyHeld;
         Quaternion headNow;
+        float lookTime;
         float restUntil, stuckFor, stuckCheckAt;
         Vector3 stuckFrom;
         AudioClip petrifySound;
@@ -1008,6 +1017,7 @@ namespace BodycamHorror.Enemies
             bool torchOn = seen && !LegacyBody && TorchOn(false);
             if (torchOn && !torchWas && Time.time >= petrifyAt) Petrify();   // the flashlight finds it: it turns to stone, audibly
             torchWas = torchOn;
+            UpdateLookTime(dt);
             UpdateStare(dt);
             if (UpdateAggression(dt, torchOn)) return;
             Breathe(dt);
@@ -2095,16 +2105,42 @@ namespace BodycamHorror.Enemies
 
         // ================================================================== fear
 
+        /// <summary>
+        /// Fear comes from looking at it, not from how near it is: the longer the player holds it in their eyes, the
+        /// higher it climbs (and it ebbs once they look away). Its scream, its rage and the end are full fright.
+        /// </summary>
         public float FearFor(Vector3 eye)
         {
             if (phase == Phase.Waiting) return 0f;
             if (phase == Phase.Killing || mode == Mode.Scream || mode == Mode.Enraged) return 1f;
-            float d = Vector3.Distance(eye, transform.position + Vector3.up * 1.4f);
-            float close = Mathf.InverseLerp(fearFar, fearNear, d);
-            if (mode == Mode.Ambush) return Mathf.Clamp01(0.25f + 0.4f * close);   // gone quiet: dread, not panic
-            float urgency = charging ? 1f : Mathf.Clamp01(chaseTime / Mathf.Max(rampTime, 0.1f));
-            // being in the dark with it is frightening already; closer, and charging, more so
-            return Mathf.Clamp01(0.35f + 0.55f * close + 0.15f * urgency);
+            return lookFearMax * (1f - Mathf.Exp(-lookTime / Mathf.Max(lookFearTime, 0.1f)));
+        }
+
+        /// <summary>How long the player has been looking at it (grows while they do, ebbs while they do not).</summary>
+        void UpdateLookTime(float dt)
+        {
+            bool looking = phase == Phase.Active && WatchedByPlayer();
+            // (capped where the fear is near its top, so looking away brings it down without a long wait first)
+            lookTime = looking ? Mathf.Min(lookTime + dt, lookFearTime * 2.5f) : Mathf.Max(0f, lookTime - dt * lookFearEbb);
+        }
+
+        /// <summary>
+        /// The player has it in their eyes: some part of it near the middle of the screen, nothing in the way, and
+        /// something to see it by (the flashlight or a lamp on it, or the chemical light at a safe zone's edge).
+        /// </summary>
+        bool WatchedByPlayer()
+        {
+            if (!cam || samplePoints == null) return false;
+            if (!seen && mode != Mode.Prowl) return false;
+            Vector3 eye = cam.transform.position;
+            foreach (Transform t in samplePoints)
+            {
+                Vector3 v = cam.WorldToViewportPoint(t.position);
+                if (v.z <= 0.05f || new Vector2(v.x - 0.5f, v.y - 0.5f).magnitude > lookFearCone) continue;
+                if (Physics.Linecast(eye, t.position, sightMask, QueryTriggerInteraction.Ignore)) continue;
+                return true;
+            }
+            return false;
         }
 
         // ================================================================== the end

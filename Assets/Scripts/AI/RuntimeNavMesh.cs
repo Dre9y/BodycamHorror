@@ -35,6 +35,9 @@ namespace BodycamHorror.AI
             var markups = new List<NavMeshBuildMarkup>();
             foreach (var m in FindObjectsByType<MonsterBrain>(FindObjectsInactive.Include))
                 markups.Add(new NavMeshBuildMarkup { root = m.transform, overrideIgnore = true, ignoreFromBuild = true, applyToChildren = true });
+            // the light monster neither: baked in, its body would cut a hole round it and strand it there
+            foreach (var m in FindObjectsByType<BodycamHorror.Enemies.Manthing>(FindObjectsInactive.Include))
+                markups.Add(new NavMeshBuildMarkup { root = m.transform, overrideIgnore = true, ignoreFromBuild = true, applyToChildren = true });
 
             // doors the monsters can open are not walls to them: the way through stays on the mesh
             foreach (var d in FindObjectsByType<BodycamHorror.Environment.Door>(FindObjectsInactive.Include))
@@ -45,6 +48,9 @@ namespace BodycamHorror.AI
             NavMeshBuilder.CollectSources(bounds, layers, NavMeshCollectGeometry.PhysicsColliders, 0, markups, sources);
             // loose physics props would leave holes that move away
             sources.RemoveAll(s => s.component && s.component.GetComponentInParent<Rigidbody>() is Rigidbody rb && !rb.isKinematic);
+            // hitboxes ride on bodies that move: never walls
+            int hitbox = LayerMask.NameToLayer("Hitbox");
+            if (hitbox >= 0) sources.RemoveAll(s => s.component && s.component.gameObject.layer == hitbox);
 
             NavMeshBuildSettings settings = NavMesh.GetSettingsByID(agentTypeId);
             settings.agentRadius = agentRadius;

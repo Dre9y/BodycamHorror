@@ -230,6 +230,8 @@ namespace BodycamHorror.Enemies
         public int hitsToRepel = 3;
         [Tooltip("Each hit stops it for this long (s).")]
         public float hitStagger = 0.45f;
+        [Tooltip("Shot off, it runs in the dark: the flashlight dies for this long (s) as it turns.")]
+        public float repelBlackout = 2f;
         [Tooltip("Its howls while it comes, one after another. Empty: the scream.")]
         public AudioClip[] enrageHowls;
         [Tooltip("Pause between howls (s).")]
@@ -446,6 +448,8 @@ namespace BodycamHorror.Enemies
             probe.direction = 1;
             if (animator && fitBodyToRoom) bodyFit = new ManthingBodyFit(animator, transform, sightMask);
             BuildHitboxes();
+            path = new NavMeshPath();
+            probePath = new NavMeshPath();
 
             nextHandDrop = Time.time + Random.Range(handDropEvery.x, handDropEvery.y);
             upright = uprightShare;
@@ -1159,6 +1163,8 @@ namespace BodycamHorror.Enemies
                 {
                     if (scream) Audio.SpatialSound.PlayAt(scream, mouth, 1f, 4f, 70f);
                     BeginRetreat(false);
+                    // the light goes as it turns: where it runs to is only heard
+                    if (torch && repelBlackout > 0f) torch.Blackout(repelBlackout);
                 }
                 else
                 {

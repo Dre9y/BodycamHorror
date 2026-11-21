@@ -14,8 +14,8 @@ creature_moan  (Assets/Resources/Audio/Monster/creature_moan.wav) "Creature Moan
                https://freesound.org/s/445196/ (added as downloaded; licence not checked here - see the Freesound page).
                Played by MonsterMoan on Infected, Manthing and CryingHead: rare, one monster at a time.
 
-monster_screamer  the scream from screamer.mp4 (added by the project owner): sound track decoded, mono, pitched up 2 semitones,
-                  its held middle stretched (overlap-add) to 2.4 s, a little saturation, long fade out. Played in the
+monster_screamer  the scream from screamer.mp4 (added by the project owner): sound track decoded, mono, at its own pitch,
+                  its held middle stretched (overlap-add) to 2.4 s, heavy saturation (louder), long fade out. Played in the
                   player's face at the end (Manthing.killScream).
 
 monster_petrify   the first sound in rocks-moving.mp3 (added by the project owner): 1.04-1.50 s, mono,

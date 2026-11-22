@@ -12176,8 +12176,8 @@ MonoBehaviour:
   hitStagger: 0.45
   repelBlackout: 2
   enrageHowls:
-  - {fileID: 8300000, guid: 5707389f09153974191e93e3c4ce47d2, type: 3}
-  - {fileID: 8300000, guid: 10d7bf71c146b9345bab3f945b61e654, type: 3}
+  - {fileID: 8300000, guid: 198b94714d705374dbd01dec49f63094, type: 3}
+  enrageScream: {fileID: 8300000, guid: 198b94714d705374dbd01dec49f63094, type: 3}
   howlEvery: {x: 0.9, y: 1.8}
   enrageGiveUp: 14
   peekEvery: {x: 2.5, y: 6.5}
@@ -12229,7 +12229,7 @@ MonoBehaviour:
   fearNear: 1.5
   killDistance: 2.07
   scream: {fileID: 8300000, guid: 5707389f09153974191e93e3c4ce47d2, type: 3}
-  killScream: {fileID: 8300000, guid: 198b94714d705374dbd01dec49f63094, type: 3}
+  killScream: {fileID: 0}
   screamTime: 1.1
   fadeTime: 0.6
 --- !u!4 &197575997

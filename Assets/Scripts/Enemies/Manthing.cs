@@ -246,6 +246,8 @@ namespace BodycamHorror.Enemies
         public float repelBlackout = 2f;
         [Tooltip("Its howls while it comes, one after another. Empty: the scream.")]
         public AudioClip[] enrageHowls;
+        [Tooltip("The scream when it snaps and comes. Empty: the scream.")]
+        public AudioClip enrageScream;
         [Tooltip("Pause between howls (s).")]
         public Vector2 howlEvery = new Vector2(0.9f, 1.8f);
         [Tooltip("Not reached in this long (s) and it breaks off anyway.")]
@@ -1193,7 +1195,9 @@ namespace BodycamHorror.Enemies
             repathAt = 0f;
             if (breathSource) breathSource.Stop();
             Vector3 mouth = head ? head.position : transform.position + Vector3.up * 2f;
-            if (scream) Audio.SpatialSound.PlayAt(scream, mouth, 1f, 4f, 70f);
+            AudioClip snap = enrageScream ? enrageScream : scream;
+            if (snap) Audio.SpatialSound.PlayAt(snap, mouth, 1f, 4f, 70f);
+            nextHowl = Mathf.Max(nextHowl, Time.time + (snap ? snap.length * 0.9f : 0f));   // no howl on top of it
             if (rig) rig.AddTrauma(0.5f);
             // the light is dead until it is shot off (or breaks off): it is fought in the dark, by its howls and the muzzle flash
             if (torch) torch.Blackout(enrageGiveUp + 5f);
@@ -1207,8 +1211,11 @@ namespace BodycamHorror.Enemies
             AudioClip clip = enrageHowls != null && enrageHowls.Length > 0 ? enrageHowls[Random.Range(0, enrageHowls.Length)] : scream;
             if (!clip) return;
             Vector3 mouth = head ? head.position : transform.position + Vector3.up * 2f;
-            var a = Audio.SpatialSound.PlayAt(clip, mouth, Random.Range(0.75f, 1f), 3f, 60f);
-            if (a) a.pitch = Random.Range(1f, 1.15f);   // never lower: the one-shot is timed for its own length
+            var a = Audio.SpatialSound.PlayAt(clip, mouth, Random.Range(0.85f, 1f), 3f, 60f);
+            // short howls vary a little in pitch (never lower: the one-shot is timed for its own length); a long scream
+            // keeps its own, and the next waits until it is nearly over
+            if (a && clip.length < 1.5f) a.pitch = Random.Range(1f, 1.15f);
+            nextHowl = Mathf.Max(nextHowl, Time.time + clip.length * 0.9f);
         }
 
         /// <summary>
@@ -1232,7 +1239,7 @@ namespace BodycamHorror.Enemies
                 }
                 else
                 {
-                    AudioClip clip = enrageHowls != null && enrageHowls.Length > 0 ? enrageHowls[Random.Range(0, enrageHowls.Length)] : scream;
+                    AudioClip clip = scream;   // a short yelp, not the long howl it comes with
                     var a = clip ? Audio.SpatialSound.PlayAt(clip, mouth, 0.9f, 3f, 50f) : null;
                     if (a) a.pitch = 1.2f;
                     nextHowl = Mathf.Max(nextHowl, Time.time + 0.8f);

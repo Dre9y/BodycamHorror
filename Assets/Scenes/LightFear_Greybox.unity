@@ -12175,8 +12175,7 @@ MonoBehaviour:
   hitsToRepel: 3
   hitStagger: 0.45
   repelBlackout: 2
-  enrageHowls:
-  - {fileID: 8300000, guid: 198b94714d705374dbd01dec49f63094, type: 3}
+  enrageHowls: []
   enrageScream: {fileID: 8300000, guid: 198b94714d705374dbd01dec49f63094, type: 3}
   howlEvery: {x: 0.9, y: 1.8}
   enrageGiveUp: 14

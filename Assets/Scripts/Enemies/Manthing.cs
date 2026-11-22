@@ -244,7 +244,7 @@ namespace BodycamHorror.Enemies
         public float hitStagger = 0.45f;
         [Tooltip("Shot off, it runs in the dark: the flashlight dies for this long (s) as it turns.")]
         public float repelBlackout = 2f;
-        [Tooltip("Its howls while it comes, one after another. Empty: the scream.")]
+        [Tooltip("Its howls while it comes, one after another. Empty: none (only the scream when it snaps).")]
         public AudioClip[] enrageHowls;
         [Tooltip("The scream when it snaps and comes. Empty: the scream.")]
         public AudioClip enrageScream;
@@ -1208,7 +1208,8 @@ namespace BodycamHorror.Enemies
         {
             if (Time.time < nextHowl) return;
             nextHowl = Time.time + Random.Range(howlEvery.x, howlEvery.y);
-            AudioClip clip = enrageHowls != null && enrageHowls.Length > 0 ? enrageHowls[Random.Range(0, enrageHowls.Length)] : scream;
+            if (enrageHowls == null || enrageHowls.Length == 0) return;   // none set: it comes silent but for its steps
+            AudioClip clip = enrageHowls[Random.Range(0, enrageHowls.Length)];
             if (!clip) return;
             Vector3 mouth = head ? head.position : transform.position + Vector3.up * 2f;
             var a = Audio.SpatialSound.PlayAt(clip, mouth, Random.Range(0.85f, 1f), 3f, 60f);

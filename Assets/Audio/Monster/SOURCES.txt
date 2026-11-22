@@ -16,7 +16,7 @@ creature_moan  (Assets/Resources/Audio/Monster/creature_moan.wav) "Creature Moan
 
 monster_screamer  the scream from screamer.mp4 (added by the project owner): sound track decoded, mono, at its own pitch,
                   its held middle stretched (overlap-add) to 2.4 s, heavy saturation (louder), long fade out. Played in the
-                  its rage: when it snaps and over and over as it comes (Manthing.enrageScream, enrageHowls).
+                  its rage, once, when it snaps (Manthing.enrageScream).
 
 monster_petrify   the first sound in rocks-moving.mp3 (added by the project owner): 1.04-1.50 s, mono,
                   normalised. Played when the flashlight catches the light monster (Manthing.petrifyClip).

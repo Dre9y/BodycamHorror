@@ -20,3 +20,14 @@ monster_screamer  the scream from screamer.mp4 (added by the project owner): sou
 
 monster_petrify   the first sound in rocks-moving.mp3 (added by the project owner): 1.04-1.50 s, mono,
                   normalised. Played when the flashlight catches the light monster (Manthing.petrifyClip).
+
+monster_rampage_loop  the roar from RAMPAGE.mp4 (added by the project owner): sound track decoded, mono, the steady
+                      0.75-9.0 s, played ~1.8 semitones lower (resampled x10/9), soft-clipped (tanh, part clean under it),
+                      high-passed at 45 Hz, the last 0.4 s crossfaded over the start for a seamless loop, normalised.
+                      Looped from its head while it runs at the player in its rage (Manthing.enrageLoop).
+
+monster_rampage_wail  also from RAMPAGE.mp4: its 0.75-4.5 s joined (0.3 s crossfade) to its own fade-out (8.7-12.8 s),
+                      mono, ~3.9 semitones lower (resampled x5/4), layered with itself an octave down (low-passed) and
+                      a hair flat (phase-vocoder shifts), a 23 Hz flutter through it, soft-clipped, a short dark room
+                      tail, high-passed at 40 Hz, faded to nothing. Played once from its head as it runs off out of its
+                      rage (Manthing.retreatWail).

@@ -54,6 +54,8 @@ namespace BodycamHorror.Environment
         /// <summary>0 = untouched, 1 = shut.</summary>
         public float Progress { get; private set; }
         public bool IsClosed { get; private set; }
+        /// <summary>Being turned right now.</summary>
+        public bool IsTurning { get; private set; }
         /// <summary>Can still be turned: shows the prompt.</summary>
         public bool CanUse => !IsClosed && isActiveAndEnabled;
         public Vector3 PromptPoint => wheel ? wheel.TransformPoint(promptOffset) : transform.position;
@@ -105,6 +107,7 @@ namespace BodycamHorror.Environment
             if (dt <= 0f) return;
 
             bool turning = !IsClosed && (latched || Time.time <= heldUntil);
+            IsTurning = turning;
             if (turning)
             {
                 Progress = Mathf.Min(1f, Progress + dt / Mathf.Max(turnTime, 0.05f));

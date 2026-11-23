@@ -50,6 +50,11 @@ namespace BodycamHorror.Environment
         [Header("Emergency power")]
         [Tooltip("The crank (a Valve): dead until the fuse is in.")]
         public Valve powerCrank;
+        [Tooltip("The fuse box the fuse goes into (used by the player). Without one, walking up to the crank with the fuse puts it in.")]
+        public UseSpot fuseBox;
+        [Tooltip("Shown in the fuse box once it is in (off until then).")]
+        public GameObject fuseInBox;
+        public AudioClip fuseInClip;
         public string fuseKey = "fuse";
         [Tooltip("Shutters that go up when the fuse is taken (the rooms open one stage at a time).")]
         public SlidingGate[] openOnFuse;
@@ -57,6 +62,16 @@ namespace BodycamHorror.Environment
         public GameObject emergencyLights;
         public SlidingGate exitGate;
         public AudioClip powerOnClip;
+        [Tooltip("The power on, the monster is gone from the level (until the shotgun is taken).")]
+        public bool vanishOnPower = true;
+
+        [Header("The shotgun and the last attack")]
+        [Tooltip("The shotgun in the way out. Taken (after the power is on), the monster comes back at attackFrom and runs at the player, screaming.")]
+        public Weapons.WeaponPickup shotgun;
+        [Tooltip("Where it comes back: the far side of the hall from the way out.")]
+        public Vector3 attackFrom = new Vector3(18f, 0f, 4.8f);
+        [Tooltip("From taking the shotgun to it appearing (s).")]
+        public float attackDelay = 0.6f;
 
         [Header("The way out")]
         public Vector3 exitCenter;
@@ -78,9 +93,55 @@ namespace BodycamHorror.Environment
                 powerCrank.closed.AddListener(PowerOn);
             }
             KeyPickup.Taken += OnKeyTaken;
+            Weapons.WeaponPickup.Taken += OnWeaponTaken;
+            // the shotgun is found in the way out: until then the player does not have it
+            if (shotgun && player)
+            {
+                var shooting = player.GetComponentInChildren<Weapons.PlayerShooting>(true);
+                if (shooting) shooting.Withhold(shooting.FindWeapon<Weapons.Shotgun>());
+            }
+            if (fuseBox) fuseBox.Used += OnFuseBox;
+            if (fuseInBox) fuseInBox.SetActive(false);
         }
 
-        void OnDestroy() => KeyPickup.Taken -= OnKeyTaken;
+        void OnDestroy()
+        {
+            KeyPickup.Taken -= OnKeyTaken;
+            Weapons.WeaponPickup.Taken -= OnWeaponTaken;
+            if (fuseBox) fuseBox.Used -= OnFuseBox;
+        }
+
+        bool attacked;
+
+        /// <summary>The shotgun taken in the way out: a beat, then the monster is back across the hall and coming, screaming.</summary>
+        void OnWeaponTaken(Weapons.WeaponPickup pickup, GameObject who)
+        {
+            if (attacked || !manthing || pickup != shotgun) return;
+            attacked = true;
+            StartCoroutine(Attack());
+        }
+
+        IEnumerator Attack()
+        {
+            yield return new WaitForSeconds(attackDelay);
+            manthing.AttackFrom(attackFrom);
+        }
+
+        /// <summary>The fuse box used: with the fuse on the ring it goes in and the crank comes alive.</summary>
+        void OnFuseBox(UseSpot box, GameObject who)
+        {
+            if (!ring) return;
+            if (!ring.Has(fuseKey)) { ring.Say("Пустое гнездо: нужен предохранитель"); return; }
+            ring.UseUp(fuseKey);
+            box.enabled = false;
+            if (fuseInBox) fuseInBox.SetActive(true);
+            if (powerCrank) powerCrank.enabled = true;
+            SpatialSound.PlayAt(fuseInClip ? fuseInClip : (generatedClick ? generatedClick : (generatedClick = BodycamHorror.Weapons.ProceduralAudio.DoubleClick(0.06f, 1800f, 0.6f))),
+                                box.PromptPoint, 0.8f, 1f, 20f);
+            ring.Say("Предохранитель вставлен. Крути ручку");
+        }
+
+        static AudioClip generatedClick;
 
         void OnKeyTaken(KeyPickup key, GameObject who)
         {
@@ -107,13 +168,14 @@ namespace BodycamHorror.Environment
             return Mathf.Abs(d.x) <= h.x && Mathf.Abs(d.y) <= h.y && Mathf.Abs(d.z) <= h.z;
         }
 
-        /// <summary>The crank is dead without the fuse; walking up to it with one puts it in.</summary>
+        /// <summary>The crank is dead without the fuse: walking up to it says so (or, with no fuse box, puts the fuse in).</summary>
         void Crank(Vector3 p)
         {
             bool near = Vector3.Distance(p, powerCrank.transform.position) < 2.5f;
             if (near && !nearCrank && ring)
             {
                 if (powerCrank.enabled) { }
+                else if (fuseBox) ring.Say("Щит мёртв: в щитке нет предохранителя");
                 else if (ring.Has(fuseKey))
                 {
                     ring.UseUp(fuseKey);
@@ -333,6 +395,53 @@ namespace BodycamHorror.Environment
             }
         }
 
+        /// <summary>
+        /// Debug skip (DebugMenu, Level): straight to the moment before the shotgun. The level as it is by then, without
+        /// its sounds: the way in shut, every lamp dead, the place silent, the fuse in and the power on (red lamps, the
+        /// way out open, the monster gone), and the player standing in the way out with the shotgun in front of them.
+        /// </summary>
+        public void SkipToShotgun()
+        {
+            if (!player) return;
+            StopAllCoroutines();
+            started = true;
+            if (entryDoor)
+            {
+                entryDoor.Close();
+                entryDoor.locked = true;
+                entryDoor.keyId = "";
+                entryDoor.enemiesCanOpen = false;
+            }
+            if (levelLights)
+            {
+                foreach (var b in levelLights.GetComponentsInChildren<LightFlicker>(true)) b.enabled = false;
+                foreach (Transform lamp in levelLights)
+                {
+                    foreach (var r in lamp.GetComponentsInChildren<Renderer>(true)) if (r.name == "Bulb") r.enabled = false;
+                    foreach (var l in lamp.GetComponentsInChildren<Light>(true)) l.enabled = false;
+                    foreach (var h in lamp.GetComponentsInChildren<LightHaze>(true))
+                    {
+                        foreach (var r in h.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+                        h.enabled = false;
+                    }
+                }
+                SetGlow(levelLights.GetComponentsInChildren<Renderer>(true), false);
+            }
+            KillAmbience();
+            if (openOnFuse != null) foreach (SlidingGate g in openOnFuse) if (g) g.Open();
+            if (ring && ring.Has(fuseKey)) ring.UseUp(fuseKey);
+            if (fuseBox) fuseBox.enabled = false;
+            if (fuseInBox) fuseInBox.SetActive(true);
+            if (manthing) manthing.Vanish();
+            PowerOn();
+            // in the way out, the shotgun on the floor a step ahead
+            Vector3 at = shotgun ? shotgun.transform.position - Vector3.forward * 1.3f : exitCenter - Vector3.forward * 2.5f;
+            at.y = player.transform.position.y;
+            player.Teleport(at, 0f, 28f);   // looking down at it
+            var torch = player.GetComponentInChildren<BodycamFlashlight>(true);
+            if (torch && torch.owned && !torch.IsOn) torch.SetOn(true, false);
+        }
+
         void PowerOn()
         {
             if (powered) return;
@@ -341,6 +450,7 @@ namespace BodycamHorror.Environment
             if (powerOnClip && powerCrank) SpatialSound.PlayAt(powerOnClip, powerCrank.transform.position, 0.8f, 2f, 40f);
             if (exitGate) exitGate.Open();
             if (ring) ring.Say("Аварийное питание включено. Ворота у триггера открыты");
+            if (manthing && vanishOnPower) manthing.Vanish();   // gone, for now: the way out looks clear
         }
 
         void OnDrawGizmosSelected()
@@ -349,6 +459,8 @@ namespace BodycamHorror.Environment
             Gizmos.DrawCube(triggerCenter, triggerSize);
             Gizmos.color = new Color(0.1f, 0.8f, 0.2f, 0.35f);
             Gizmos.DrawCube(exitCenter, exitSize);
+            Gizmos.color = new Color(1f, 0.3f, 0f, 0.6f);
+            Gizmos.DrawWireSphere(attackFrom + Vector3.up, 0.6f);
         }
     }
 }

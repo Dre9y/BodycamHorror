@@ -226,6 +226,9 @@ namespace BodycamHorror.Enemies
 
         static readonly RaycastHit[] Hits = new RaycastHit[12];
         static readonly Dictionary<string, AudioClip> ClipCache = new Dictionary<string, AudioClip>();
+        /// <summary>The zombies' own long, low moan (ZombieTest.ogg pitched down and dragged out).</summary>
+        const string ZombieMoanClip = "Audio/Monster/zombie_moan";
+        static AudioClip zombieMoan;
         int voiceVariant;
 
         void Awake()
@@ -262,6 +265,7 @@ namespace BodycamHorror.Enemies
             voiceVariant = Random.Range(0, 4);
 
             var moan = gameObject.AddComponent<Audio.MonsterMoan>();   // rare, never on top of another monster's
+            moan.clip = zombieMoan ? zombieMoan : (zombieMoan = Resources.Load<AudioClip>(ZombieMoanClip));   // null: the shared creature moan
             moan.canMoan = () => !invulnerable && state != State.Dead && state != State.Scream && !BangingWall;   // the head-banger is silent at the wall
 
             health = maxHealth;

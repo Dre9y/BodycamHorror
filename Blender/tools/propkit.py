@@ -12,7 +12,7 @@ import bpy, bmesh, math, os, time
 import numpy as np
 from mathutils import Vector, Quaternion, Matrix, Euler
 
-PROJECT = r"D:\BodycamHorror"
+PROJECT = r"E:\Unity\Projects\BodycamHorror"
 TEX_OUT = os.path.join(PROJECT, "Assets", "Generated", "Textures", "Props")
 SRC_TEX = os.path.join(PROJECT, "Blender", "tex")
 FONTS = r"C:\Windows\Fonts"

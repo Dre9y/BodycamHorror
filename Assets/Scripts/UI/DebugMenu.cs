@@ -125,7 +125,9 @@ namespace BodycamHorror.UI
             float pad = 18f * k, rowH = 44f * k, w = 700f * k, tabH = 40f * k, actionH = 48f * k;
             int count = 0;
             foreach (var r in Rows) if (r.section == shown) count++;
-            int actions = shown == Section.Flashlight || shown == Section.Weapons ? 1 : shown == Section.Level ? Teleports.Length : 0;
+            var lightFear = shown == Section.Level ? FindAnyObjectByType<Environment.LightFearEvent>() : null;
+            int actions = shown == Section.Flashlight || shown == Section.Weapons ? 1
+                        : shown == Section.Level ? Teleports.Length + (lightFear ? 1 : 0) : 0;
             var panel = new Rect(16f * k, 16f * k, w, pad * 2f + 44f * k + tabH + 14f * k + rowH * count + actionH * actions + 34f * k);
             Fill(panel, new Color(0.05f, 0.055f, 0.06f, 0.88f));
 
@@ -166,6 +168,16 @@ namespace BodycamHorror.UI
 
             if (shown == Section.Level)
             {
+                // the light monster's level: straight to the last part (the power on, the shotgun ahead in the way out)
+                if (lightFear)
+                {
+                    if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), "Скип: перед подбором дробовика", action))
+                    {
+                        lightFear.SkipToShotgun();
+                        ClosePanel();
+                    }
+                    y += actionH;
+                }
                 foreach (var tp in Teleports)
                 {
                     var anchor = GameObject.Find(tp.anchor);
@@ -224,6 +236,12 @@ namespace BodycamHorror.UI
                 if (player.cameraPivot) player.cameraPivot.localPosition = new Vector3(0f, player.StandingEyeHeight, 0f);
             }
             player.Teleport(anchor.TransformPoint(local), anchor.eulerAngles.y + yaw);
+            ClosePanel();
+        }
+
+        /// <summary>Closes the panel and gives the mouse back to the view, so the player can go on at once.</summary>
+        void ClosePanel()
+        {
             open = IsOpen = false;
             Save();
             Cursor.lockState = CursorLockMode.Locked;

@@ -29,6 +29,10 @@ namespace BodycamHorror.Environment
         [Tooltip("How directly they must look at it (deg). 0 = PlayerInteractor's pickup look angle.")]
         public float lookAngle;
 
+        [Header("Showcase (the screen on pickup)")]
+        [Tooltip("Its pose to the camera (deg). Zero: turned to show its broad side.")]
+        public Vector3 showcaseEuler;
+
         [Header("Glow (optional)")]
         [Tooltip("A small light that marks the key in the dark. It breathes a little.")]
         public Light glow;

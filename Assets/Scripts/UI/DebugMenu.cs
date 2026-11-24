@@ -33,6 +33,7 @@ namespace BodycamHorror.UI
         {
             // the bottom of the PvE landing, just in from the leg's door, looking up the landing to the iron door
             ("Телепорт: площадка с ключами", "PvE_Landing", new Vector3(2.25f, 0.05f, 1.4f), 0f),
+            ("Телепорт: тепловой узел", "BasementTransition", new Vector3(0f, 0.05f, -0.8f), 0f),
         };
 
         static readonly Row[] Rows =
@@ -42,6 +43,7 @@ namespace BodycamHorror.UI
             new Row { section = Section.Flashlight, name = "Фонарь: внутренний круг", key = "debug.flashlightSize", min = 0f, max = 3f, step = 0.05f, reset = 0.8f, floor = 0.2f, format = "0.00", unitPrefix = "x" },
             new Row { section = Section.Flashlight, name = "Фонарь: внешний круг", key = "debug.flashlightOuterSize", min = 0f, max = 3f, step = 0.05f, reset = 0.3f, floor = 0.1f, format = "0.00", unitPrefix = "x" },
             new Row { section = Section.Camera, name = "Дальность резкости", key = "debug.focusDistance", min = 2f, max = 60f, step = 0.5f, reset = 9f, format = "0.0", unitSuffix = " м" },
+            new Row { section = Section.Camera, name = "Рыбий глаз", key = "debug.fisheye", min = 0f, max = 1f, step = 0.05f, reset = 0.5f, format = "0.00" },
             new Row { section = Section.Movement, name = "Скорость ходьбы", key = "debug.walkSpeed", min = 0.5f, max = 8f, step = 0.1f, reset = 2.7f, floor = 0.5f, format = "0.0", unitSuffix = " м/с" },
             new Row { section = Section.Movement, name = "Скорость бега", key = "debug.sprintSpeed", min = 1f, max = 15f, step = 0.1f, reset = 3.9f, floor = 1f, format = "0.0", unitSuffix = " м/с" },
         };
@@ -63,9 +65,11 @@ namespace BodycamHorror.UI
         /// <summary>The camera is sharp up to this far (m) and out of focus beyond it (LensLook).</summary>
         public static float FocusDistance => Rows[4].value;
         /// <summary>The player's walking speed (m/s); written into the controller every frame.</summary>
-        public static float WalkSpeed => Rows[5].value;
+        public static float WalkSpeed => Rows[6].value;
         /// <summary>The player's running speed (m/s); written into the controller every frame.</summary>
-        public static float SprintSpeed => Rows[6].value;
+        public static float SprintSpeed => Rows[7].value;
+        /// <summary>Strength of the camera's fisheye bend (LensLook): 0 = flat, 1 = full equidistant fisheye.</summary>
+        public static float Fisheye => Rows[5].value;
         /// <summary>Multiplier on the size of the flashlight's outer circle (the wide spill); 1 = as tuned.</summary>
         public static float FlashlightOuterSize => Rows[3].value;
 
@@ -125,9 +129,10 @@ namespace BodycamHorror.UI
             float pad = 18f * k, rowH = 44f * k, w = 700f * k, tabH = 40f * k, actionH = 48f * k;
             int count = 0;
             foreach (var r in Rows) if (r.section == shown) count++;
+            // the level's actions: the light fear skip (in that level only), a button per teleport, the deathcam kill
             var lightFear = shown == Section.Level ? FindAnyObjectByType<Environment.LightFearEvent>() : null;
             int actions = shown == Section.Flashlight || shown == Section.Weapons ? 1
-                        : shown == Section.Level ? Teleports.Length + (lightFear ? 1 : 0) : 0;
+                        : shown == Section.Level ? Teleports.Length + 1 + (lightFear ? 1 : 0) : 0;
             var panel = new Rect(16f * k, 16f * k, w, pad * 2f + 44f * k + tabH + 14f * k + rowH * count + actionH * actions + 34f * k);
             Fill(panel, new Color(0.05f, 0.055f, 0.06f, 0.88f));
 
@@ -188,6 +193,14 @@ namespace BodycamHorror.UI
                     GUI.enabled = was;
                     y += actionH;
                 }
+
+                var health = FindAnyObjectByType<PlayerHealth>();
+                bool wasOn = GUI.enabled;
+                GUI.enabled = health && !health.IsDead;
+                string killLabel = !health ? "Игрока нет в сцене" : health.IsDead ? "Игрок уже мёртв" : "Умереть (deathcam)";
+                if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), killLabel, action)) Kill(health);
+                GUI.enabled = wasOn;
+                y += actionH;
             }
 
             foreach (var r in Rows)
@@ -220,6 +233,20 @@ namespace BodycamHorror.UI
             var pistol = shooting ? shooting.FindWeapon<Pistol>() : null;
             if (pistol) pistol.HasLight = true;
             light.SetOn(true);
+        }
+
+        /// <summary>Kills the player outright and closes the panel, so the death cam plays out in full view.</summary>
+        void Kill(PlayerHealth health)
+        {
+            if (!health) return;
+            // still lying on the floor in the wake-up intro: cut it short first (disabling it gives back input, eyes and ears)
+            var intro = health.GetComponent<WakeUpIntro>();
+            if (intro && intro.IsPlaying) intro.enabled = false;
+            open = IsOpen = false;
+            Save();
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+            health.Kill();
         }
 
         /// <summary>Moves the player to a point given in <paramref name="anchor"/>'s space, facing its <paramref name="yaw"/>,

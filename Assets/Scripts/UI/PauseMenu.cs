@@ -17,8 +17,8 @@ namespace BodycamHorror.UI
         enum Page { Main, Settings }
 
         public static PauseMenu Instance { get; private set; }
-        /// <summary>A menu is up (this one, or the debug panel with its free cursor): gameplay input must be ignored.</summary>
-        public static bool IsOpen => IsPaused || DebugMenu.IsOpen;
+        /// <summary>A menu is up (this one, the debug panel with its free cursor, or a picked-up item on show): gameplay input must be ignored.</summary>
+        public static bool IsOpen => IsPaused || DebugMenu.IsOpen || ItemShowcase.Blocking || Player.DeathCam.Active;
         /// <summary>The pause menu itself is up: the game is paused.</summary>
         public static bool IsPaused => Instance && Instance.open;
 
@@ -70,6 +70,8 @@ namespace BodycamHorror.UI
         void Update()
         {
             if (!toggle.WasPressedThisFrame() || MainMenu.IsActive) return;   // no pausing the main menu
+            if (!open && ItemShowcase.Blocking) return;   // Escape puts the item away, it does not pause
+            if (!open && Player.DeathCam.Active) return;  // dead: the death cam plays out (it mutes and blacks out on its own)
             if (!open) Open();
             else if (page != Page.Main) page = Page.Main;   // Escape steps back out of a sub-page first
             else Close();

@@ -50,6 +50,7 @@ namespace BodycamHorror.EditorTools
             ApartmentPropsSetup.FitBox("KeyCabinet", new Vector3(0f, 0f, 0.005f), new Vector3(0.32f, 0.42f, 0.01f));
 
             for (int n = 1; n <= 4; n++) DecorPropsSetup.MakeGraffiti("Num" + n, 0.4f);
+            DecorPropsSetup.MakeGraffiti("BloodArrow", 1.0f);   // on the landing floor, to the iron door
 
             BuildApartmentDoor();
             BuildHeavyDoor();
@@ -83,7 +84,7 @@ namespace BodycamHorror.EditorTools
             glow.color = new Color(1f, 0.82f, 0.55f);
             bool big = id == "exit";
             glow.range = big ? 0.4f : 0.25f;
-            glow.intensity = big ? 0.1f : 0.06f;
+            glow.intensity = big ? 0.06f : 0.036f;   // 40% under what it was: it read as a lamp in the cabinet
             glow.shadows = LightShadows.None;
             pickup.glow = glow;
             PrefabUtility.SaveAsPrefabAsset(root, path);

@@ -50,9 +50,11 @@ namespace BodycamHorror.Player
         Vector3 promptPoint;
         float promptAlpha;
         GUIStyle labelStyle;
-        static Texture2D white, padlockIcon;
+        static Texture2D white, padlockIcon, keyIcon;
         Door triedLocked;      // the door being looked at was tried and would not open
         float lockedShown, lockedAge;
+        float keyShown;        // the key badge of a door that needs a key
+        bool keyInRing;        // ...and the player has that key
 
         /// <summary>Puts an interactor on the player if the scene has none yet.</summary>
         public static void Ensure()
@@ -133,6 +135,11 @@ namespace BodycamHorror.Player
             if (triedLocked && (Target != triedLocked || !triedLocked.IsBarred(cam.transform.position))) triedLocked = null;
             lockedAge += Time.unscaledDeltaTime;
             lockedShown = Mathf.MoveTowards(lockedShown, triedLocked ? 1f : 0f, Time.unscaledDeltaTime * (triedLocked ? 12f : 7f));
+
+            // a door that wants a key shows a key badge as soon as it is looked at: red without the key, light with it
+            bool keyDoor = Target && Target.NeedsKey;
+            if (keyDoor) keyInRing = KeyRing.Of(gameObject).Has(Target.keyId);
+            keyShown = Mathf.MoveTowards(keyShown, keyDoor ? 1f : 0f, Time.unscaledDeltaTime * (keyDoor ? 12f : 7f));
         }
 
         Valve FindValve(Vector3 eye, Vector3 forward)
@@ -185,9 +192,10 @@ namespace BodycamHorror.Player
             {
                 Vector3 to = pickup.Centre + Vector3.up * 0.02f - eye;
                 float distance = to.magnitude;
-                if (distance > (pickup.reach > 0f ? pickup.reach : pickupReach) || distance < 0.01f) continue;
+                pickup.Limits(eye, pickupReach, pickupLookAngle, out float maxReach, out float maxAngle);   // more from its easy side
+                if (distance > maxReach || distance < 0.01f) continue;
                 float a = Vector3.Angle(forward, to);
-                if (a >= bestAngle || (pickup.lookAngle > 0f && a >= pickup.lookAngle)) continue;
+                if (a >= bestAngle || a >= maxAngle) continue;
                 // not through a wall or a crate
                 if (Physics.Raycast(eye, to / distance, out RaycastHit block, distance - 0.1f, mask, QueryTriggerInteraction.Ignore)
                     && !block.collider.transform.IsChildOf(pickup.transform)) continue;
@@ -219,16 +227,18 @@ namespace BodycamHorror.Player
         Door FindDoor(Vector3 eye, Vector3 forward)
         {
             // looking straight at it
+            // (a door bolted on the other side is not a door from here: nothing to use, no prompt)
             if (Physics.Raycast(eye, forward, out RaycastHit hit, reach, mask, QueryTriggerInteraction.Ignore))
             {
                 Door door = Door.Of(hit.collider);
-                if (door) return door;
+                if (door) return door.LatchedAgainst(eye) ? null : door;
             }
             // or near enough at its handle: an open door is seen edge-on and is easy to miss
             Door best = null;
             float bestAngle = lookAngle;
             foreach (Door door in Door.All)
             {
+                if (door.LatchedAgainst(eye)) continue;
                 Vector3 to = door.PromptPoint(eye) - eye;
                 float distance = to.magnitude;
                 if (distance > reach || distance < 0.01f) continue;
@@ -244,6 +254,7 @@ namespace BodycamHorror.Player
 
         void OnGUI()
         {
+            if (UI.ItemShowcase.Blocking) return;   // the item screen is up
             if (promptAlpha <= 0.01f || !cam || Event.current.type != EventType.Repaint) return;
             Vector3 screen = cam.WorldToScreenPoint(promptPoint);
             if (screen.z <= 0.05f) return;
@@ -269,20 +280,30 @@ namespace BodycamHorror.Player
             labelStyle.normal.textColor = Color.white;
             GUI.Label(box, keyLabel, labelStyle);
 
-            if (lockedShown > 0.01f) DrawLocked(box, line);
+            // a key door shows its key badge (it shakes when tried without the key); any other barred door, the padlock once tried
+            if (keyShown > 0.01f)
+            {
+                if (!keyIcon) keyIcon = MakeKeyIcon(64);
+                DrawBadge(box, line, keyIcon, keyInRing ? promptInk : lockedInk, keyShown, triedLocked ? lockedAge : 99f);
+            }
+            else if (lockedShown > 0.01f)
+            {
+                if (!padlockIcon) padlockIcon = MakePadlockIcon(64);
+                DrawBadge(box, line, padlockIcon, lockedInk, lockedShown, lockedAge);
+            }
             GUI.color = Color.white;
         }
 
-        /// <summary>A red padlock in a cap of its own beside the key: pops in and shakes when the door is tried.</summary>
-        void DrawLocked(Rect key, float line)
+        /// <summary>An icon in a cap of its own beside the key: pops in and shakes for a while after <paramref name="age"/> resets (the door tried).</summary>
+        void DrawBadge(Rect key, float line, Texture2D icon, Color badgeInk, float shown, float age)
         {
-            float pop = 1f + 0.35f * Mathf.Exp(-lockedAge * 14f);
-            float shake = Mathf.Sin(lockedAge * 70f) * Mathf.Exp(-lockedAge * 9f) * key.width * 0.09f;
+            float pop = 1f + 0.35f * Mathf.Exp(-age * 14f);
+            float shake = Mathf.Sin(age * 70f) * Mathf.Exp(-age * 9f) * key.width * 0.09f;
             float size = key.width * 0.78f * pop;
             var badge = new Rect(Mathf.Round(key.xMax + key.width * 0.16f + shake), Mathf.Round(key.center.y - size * 0.5f), size, size);
-            float a = promptAlpha * lockedShown;
+            float a = promptAlpha * shown;
 
-            Color fill = promptFill, ink = lockedInk;
+            Color fill = promptFill, ink = badgeInk;
             fill.a *= a;
             ink.a *= a;
             GUI.color = fill;
@@ -293,9 +314,35 @@ namespace BodycamHorror.Player
             GUI.DrawTexture(new Rect(badge.x, badge.y, line, badge.height), white);
             GUI.DrawTexture(new Rect(badge.xMax - line, badge.y, line, badge.height), white);
 
-            if (!padlockIcon) padlockIcon = MakePadlockIcon(64);
             float inset = badge.width * 0.17f;
-            GUI.DrawTexture(new Rect(badge.x + inset, badge.y + inset, badge.width - inset * 2f, badge.height - inset * 2f), padlockIcon);
+            GUI.DrawTexture(new Rect(badge.x + inset, badge.y + inset, badge.width - inset * 2f, badge.height - inset * 2f), icon);
+        }
+
+        /// <summary>A white key glyph (ring bow with a hole, shaft, two teeth), lying flat, bow to the left; tinted when drawn.</summary>
+        static Texture2D MakeKeyIcon(int size)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, name = "KeyIcon" };
+            var pixels = new Color32[size * size];
+            float px = 1f / size;
+            var bow = new Vector2(0.27f, 0.56f);
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    var p = new Vector2((x + 0.5f) * px, (y + 0.5f) * px);
+                    float shape = (p - bow).magnitude - 0.2f;
+                    shape = Mathf.Min(shape, RoundBox(p - new Vector2(0.64f, 0.56f), new Vector2(0.3f, 0.055f), 0.02f));
+                    // the bit: two teeth hanging off the shaft's far end
+                    shape = Mathf.Min(shape, RoundBox(p - new Vector2(0.86f, 0.43f), new Vector2(0.06f, 0.1f), 0.015f));
+                    shape = Mathf.Min(shape, RoundBox(p - new Vector2(0.69f, 0.45f), new Vector2(0.04f, 0.075f), 0.015f));
+                    shape = Mathf.Max(shape, -((p - bow).magnitude - 0.085f));   // the bow's hole
+                    float alpha = Mathf.Clamp01(0.5f - shape / px);
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply(false, true);
+            return tex;
         }
 
         /// <summary>A white padlock glyph (shackle, body, keyhole) drawn from distance fields, antialiased; tinted when drawn.</summary>

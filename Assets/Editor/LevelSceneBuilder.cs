@@ -488,13 +488,15 @@ namespace BodycamHorror.EditorTools
             PlaceModel(WallShelfPrefab, sofa, "WallShelf_Model", new Vector3(0f, 1.45f, 1.3f), 90f);   // on the wall over it
             Prop(sofa, "Cushion_Fallen", new Vector3(1.0f, 0f, 1.0f), new Vector3(1.55f, 0.12f, 1.55f), fabricDark, 25f);
 
-            var table = Group(room, "Table_Overturned");   // on its side, legs to the room
-            Prop(table, "Top", new Vector3(2.6f, 0f, 1.6f), new Vector3(3.8f, 0.75f, 1.64f), wood, 8f);
+            // on its side, legs to the bottom wall, pushed up against it so it leaves the way past the sofa clear
+            var table = Group(room, "Table_Overturned");
+            const float tableZ = -0.8f;
+            Prop(table, "Top", new Vector3(2.6f, 0f, 1.6f + tableZ), new Vector3(3.8f, 0.75f, 1.64f + tableZ), wood, 8f);
             for (int i = 0; i < 2; i++)
             {
                 float x = 2.7f + i * 0.95f;
-                Prop(table, "Leg" + i, new Vector3(x, 0.05f, 0.95f), new Vector3(x + 0.05f, 0.1f, 1.6f), wood, 8f);
-                Prop(table, "LegT" + i, new Vector3(x, 0.62f, 0.95f), new Vector3(x + 0.05f, 0.67f, 1.6f), wood, 8f);
+                Prop(table, "Leg" + i, new Vector3(x, 0.05f, 0.95f + tableZ), new Vector3(x + 0.05f, 0.1f, 1.6f + tableZ), wood, 8f);
+                Prop(table, "LegT" + i, new Vector3(x, 0.62f, 0.95f + tableZ), new Vector3(x + 0.05f, 0.67f, 1.6f + tableZ), wood, 8f);
             }
 
             var fridge = Group(room, "Fridge");   // in the corner, its door to the room
@@ -580,7 +582,7 @@ namespace BodycamHorror.EditorTools
             run.transform.rotation = Quaternion.Euler(0f, 0f, 90f);
         }
 
-        /// <summary>Litter over both floors and the corridor: papers, chunks of plaster, bits, puddles.</summary>
+        /// <summary>Litter over both floors: papers, chunks of plaster, bits; sparse in the small room.</summary>
         static void Rubbish(Transform level)
         {
             var root = Group(level, "Rubbish");
@@ -602,6 +604,15 @@ namespace BodycamHorror.EditorTools
                     float z = Mathf.Lerp(a[1], a[3], (float)rng.NextDouble());
                     float yaw = (float)rng.NextDouble() * 360f;
                     double kind = rng.NextDouble();
+                    // the small room (the pistol's) keeps a third of its litter: the desk must stand out, not drown in it.
+                    // The numbers are still drawn for the rest, so every other area stays as it was
+                    if (a == areas[0] && i % 3 != 0)
+                    {
+                        int draws = kind < 0.4 ? 0 : kind < 0.7 ? 3 : kind < 0.88 ? 2 : 1;   // what that item's branch would draw
+                        for (int d = 0; d < draws; d++) rng.NextDouble();
+                        n++;
+                        continue;
+                    }
                     if (kind < 0.4)   // a sheet of paper
                         Prop(root, "Paper" + n++, new Vector3(x - 0.1f, 0f, z - 0.14f), new Vector3(x + 0.1f, 0.003f, z + 0.14f), paper, yaw, false);
                     else if (kind < 0.7)   // a lump of plaster
@@ -621,14 +632,7 @@ namespace BodycamHorror.EditorTools
                         c.transform.rotation = Quaternion.Euler(90f, yaw, 0f);
                     }
                 }
-            // puddles under the leaks (see Leaks): flat and glossy, they shine in the flashlight
-            Puddle(root, new Vector3(3.3f, 0f, RoomD - 0.6f), 0.9f, 0.5f, 10f);
-            Puddle(root, new Vector3(5.6f, 0f, 1.2f), 1.4f, 0.8f, -20f);
-            Puddle(root, new Vector3(8.3f, 0f, 6.3f), 0.8f, 1.1f, 35f);
-            Puddle(root, new Vector3(4.25f, 0f, 2.15f), 1.0f, 0.7f, 5f);   // under the ceiling hole
-            Puddle(root, new Vector3(RoomW + Wall + 1.0f, 0f, 5.2f), 0.9f, 1.4f, 0f);
-            Puddle(root, new Vector3((PassX0 + PassX1) * 0.5f, 0f, -1.4f), 0.8f, 1.6f, 5f);
-            Puddle(root, new Vector3(6.0f, 0f, (LowZ0 + LowZ1) * 0.5f), 1.6f, 0.8f, -4f);
+            // no puddles: they are gone from the floors (their gloss read as a bug, not as water)
         }
 
         /// <summary>Dark streaks running down the walls from the ceiling, where water has got in for years.</summary>
@@ -691,7 +695,11 @@ namespace BodycamHorror.EditorTools
             }
             // up at the desk and looking down at it: the player's eyes are on the desk, not the doorway
             pickup.reach = 1.4f;
-            pickup.lookAngle = 12f;
+            pickup.lookAngle = 7f;
+            // a little easier from the room side, standing at the desk facing the window (not from the ends of the desk)
+            pickup.easySide = Vector3.left;
+            pickup.easySideReach = 0.5f;
+            pickup.easySideLookAngle = 14f;
             EditorUtility.SetDirty(pickup);
             return pickup;
         }

@@ -9,7 +9,7 @@ namespace BodycamHorror.Player
     /// How the lens sees. The picture sits in a dark rounded frame; it is sharp up to a distance (set in the Tab
     /// debug menu) and goes out of focus beyond it. Aiming closes the frame a little, like squinting.
     /// The frame is drawn by the Lens Vignette full-screen renderer feature, the focus blur by the Lens Focus one
-    /// (before post-processing, with the depth); the glass effects by a volume of its own.
+    /// (before post-processing, with the depth); the fisheye bend by Lens Vignette too; the glass effects by a volume of its own.
     /// </summary>
     [RequireComponent(typeof(Camera))]
     public class LensLook : MonoBehaviour
@@ -46,10 +46,12 @@ namespace BodycamHorror.Player
         public float focusSpeed = 7f;
 
         [Header("Wide-angle glass (the body camera's fisheye)")]
-        [Tooltip("Barrel distortion: straight lines bow outwards towards the edges, as through a short wide lens. 0 = off.")]
-        [Range(0f, 1f)] public float barrel = 0.42f;
-        [Tooltip("Zoom that goes with the distortion: above 1 crops the stretched corners away.")]
-        [Range(0.8f, 1.3f)] public float barrelScale = 1.04f;
+        [Tooltip("Fisheye: the picture bent towards an equidistant lens, corners kept in place (Lens Vignette pass). " +
+                 "0 = flat, 1 = full fisheye. The Tab debug menu overrides it (DebugMenu.Fisheye).")]
+        [Range(0f, 1f)] public float fisheye = 0.5f;
+        [Tooltip("Not used any more (was URP's lens distortion); replaced by the fisheye.")]
+        [HideInInspector] public float barrel = 0.42f;
+        [HideInInspector] public float barrelScale = 1.04f;
         [Tooltip("Colour fringes towards the edges of the frame, from cheap glass.")]
         [Range(0f, 1f)] public float fringing = 0.32f;
 
@@ -74,6 +76,7 @@ namespace BodycamHorror.Player
         static readonly int ShadeId = Shader.PropertyToID("_LensShade");
         static readonly int BlurId = Shader.PropertyToID("_LensBlur");
         static readonly int FocusId = Shader.PropertyToID("_LensFocus");
+        static readonly int FisheyeId = Shader.PropertyToID("_LensFisheye");
 
         Volume volume;
         VolumeProfile profile;
@@ -82,10 +85,12 @@ namespace BodycamHorror.Player
         ChromaticAberration fringe;
         MotionBlur smear;
         PlayerShooting shooting;
+        Camera cam;
         float aim;
 
         void Awake()
         {
+            cam = GetComponent<Camera>();
             var player = GetComponentInParent<BodycamPlayerController>();
             shooting = player ? player.GetComponentInChildren<PlayerShooting>(true) : null;
 
@@ -115,6 +120,7 @@ namespace BodycamHorror.Player
         {
             Shader.SetGlobalFloat(OnId, 0f);
             Shader.SetGlobalVector(FocusId, Vector4.zero);   // no player lens: the focus pass does nothing
+            Shader.SetGlobalVector(FisheyeId, Vector4.zero);
         }
 
         void OnDestroy()
@@ -136,8 +142,9 @@ namespace BodycamHorror.Player
                 blur = Mathf.Lerp(farBlur, dazeBlur, daze);
             }
             Shader.SetGlobalVector(FocusId, new Vector4(sharp, sharp * (1f + blurFalloff), blur, blur > 0f ? 1f : 0f));
-            glass.intensity.Override(barrel);
-            glass.scale.Override(barrelScale);
+            glass.active = false;   // the fisheye in the Lens Vignette pass bends the picture instead
+            float bend = BodycamHorror.UI.DebugMenu.Fisheye >= 0f ? BodycamHorror.UI.DebugMenu.Fisheye : fisheye;
+            Shader.SetGlobalVector(FisheyeId, new Vector4(bend, Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad), 0f, 0f));
             fringe.intensity.Override(fringing);
             smear.active = motionBlur > 0f;
             smear.intensity.Override(motionBlur);

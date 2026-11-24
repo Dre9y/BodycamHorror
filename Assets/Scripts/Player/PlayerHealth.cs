@@ -32,6 +32,8 @@ namespace BodycamHorror.Player
         public BodycamFlashlight flashlight;
         [Tooltip("The concussion look on the camera; added to the lens camera if missing.")]
         public ConcussionEffect concussion;
+        [Tooltip("What the camera records at death (fall, the feed breaking up, NO SIGNAL); added if missing. Off: straight back to the start.")]
+        public DeathCam deathCam;
 
         [Header("Debug")]
         [Tooltip("Editor / development builds: this key hits the player (from the front).")]
@@ -70,6 +72,8 @@ namespace BodycamHorror.Player
                 if (cam) concussion = cam.gameObject.AddComponent<ConcussionEffect>();
             }
             if (concussion) concussion.health = this;
+            if (!deathCam) deathCam = GetComponent<DeathCam>();
+            if (!deathCam) deathCam = gameObject.AddComponent<DeathCam>();
             spawnPos = transform.position;
             spawnYaw = transform.eulerAngles.y;
         }
@@ -92,18 +96,38 @@ namespace BodycamHorror.Player
             if (stress) stress.Add(stressPerHit);
             if (flashlight) flashlight.Flicker(0.35f);
 
+            lastBlowDirection = info.direction;
             Damaged?.Invoke(info);
             if (IsDead) Die();
+        }
+
+        /// <summary>Kills the player outright (debug).</summary>
+        public void Kill()
+        {
+            if (IsDead) return;
+            hitsTaken = hitsToDie;
+            Die();
         }
 
         void Die()
         {
             Died?.Invoke();
-            Debug.Log("[PlayerHealth] Player died - respawning at start.");
+            // stays dead (no more hits land) until the death cam hands back with Respawn
+            if (deathCam && deathCam.isActiveAndEnabled) deathCam.Play(lastBlowDirection);
+            else Respawn();
+        }
+
+        /// <summary>Back at the start, unhurt (prototype).</summary>
+        public void Respawn()
+        {
+            Debug.Log("[PlayerHealth] Respawning at start.");
             if (player) player.Teleport(spawnPos, spawnYaw);
             hitsTaken = 0;
             woundTimeLeft = 0f;
+            LastHitTime = -100f;
         }
+
+        Vector3 lastBlowDirection;
 
         void Update()
         {

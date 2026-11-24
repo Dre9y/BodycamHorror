@@ -98,12 +98,27 @@ namespace BodycamHorror.EditorTools
             Items(Group("Items"));
             Lights(Group("Lights"));
             Markers(Group("Markers"));
+            BasementTransitionBuilder.Build(root);
             foreach (Transform g in still)
                 foreach (Transform t in g.GetComponentsInChildren<Transform>(true)) t.gameObject.isStatic = true;
 
             Selection.activeGameObject = root.gameObject;
             EditorSceneManager.MarkSceneDirty(root.gameObject.scene);
             Debug.Log("PvE landing built at " + Origin);
+        }
+
+        /// <summary>Only the lights again (the "Lights" group), leaving the rest of the landing as it stands.</summary>
+        [MenuItem("BodycamHorror/Level: Rebuild PvE Landing Lights")]
+        public static void RebuildLights()
+        {
+            var existing = GameObject.Find(RootName);
+            if (!existing) { Build(); return; }
+            root = existing.transform;
+            hangingLamp = LightingTestSceneBuilder.BuildLampPrefab();
+            Transform old = root.Find("Lights");
+            if (old) Object.DestroyImmediate(old.gameObject);
+            Lights(Group("Lights"));
+            EditorSceneManager.MarkSceneDirty(root.gameObject.scene);
         }
 
         // ---------------------------------------------------------------- shell: paint below, plaster above, tiles, plaster ceiling
@@ -210,9 +225,6 @@ namespace BodycamHorror.EditorTools
             Slab(p, "Ceiling", x0 - T, x1 + T, z0, z1 + T, H, H + 0.2f, L.ceilingMat, 2.5f);
             Wall(p, new Vector3(x0 - T, 0f, z0), new Vector3(x0, H, z1 + T));
             Wall(p, new Vector3(x1, 0f, z0), new Vector3(x1 + T, H, z1 + T));
-            Wall(p, new Vector3(x0, 0f, z1), new Vector3(x1, H, z1 + T));
-            for (int i = 0; i < 4; i++)   // the bottom of a flight going up, out of sight
-                TexBox(p, "StepUp" + i, new Vector3(ExitX - 0.3f, 0f, z1 - 0.3f * (4 - i)), new Vector3(ExitX + 1.5f, 0.16f * (i + 1), z1 - 0.3f * (3 - i)), MatteFloor(), 2f, 2f);
             return p;
         }
 
@@ -380,6 +392,8 @@ namespace BodycamHorror.EditorTools
             // and inside: a warning in the dark flat, a tag in flat 2's kitchen
             Decal(p, "DontLook", new Vector3(-8.2f, 1.6f, 0f), 180f);        // flat 1, on the wall opposite the hole to flat 2
             Decal(p, "LMM", new Vector3(-3.0f, 1.7f, HighZ0), 180f);         // flat 2's kitchen, over the table
+            // a bloody arrow smeared on the landing floor, pointing on to the iron door
+            FloorDecal(p, "BloodArrow", new Vector3(ExitX + 0.15f, 0f, 10.4f), 7f);
 
             // litter: paper, cardboard, bits along the walls and in corners; a puddle or two under leaks
             Litter(p, "Litter_Landing_A", new Vector3(0.6f, 0f, 2.4f), 0.6f, 9, 11);
@@ -397,6 +411,14 @@ namespace BodycamHorror.EditorTools
         {
             var d = Place(Graffiti(name), p, "Graffiti_" + name, wallPoint, Quaternion.Euler(0f, yaw, 0f));
             d.isStatic = true;
+        }
+
+        /// <summary>A decal on the floor: projecting down, the top of its picture towards local +Z turned by <paramref name="yaw"/>.</summary>
+        internal static GameObject FloorDecal(Transform p, string name, Vector3 floorPoint, float yaw)
+        {
+            var d = Place(Graffiti(name), p, "Floor_" + name, floorPoint, Quaternion.Euler(0f, yaw, 0f) * Quaternion.Euler(90f, 0f, 0f));
+            d.isStatic = true;
+            return d;
         }
 
         static void Litter(Transform p, string name, Vector3 at, float radius, int count, int seed)
@@ -485,25 +507,61 @@ namespace BodycamHorror.EditorTools
 
         // ---------------------------------------------------------------- lights: Level's lamps; flat 1 stays dark
 
+        // There is no flashlight at this point of the game: every light here is placed to be read. The language:
+        //  - cold blue bulbs are the dead building: they show the space (walls, floor, the way through), never the goal;
+        //  - what to go to is the brightest, most contrasting thing at the end of a line of sight: the iron door under its own
+        //    bulb; warm light on the keys (desk lamps) and over a flat's way out (a sconce);
+        //  - every room has a faint shadowless fill so walls and furniture read as silhouettes; corners stay dark;
+        //  - an opening to the next step (the inner doorways, the knocked-through holes) has light beyond it, so it reads
+        //    as a lit frame from the dark side;
+        //  - the bulbs' haze is turned down from the corridor's: a glare blob blinds the exposure and hides what is under it.
+        // Shadows: one shadowed light per lit area (each costs a pass); shadowed lights also get their bounce (BounceLight).
         static void Lights(Transform p)
         {
-            // the landing: a bulb near the way in (the one shadowed lamp out here), a failing one halfway, and a
-            // bulkhead lamp over the key cabinet by the iron door, so the goal is the brightest thing at the far end
-            Hanging(p, "Lamp_Landing_In", new Vector3(ExitX, H, 3.2f), 0.5f, false);
-            Hanging(p, "Lamp_Landing_Mid", new Vector3(ExitX, H, 9.6f), 0.3f, true);
+            // the landing: a bulb near the way in, a failing one halfway over the blood arrow; the bulkhead lamp keeps the
+            // key cabinet; the iron door stands right under a bulb of its own, hung close to it, so its cone runs down the door
+            Hanging(p, "Lamp_Landing_In", new Vector3(ExitX, H, 3.2f), 0.6f, false, true);
+            Hanging(p, "Lamp_Landing_Mid", new Vector3(ExitX, H, 9.6f), 0.45f, true);
             WallLamp(p, "WallLamp_Cabinet", new Vector3(ExitX - 1.25f, 2.1f, LandZ1), 180f, 0.9f, false);
-            WallLamp(p, "WallLamp_Exit", new Vector3(ExitX + 1.2f, 2.1f, LandZ1), 180f, 0.4f, true);
-            // flats: one weak bulb a room, a couple failing; flat 4's back room shadowed, over the key's desk
-            Hanging(p, "Lamp_F2_Room", new Vector3(-8.4f, H, 12.0f), 0.3f, false);
-            Hanging(p, "Lamp_F2_Kitchen", new Vector3(-2.7f, H, 12.6f), 0.25f, true);
-            Hanging(p, "Lamp_F3_Room", new Vector3(7.2f, H, 12.2f), 0.3f, false);
-            Hanging(p, "Lamp_F3_Bedroom", new Vector3(12.9f, H, 12.0f), 0.2f, true);
-            Hanging(p, "Lamp_F4_Room", new Vector3(7.0f, H, 2.4f), 0.45f, false);
-            Hanging(p, "Lamp_F4_Back", new Vector3(12.9f, H, 3.5f), 0.2f, false);
+            Hanging(p, "Lamp_Exit", new Vector3(ExitX, H, LandZ1 - 0.5f), 0.7f, false, true);
+            RoomFill(p, "Fill_Landing", new Vector3(ExitX, 1.7f, 8f), 9f, 1.6f);
+
+            // flat 1, the one without power: a desk lamp knocked onto the floor of the back room still burns, its beam across
+            // the floor onto the box with the iron key - seen first as a warm pool through the inner doorway. The cold light
+            // of flat 2 comes through the hole behind the wardrobe
+            FallenDeskLamp(p, "DeskLamp_F1_Fallen", new Vector3(-6.2f, 0f, 1.5f), new Vector3(-7.5f, 0.45f, 2.8f));
+            RoomFill(p, "Fill_F1_Back", new Vector3(-8.3f, 1.5f, 3.5f), 5f, 0.9f);
+            RoomFill(p, "Fill_F1_Front", new Vector3(-2.6f, 1.5f, 3.5f), 5f, 0.9f);
+
+            // flat 2: the room lamp hangs by the hole from flat 1 (it lights the way in, and leaks through into flat 1); the
+            // kitchen bulb fails; a warm sconce over the front door inside: the way out (the door opens only from in here)
+            Hanging(p, "Lamp_F2_Room", new Vector3(-8.2f, H, 10.0f), 0.5f, false, true);
+            Hanging(p, "Lamp_F2_Kitchen", new Vector3(-2.7f, H, 13.2f), 0.3f, true);
+            DoorSconce(p, "WallLamp_F2_Door", new Vector3(LandX0 - T, 2.42f, HighDoorZ), -90f);
+            RoomFill(p, "Fill_F2_Room", new Vector3(-8.3f, 1.5f, 12f), 6f, 1.0f);
+            RoomFill(p, "Fill_F2_Kitchen", new Vector3(-2.6f, 1.5f, 11.5f), 5f, 1.0f);
+
+            // flat 3: the desk lamp on the table is the room's warm light (the ceiling bulb barely holds on); the bedroom's
+            // failing bulb hangs in line with the inner doorway, so the bedroom shows as a lit floor through it
+            Hanging(p, "Lamp_F3_Room", new Vector3(7.2f, H, 12.2f), 0.25f, false);
+            Hanging(p, "Lamp_F3_Bedroom", new Vector3(12.0f, H, 12.0f), 0.4f, true, true);
+            RoomFill(p, "Fill_F3_Room", new Vector3(7.1f, 1.5f, 11.6f), 5.5f, 1.0f);
+            RoomFill(p, "Fill_F3_Bedroom", new Vector3(12.8f, 1.5f, 11.6f), 6f, 1.0f);
+
+            // flat 4: a bulb in the back room by the hole; the front room's bulb over the desk, and a desk lamp turned onto
+            // the key to flat 1; the door out to the landing (bolted on this side) stands in the lamp's light
+            Hanging(p, "Lamp_F4_Back", new Vector3(12.4f, H, 5.0f), 0.35f, false);
+            Hanging(p, "Lamp_F4_Room", new Vector3(6.4f, H, 3.0f), 0.45f, false, true);
+            DeskLampOn(p, "DeskLamp_F4_Key", new Vector3(7.55f, 0.76f, 1.25f), new Vector3(7.15f, 0.77f, 1.45f));
+            RoomFill(p, "Fill_F4_Room", new Vector3(7.1f, 1.5f, 3.5f), 5.5f, 1.0f);
+            RoomFill(p, "Fill_F4_Back", new Vector3(12.8f, 1.5f, 3.5f), 6f, 1.0f);
+
             WallLamp(p, "WallLamp_Vestibule", new Vector3(ExitX - 1.6f, 2.0f, VestibuleZ1 - 1.2f), 90f, 0.3f, true);
         }
 
-        static void Hanging(Transform p, string name, Vector3 ceiling, float dim, bool flicker)
+        const float HazeScale = 0.45f;   // the bulbs' haze here, against the corridor's lamps
+
+        static void Hanging(Transform p, string name, Vector3 ceiling, float dim, bool flicker, bool shadows = false)
         {
             LightingTestSceneBuilder.PlaceLamp(hangingLamp, p, name, p.TransformPoint(ceiling), false);
             Transform lamp = p.Find(name);
@@ -512,18 +570,76 @@ namespace BodycamHorror.EditorTools
             {
                 l.intensity *= dim;
                 if (l.name == "Light") main = l;
-                if (dim < 0.45f) l.shadows = LightShadows.None;   // shadows from the brighter lamps only (each costs a pass)
+                if (!shadows) l.shadows = LightShadows.None;   // one shadowed lamp per lit area (each costs a pass)
+                if (l.TryGetComponent(out LightHaze haze)) haze.density *= HazeScale;
             }
             if (flicker && main) Flicker(main, lamp.GetComponentsInChildren<Renderer>(true), "Bulb");
         }
 
-        static void WallLamp(Transform p, string name, Vector3 wallPoint, float yaw, float intensity, bool flicker)
+        /// <summary>A warm wall lamp right over a door, its wash widened to take in the whole door below it: the way out.</summary>
+        static void DoorSconce(Transform p, string name, Vector3 wallPoint, float yaw)
+        {
+            WallLamp(p, name, wallPoint, yaw, 0.7f, false, true);
+            Light wash = p.Find(name + "/WallWash").GetComponent<Light>();
+            wash.range = 2.6f;
+            wash.intensity = 1.2f;
+            wash.transform.localPosition = new Vector3(0f, -0.15f, 0.25f);
+        }
+
+        /// <summary>Faint shadowless light filling a room: walls and furniture read as shapes, the corners stay dark.
+        /// Cold, like the building's other light; no bounce, no haze.</summary>
+        static void RoomFill(Transform p, string name, Vector3 centre, float range, float intensity)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(p, false);
+            go.transform.localPosition = centre;
+            var l = go.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.color = new Color(0.62f, 0.72f, 0.85f);
+            l.range = range;
+            l.intensity = intensity;
+            l.shadows = LightShadows.None;
+            go.AddComponent<NoBounce>();
+        }
+
+        /// <summary>A desk lamp standing on a surface (<paramref name="at"/>), turned and its beam aimed at <paramref name="target"/>.</summary>
+        static void DeskLampOn(Transform p, string name, Vector3 at, Vector3 target)
+        {
+            Vector3 to = target - at; to.y = 0f;
+            var go = Place(DeskLamp, p, name, at, Quaternion.LookRotation(to, Vector3.up));
+            Bare(go);
+            AimDeskLamp(go, p.TransformPoint(target));
+        }
+
+        /// <summary>A desk lamp knocked over on the floor, lying on its side, still burning: its beam along the floor onto <paramref name="target"/>.</summary>
+        static void FallenDeskLamp(Transform p, string name, Vector3 floor, Vector3 target)
+        {
+            Vector3 to = target - floor; to.y = 0f;
+            var go = Place(DeskLamp, p, name, floor + Vector3.up * 0.07f, Quaternion.LookRotation(to, Vector3.up) * Quaternion.Euler(0f, 0f, 90f));
+            Bare(go);
+            AimDeskLamp(go, p.TransformPoint(target));
+        }
+
+        static void AimDeskLamp(GameObject lamp, Vector3 worldTarget)
+        {
+            Light l = lamp.GetComponentInChildren<Light>(true);
+            if (!l) return;
+            l.transform.rotation = Quaternion.LookRotation(worldTarget - l.transform.position, Vector3.up);
+            l.spotAngle = 85f;
+            l.innerSpotAngle = 40f;
+            l.intensity = 4f;
+            l.range = 5f;
+            l.shadows = LightShadows.Soft;
+        }
+
+        static void WallLamp(Transform p, string name, Vector3 wallPoint, float yaw, float intensity, bool flicker, bool warm = false)
         {
             var lamp = Model(WallLampM, p, name, wallPoint, yaw);
             Light spot = lamp.transform.Find("Light").GetComponent<Light>();
             Light wash = lamp.transform.Find("WallWash").GetComponent<Light>();
             wash.intensity *= intensity / spot.intensity;
             spot.intensity = intensity;
+            if (warm) spot.color = wash.color = new Color(1f, 0.74f, 0.47f);   // a way out (see Lights)
             spot.shadows = LightShadows.None;
             wash.shadows = LightShadows.None;
             if (flicker) Flicker(spot, lamp.GetComponentsInChildren<Renderer>(true), "_Glass");

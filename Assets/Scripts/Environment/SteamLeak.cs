@@ -17,6 +17,8 @@ namespace BodycamHorror.Environment
         public Valve valve;
         [Tooltip("Steam puff material (BodycamHorror/Steam).")]
         public Material material;
+        [Tooltip("Optional solid curtain across a passage. It clears when the remaining steam is safe.")]
+        public BoxCollider passageBlocker;
 
         [Header("Jet")]
         [Tooltip("How far the scalding part of the jet reaches at full pressure (m).")]
@@ -103,6 +105,7 @@ namespace BodycamHorror.Environment
             if (valve && valve.IsClosed) IsOn = false;
             float target = !IsOn ? 0f : valve ? Mathf.Lerp(1f, pressureNearlyShut, valve.Progress) : 1f;
             Pressure = Mathf.MoveTowards(Pressure, target, dt / Mathf.Max(dieAwayTime, 0.05f));
+            if (passageBlocker) passageBlocker.enabled = IsDeadly;
 
             // --- the look and the sound follow the pressure
             var emission = steam.emission;

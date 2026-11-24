@@ -1,235 +1,265 @@
+using System.Linq;
 using BodycamHorror.Enemies;
 using BodycamHorror.Environment;
+using BodycamHorror.Weapons;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 namespace BodycamHorror.EditorTools
 {
     internal sealed class BasementTransitionBuilder
     {
-        const string Basement = "Assets/Prefabs/Basement/";
+        const string RootName = "BasementTransition";
         const string Materials = "Assets/Generated/Materials/Basement/Basement_";
-        const float Floor = -1.6f, Ceiling = 2.1f;
-        Transform root;
-        Material brick, concrete, soffit, iron;
+        const float Height = 3;
+        const float ApproachStart = 9.4f;
+        const float ApproachLength = 29.2f;
+        const float JunctionZ = ApproachStart + ApproachLength;
+        const float ScareLead = 10f;
+        const float RoomStart = JunctionZ + 2.6f;
+        const float StairStart = RoomStart + 9.4f;
+        const float WorkbenchZ = StairStart - 2.1f;
 
-        // Update just the old cul-de-sac in the existing, hand-dressed scene.
-        [MenuItem("BodycamHorror/Level/Add Basement Transition")]
-        static void AddToLevel()
+        readonly Transform root;
+        readonly Material brick = Material("BrickPlaster"), floor = Material("FloorConcrete"), ceiling = Material("Ceiling");
+
+        static Material Material(string name) => AssetDatabase.LoadAssetAtPath<Material>(Materials + name + ".mat");
+
+        BasementTransitionBuilder(Transform landing)
+        {
+            root = new GameObject(RootName).transform;
+            root.SetParent(landing, false);
+            root.localPosition = new Vector3(2.25f, 0, 19.2f);
+        }
+
+        [MenuItem("BodycamHorror/Level/Rebuild Basement Transition")]
+        static void Rebuild()
         {
             var landing = GameObject.Find("PvE_Landing");
-            if (!landing || landing.scene.path != "Assets/Scenes/Level.unity" || landing.transform.Find("BasementTransition")) return;
-            var vestibule = landing.transform.Find("Vestibule");
-            if (!vestibule) return;
+            if (!landing || landing.scene.path != "Assets/Scenes/Level.unity") return;
+            var previous = landing.transform.Find(RootName);
             Build(landing.transform);
-            foreach (Transform piece in vestibule)
-            {
-                bool backWall = Mathf.Abs(piece.localPosition.z - 19.05f) < 0.01f &&
-                    (piece.name == "Paint" || piece.name == "Plaster");
-                if (backWall || piece.name.StartsWith("StepUp"))
-                {
-                    Undo.RecordObject(piece.gameObject, "Open basement passage");
-                    piece.gameObject.SetActive(false);
-                }
-            }
-            Undo.RegisterCreatedObjectUndo(landing.transform.Find("BasementTransition").gameObject, "Add basement transition");
+            if (previous) Undo.DestroyObjectImmediate(previous.gameObject);
+            Undo.RegisterCreatedObjectUndo(landing.transform.Find(RootName).gameObject, "Rebuild basement transition");
             EditorSceneManager.MarkSceneDirty(landing.scene);
         }
 
         internal static void Build(Transform landing)
         {
-            var b = new BasementTransitionBuilder();
-            b.root = new GameObject("BasementTransition").transform;
-            b.root.SetParent(landing, false);
-            b.root.localPosition = new Vector3(2.25f, 0, 19.2f);
-            b.brick = AssetDatabase.LoadAssetAtPath<Material>(Materials + "BrickPlaster.mat");
-            b.concrete = AssetDatabase.LoadAssetAtPath<Material>(Materials + "FloorConcrete.mat");
-            b.soffit = AssetDatabase.LoadAssetAtPath<Material>(Materials + "Ceiling.mat");
-            b.iron = AssetDatabase.LoadAssetAtPath<Material>(Materials + "MetalPaint.mat");
-            b.Architecture();
-            b.Furnish();
-            b.Puzzle();
+            var b = new BasementTransitionBuilder(landing);
+            try
+            {
+                b.Layout();
+                b.Collapse();
+                ImportScene("TestRange", b.PlacePuzzleAndPickup);
+                ImportScene("JunctionScare", b.PlaceCrossing);
+            }
+            catch
+            {
+                Object.DestroyImmediate(b.root.gameObject);
+                throw;
+            }
         }
 
-        void Architecture()
+        static void ImportScene(string name, System.Action<Scene> copy)
         {
-            Flight("Entry", 0, 0, 0, 3.2f);
-            Box("Hall floor", -6.2f, 6.2f, Floor - .2f, Floor, 4, 14, concrete);
-            Box("Hall ceiling", -6.2f, 6.2f, Ceiling, Ceiling + .2f, 4, 14, soffit);
-            Wall("West wall", -6.2f, -6, 4, 14);
-            Wall("East wall", 6, 6.2f, 4, 14);
-            Wall("Entry return L", -6, -1.6f, 4, 4.2f);
-            Wall("Entry return R", 1.6f, 6, 4, 4.2f);
-            Wall("Gallery south", 1.9f, 2.1f, 4, 6.2f);
-            Wall("Gallery north", 1.9f, 2.1f, 8.6f, 14);
-            Wall("Exit return L", -6, -3.2f, 13.8f, 14);
-            Wall("Exit return R", -.8f, 6, 13.8f, 14);
-            Flight("Basement", -2, 14, Floor, 2.4f);
-            Box("Receiving bay floor", -5, 1, -3.4f, -3.2f, 18, 23, concrete);
-            Box("Receiving bay ceiling", -5, 1, -.2f, 0, 18, 23, soffit);
-            Box("Bay left", -5.2f, -5, -3.2f, 0, 18, 23.2f, brick);
-            Box("Bay right", 1, 1.2f, -3.2f, 0, 18, 23.2f, brick);
-            Box("Bay return L", -5, -3.2f, -3.2f, 0, 18, 18.2f, brick);
-            Box("Bay return R", -.8f, 1, -3.2f, 0, 18, 18.2f, brick);
-            Box("Bay end", -5, 1, -3.2f, 0, 23, 23.2f, brick);
+            string path = "Assets/Scenes/" + name + ".unity";
+            var scene = SceneManager.GetSceneByPath(path);
+            bool opened = !scene.isLoaded;
+            if (opened) scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
+            try { copy(scene); }
+            finally { if (opened) EditorSceneManager.CloseScene(scene, true); }
         }
 
-        void Flight(string name, float x, float z, float top, float width)
-        {
-            float left = x - width / 2, right = x + width / 2;
-            for (int i = 0; i < 10; i++)
-                Box(name + " tread " + (i+1), left, right, top - 1.8f, top - .16f * (i+1), z + .4f*i, z + .4f*(i+1), concrete);
-            Box(name + " left", left-.2f, left, top-1.8f, top+2.9f, z, z+4, brick);
-            Box(name + " right", right, right+.2f, top-1.8f, top+2.9f, z, z+4, brick);
-            Box(name + " ceiling", left, right, top+2.7f, top+2.9f, z, z+4, soffit);
-        }
-
-        void Wall(string name, float x0, float x1, float z0, float z1) =>
-            Box(name, x0, x1, Floor, Ceiling, z0, z1, brick);
-
-        void Box(string name, float x0, float x1, float y0, float y1, float z0, float z1, Material material)
+        GameObject Box(string name, float x0, float x1, float y0, float y1, float z0, float z1, Material mat)
         {
             var a = root.TransformPoint(x0,y0,z0);
             var b = root.TransformPoint(x1,y1,z1);
-            var go = LightingTestSceneBuilder.Box(name, root, Vector3.Min(a,b), Vector3.Max(a,b), material, 2, 2);
+            var go = LightingTestSceneBuilder.Box(name, root, Vector3.Min(a,b), Vector3.Max(a,b), mat, 2, 2);
             go.transform.rotation = Quaternion.identity;
+            return go;
         }
 
-        GameObject Place(string path, float x, float y, float z, float yaw = 0)
+        void Shell(string name, float x0, float x1, float z0, float z1)
         {
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, root);
+            Box(name + " floor",x0,x1,-.2f,0,z0,z1,floor);
+            Box(name + " ceiling",x0,x1,Height,Height+.2f,z0,z1,ceiling);
+        }
+
+        void Across(string name, float z, float x0, float x1) => Box(name,x0,x1,0,Height,z-.1f,z+.1f,brick);
+        void Along(string name, float x, float z0, float z1) => Box(name,x-.1f,x+.1f,0,Height,z0,z1,brick);
+
+        GameObject Prop(string name,float x,float y,float z,float yaw=0)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Basement/"+name+".prefab");
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab,root);
             go.transform.localPosition = new Vector3(x,y,z);
             go.transform.localRotation = Quaternion.Euler(0,yaw,0);
             return go;
         }
 
-        GameObject Prop(string name, float x, float y, float z, float yaw = 0) =>
-            Place(Basement + name + ".prefab", x,y,z,yaw);
-
-        void Lamp(float x, float y, float z, Color color)
+        void Lamp(float x,float z,Color color)
         {
-            var lamp = Prop("Lamp_Caged", x,y,z).GetComponentInChildren<Light>();
-            lamp.color = color;
-            lamp.shadows = LightShadows.None;
-            lamp.range = 6f;
-            PrefabUtility.RecordPrefabInstancePropertyModifications(lamp);
+            var l = Prop("Lamp_Caged",x,Height,z).GetComponentInChildren<Light>();
+            l.color=color;
+            l.range=7;
+            l.shadows=LightShadows.None;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(l);
         }
 
-        void Furnish()
+        void Layout()
         {
-            Prop("Workbench", -5.25f, Floor, 5.65f, 90);
-            Prop("Radiator_Basement", -5.8f, Floor, 11.5f, 90);
-            Prop("GasCylinder", .9f, Floor, 11.7f);
-            Prop("Barrel", .75f, Floor, 12.6f);
-            Prop("Shelf_Metal", 4.6f, Floor, 13.45f, 180);
-            Prop("Bucket", 5.45f, Floor, 8.7f);
-            Prop("Crate", -4.1f, -3.2f, 21.5f);
-            Prop("Door_Bunker", -1.7f, -3.2f, 22.94f, 180);
-            var amber = new Color(1,.69f,.36f);
-            var cold = new Color(.55f,.78f,1);
-            Lamp(0,2.7f,1.1f, amber);
-            Lamp(-4.1f,Ceiling,8.4f, amber);
-            Lamp(4.1f,Ceiling,10.5f,cold);
-            Lamp(-2,Ceiling,12.9f, amber);
-            Lamp(-2,-.2f,20.7f,cold);
-            Sign("ТЕПЛОВОЙ УЗЕЛ\nПри прорыве пара перекрыть обе линии", 0,1.67f,4.42f,0,2.85f);
-            // The entry sign hangs above the foot of the stairs.
-            Box("Sign hanger", -.03f,.03f,1.92f,Ceiling,4.40f,4.44f,iron);
-            Sign("I   /   ГАЛЕРЕЯ", -5.94f,.28f,8.5f,-90,1.55f);
-            Sign("II   /   СПУСК", 5.94f,.28f,11.2f,90,1.55f);
-            Sign("II   /   В ПОДВАЛ", -2,1.77f,13.8f,0,2.28f);
-            Box("Exit sign lintel", -3.2f,-.8f,1.52f,Ceiling,13.8f,14,brick);
-            Sign("−1   ПОДВАЛ", -3.7f,-1.45f,22.92f,0,1.7f);
+            Shell("Entry",-1.6f,1.6f,0,6);
+            Along("Entry west",-1.6f,0,6);
+            Along("Entry east",1.6f,0,6);
+            Shell("Ring",-1.6f,11,6,17.6f);
+            Across("Ring south",6,1.6f,11);
+            Across("Ring north",17.6f,-1.6f,11);
+            Along("Ring west",-1.6f,6,17.6f);
+            Along("Outlet jamb",11,6,7);
+            Along("Ring east",11,9.4f,17.6f);
+            Box("Central masonry core",1.6f,7.7f,0,Height,9.4f,14.2f,brick);
+
+            Shell("Steam passage",11,21.2f,7,9.4f);
+            Across("Steam passage south",7,11,21.2f);
+            Across("Steam passage north",9.4f,11,18.8f);
+            Along("Elbow east",21.2f,7,JunctionZ);
+            Shell("Approach",18.8f,21.2f,ApproachStart,JunctionZ);
+            Along("Approach west",18.8f,ApproachStart,JunctionZ);
+
+            // North of the donor crossing. Its north wall has an opening at x=3..5.
+            Shell("Flashlight room",2,11,RoomStart,StairStart);
+            Along("Flashlight room west",2,RoomStart,StairStart);
+            Across("Flashlight room north",StairStart,2,11);
+            Along("Shared wall",11,RoomStart,StairStart-2.4f);
+            Along("Shared jamb",11,StairStart-.7f,StairStart);
+            Shell("Future encounter",11,21.2f,RoomStart,StairStart);
+            Along("Future encounter east",21.2f,RoomStart,StairStart);
+            Along("Partition",14.2f,RoomStart+2.1f,StairStart);
+            Across("Stair return",StairStart,11,17.4f);
+            Across("Stair return",StairStart,19.8f,21.2f);
+            for (int i=0;i<16;i++)
+                Box("Basement tread " + (i+1),17.4f,19.8f,-3,-.17f*(i+1),StairStart+i*.32f,StairStart+(i+1)*.32f,floor);
+            Box("Basement landing",17.4f,19.8f,-3,-2.72f,StairStart+5.12f,StairStart+7.2f,floor);
+            Box("Stairwell west",17.2f,17.4f,-3,Height,StairStart,StairStart+7.4f,brick);
+            Box("Stairwell east",19.8f,20,-3,Height,StairStart,StairStart+7.4f,brick);
+            Box("Stairwell ceiling",17.2f,20,Height,Height+.2f,StairStart,StairStart+7.4f,ceiling);
+            Box("Temporary basement end wall",17.4f,19.8f,-2.72f,Height,StairStart+7.2f,StairStart+7.4f,brick);
+            var socket=new GameObject("BasementConnection").transform;
+            socket.SetParent(root,false);
+            socket.localPosition=new Vector3(18.6f,-2.72f,StairStart+7.2f);
+
+            var warm=new Color(1,.78f,.53f);
+            var cool=new Color(.64f,.79f,1);
+            Lamp(.85f,4,warm);
+            Lamp(.65f,16.1f,warm);
+            Lamp(9.1f,10,cool);
+            Lamp(14,8.2f,warm);
+            Lamp(20,15,cool);
+            Lamp(20,JunctionZ-9f,cool);
+            Lamp(5,RoomStart+3.4f,warm);
+            Lamp(17,RoomStart+2.4f,cool);
+            Lamp(18.6f,StairStart+1f,cool);
         }
 
-        void Sign(string message, float x,float y,float z,float yaw,float width)
+        void Collapse()
         {
-            var board = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            board.name = message.Split('\n')[0];
-            board.transform.SetParent(root,false);
-            board.transform.localPosition = new Vector3(x,y,z);
-            board.transform.localRotation = Quaternion.Euler(0,yaw,0);
-            board.transform.localScale = new Vector3(width,.48f,.045f);
-            board.GetComponent<Renderer>().sharedMaterial = iron;
-
-            var canvas = new GameObject("Lettering", typeof(RectTransform), typeof(Canvas));
-            canvas.transform.SetParent(root,false);
-            canvas.transform.localRotation = board.transform.localRotation;
-            canvas.transform.position = board.transform.TransformPoint(0,0,-.55f);
-            canvas.transform.localScale = Vector3.one * .002f;
-            var rect = (RectTransform)canvas.transform;
-            canvas.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
-            rect.sizeDelta = new Vector2(width*500,230);
-            var label = new GameObject("Stencil", typeof(RectTransform), typeof(Text)).GetComponent<Text>();
-            label.transform.SetParent(rect,false);
-            label.rectTransform.sizeDelta = rect.sizeDelta;
-            label.font = AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Oswald.ttf");
-            label.fontSize = message.Contains("\n") ? 70 : 86;
-            label.alignment = TextAnchor.MiddleCenter;
-            label.color = new Color(.88f,.84f,.69f);
-            label.text = message;
+            // A real low sill, tilted slabs and exposed reinforcement. The eye can see the
+            // red wheel through the slit; even the prone character cannot fit between rods.
+            Box("Collapsed wall footing",-1.6f,1.6f,0,.94f,11,11.9f,brick);
+            for (int i=0;i<5;i++)
+            {
+                float x=-1.6f+.64f*i;
+                var slab=Box("Broken masonry",x,x+.69f,.72f,1.23f+(i%2)*.19f,10.85f,11.89f,brick);
+                slab.transform.Rotate(7-i*3,3*i-6,9-i*4);
+                var pile=Prop("Brick_Pile",x+.31f,0,10.51f-(i%2)*.35f,45*i);
+                pile.transform.localScale=Vector3.one*(1.2f+.1f*i);
+            }
+            Box("Fallen lintel",-1.6f,1.6f,2.32f,3,10.98f,11.96f,brick).transform.Rotate(0,0,5);
+            var metal=Material("Rust");
+            for(int i=0;i<9;i++)
+            {
+                float x=-1.31f+i*.36f;
+                Box("Exposed rebar",x,x+.035f,.95f,2.65f,11.25f,11.29f,metal).transform.Rotate(0,0,i%2==0?5:-4);
+            }
         }
 
-        void Puzzle()
-        {
-            var supply = Wheel(-5.78f,8.5f,90);
-            var isolation = Wheel(5.78f,11.2f,-90);
-            Jet("I - gallery", new Vector3(2,Floor+1,6.2f),0,supply);
-            Jet("II - descent", new Vector3(-3.2f,Floor+1,13.9f),90,isolation);
+        T FindIn<T>(Scene scene, System.Func<T,bool> matches) where T:Component =>
+            scene.GetRootGameObjects().SelectMany(go=>go.GetComponentsInChildren<T>(true)).Single(matches);
 
-            var infected = Place("Assets/Prefabs/Blender/Enemies/Zombie_HeadBanger.prefab",-4.5f,Floor,12.1f,175);
-            var spawner = infected.GetComponent<InfectedSpawner>();
-            spawner.bangHeadOnWall = false;
-            PrefabUtility.RecordPrefabInstancePropertyModifications(spawner);
-            Threshold("Enter hall", infected, 0,0,2.2f,3.2f,4);
-            var head = Place("Assets/Prefabs/Enemies/CryingHead.prefab",4.85f,Floor+.22f,12.35f,180);
-            Threshold("Enter gallery",head,3.6f,Floor+1,7.4f,2.8f,2.4f);
+        GameObject Copy(GameObject source,Vector3 position,Quaternion rotation)
+        {
+            var clone=Object.Instantiate(source,root,false);
+            clone.name=source.name;
+            clone.transform.localPosition=position;
+            clone.transform.localRotation=rotation;
+            // Generated meshes in donor scenes are scene-local subobjects.
+            foreach(var filter in clone.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var mesh=filter.sharedMesh;
+                if(mesh && (AssetDatabase.GetAssetPath(mesh)=="" || AssetDatabase.GetAssetPath(mesh).EndsWith(".unity")))
+                    filter.sharedMesh=Object.Instantiate(mesh);
+            }
+            return clone;
         }
 
-        Valve Wheel(float x,float z,float yaw)
+        void PlacePuzzleAndPickup(Scene scene)
         {
-            var wheel = Place(ValveBuilder.PrefabPath,x,Floor+1.2f,z,yaw).GetComponent<Valve>();
-            wheel.turnTime = 3.5f;
-            PrefabUtility.RecordPrefabInstancePropertyModifications(wheel);
-            return wheel;
+            var source=FindIn<SteamLeak>(scene, leak=>leak.valve);
+            var wheel=ValveBuilder.Place(root.TransformPoint(0,1.62f,17.49f),-root.forward,root).GetComponent<Valve>();
+            var rim = wheel.wheel.GetComponent<MeshRenderer>();
+            rim.sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Environment/IsolationWheelRed.mat");
+            PrefabUtility.RecordPrefabInstancePropertyModifications(rim);
+            var leak=Copy(source.gameObject,new Vector3(12.05f,1.1f,9.14f),Quaternion.Euler(0,180,0)).GetComponent<SteamLeak>();
+            // The breach sits on a pipe joint on the north wall. Its isolation valve is around the ring.
+            Prop("Pipe_Large_2m",11.95f,1.1f,9.27f);
+            Prop("Pipe_Large_2m",13.95f,1.1f,9.27f);
+            leak.valve=wheel;
+            var block=leak.gameObject.AddComponent<BoxCollider>();
+            block.center=new Vector3(0,.4f,.94f);
+            block.size=new Vector3(.22f,Height,2.55f);
+            leak.passageBlocker=block;
+
+            var torch=FindIn<WeaponPickup>(scene,p=>p.weapon==WeaponPickup.Kind.PistolLight);
+            var bench=Prop("Workbench",4.3f,0,WorkbenchZ,90);
+            var top=bench.GetComponentsInChildren<Collider>().Max(c=>c.bounds.max.y);
+            Copy(torch.gameObject,new Vector3(4.3f,top-root.position.y,WorkbenchZ),Quaternion.Euler(0,80,0));
         }
 
-        void Jet(string name,Vector3 position,float yaw,Valve wheel)
+        void PlaceCrossing(Scene scene)
         {
-            var jet = new GameObject(name).AddComponent<SteamLeak>();
-            jet.transform.SetParent(root,false);
-            jet.transform.localPosition = position;
-            jet.transform.localRotation = Quaternion.Euler(0,yaw,0);
-            jet.valve = wheel;
-            jet.material = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Environment/Steam.mat");
-            jet.length = 2.4f;
-            jet.speed = 3f;
-            jet.endRadius = .72f;
-            var blocker = jet.gameObject.AddComponent<BoxCollider>();
-            blocker.center = new Vector3(0,.85f,1.2f);
-            blocker.size = new Vector3(.24f,3.7f,2.42f);
-            jet.passageBlocker = blocker;
-            var nozzle = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            nozzle.name = "Burst pipe";
-            nozzle.transform.SetParent(jet.transform,false);
-            nozzle.transform.localRotation = Quaternion.Euler(90,0,0);
-            nozzle.transform.localScale = new Vector3(.25f,.18f,.25f);
-            nozzle.GetComponent<Renderer>().sharedMaterial = iron;
-        }
-
-        void Threshold(string name,GameObject encounter,float x,float y,float z,float width,float depth)
-        {
-            encounter.SetActive(false);
-            PrefabUtility.RecordPrefabInstancePropertyModifications(encounter);
-            var trigger = new GameObject(name).AddComponent<BoxCollider>();
-            trigger.transform.SetParent(root,false);
-            trigger.transform.localPosition = new Vector3(x,y,z);
-            trigger.size = new Vector3(width,4,depth);
-            trigger.isTrigger = true;
-            trigger.gameObject.AddComponent<EncounterThreshold>().encounter = encounter;
+            // In JunctionScare the crossing begins at z=20.
+            Vector3 offset=new Vector3(20,0,JunctionZ-20f);
+            var source=FindIn<RunnerScare>(scene,s=>true);
+            var crossing=FindIn<Transform>(scene,t=>t.name=="Crossing" && t.parent && t.parent.name=="Environment");
+            var copy=Copy(crossing.gameObject,offset+crossing.position,crossing.rotation);
+            // Retain the original wall and surface for the entire crawl, cutting a doorway
+            // into its far left end (well beyond the last path point).
+            foreach(Transform piece in copy.transform.Cast<Transform>().Where(t=>t.name.StartsWith("Wall_Far")).ToArray())
+            {
+                var box=piece.GetComponent<BoxCollider>();
+                float y=piece.localPosition.y;
+                float h=box.size.y*.5f;
+                var mat=piece.GetComponent<MeshRenderer>().sharedMaterial;
+                Box(piece.name,1.7f,3,y-h,y+h,RoomStart,RoomStart+.3f,mat);
+                Box(piece.name,5,23.9f,y-h,y+h,RoomStart,RoomStart+.3f,mat);
+                Object.DestroyImmediate(piece.gameObject);
+            }
+            var lamp=source.flickerLight.transform;
+            while(lamp.parent && lamp.parent.name!="Lamps") lamp=lamp.parent;
+            var light=Copy(lamp.gameObject,offset+lamp.position,lamp.rotation).GetComponentInChildren<Light>();
+            // Give the player time to face the junction after turning past the steam.
+            var scare=Copy(source.gameObject,new Vector3(20,1.5f,JunctionZ-ScareLead),source.transform.rotation).GetComponent<RunnerScare>();
+            scare.flickerLight=light;
+            scare.from=root.TransformPoint(offset+source.from);
+            scare.to=root.TransformPoint(offset+source.to);
+            for(int i=0;i<scare.path.Length;i++)
+            {
+                scare.path[i]=root.TransformPoint(offset+source.path[i]);
+                scare.normals[i]=root.TransformDirection(source.normals[i]);
+            }
         }
     }
 }

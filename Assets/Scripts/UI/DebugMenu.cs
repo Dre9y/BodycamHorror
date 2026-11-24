@@ -33,7 +33,7 @@ namespace BodycamHorror.UI
         {
             // the bottom of the PvE landing, just in from the leg's door, looking up the landing to the iron door
             ("Телепорт: площадка с ключами", "PvE_Landing", new Vector3(2.25f, 0.05f, 1.4f), 0f),
-            ("Телепорт: тепловой узел", "BasementTransition", new Vector3(0f, 0.05f, -0.8f), 0f),
+            ("Телепорт: вход в кольцо", "BasementTransition", new Vector3(0f, 0.05f, -0.8f), 0f),
         };
 
         static readonly Row[] Rows =

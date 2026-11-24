@@ -273,6 +273,19 @@ namespace BodycamHorror.Enemies
         public float rampageStride = 1.2f;
         [Tooltip("The run's pace lurches faster and slower by up to this share either way.")]
         [Range(0f, 0.8f)] public float rampagePaceWobble = 0.3f;
+        [Tooltip("The run carries the body turned some 30 deg off the way it goes: this much of that is turned back, so its " +
+                 "back points where it runs (1 = all).")]
+        [Range(0f, 1f)] public float rampageStraighten = 0.85f;
+        [Tooltip("The run carries the shoulders tilted 20-50 deg: this much of that tilt is levelled out (1 = shoulders level).")]
+        [Range(0f, 1f)] public float rampageLevel = 0.6f;
+        [Tooltip("How much of the way its neck is brought out from under it: straight ahead and up towards the player (1 = all).")]
+        [Range(0f, 1f)] public float rampageNeckReach = 1f;
+        [Tooltip("The neck aimed this far up from straight ahead (towards the player's eyes = 1).")]
+        [Range(0f, 1f)] public float rampageNeckToEyes = 0.45f;
+        [Tooltip("The head pushed out along the neck this far (m, at the model's own scale): the neck stretched.")]
+        public float rampageNeckStretch = 0.06f;
+        [Tooltip("How much of the way its face turns to the player as it runs (1 = staring right at them).")]
+        [Range(0f, 1f)] public float rampageFaceTrack = 1f;
         [Tooltip("Not used any more (a shot now makes it scream and blink away: see below).")]
         public float rampageStagger = 0.2f;
         [Tooltip("Shot this many times and it falls dead (each shot before that: a deafening scream, a blow to the picture, a " +
@@ -303,8 +316,8 @@ namespace BodycamHorror.Enemies
         [Header("The showdown (once, at a valve turned in the light)")]
         [Tooltip("Turned from inside a safe zone, this valve brings it: it rushes to the edge of the light and circles the " +
                  "player slowly, close (the flashlight does not stare it down now). The valve shut, it holds its breath, the " +
-                 "fear and every sound fall away, and it waits for the player to turn and look at it; then it screams, the " +
-                 "flashlight dies with a blow to the picture, and it is gone. After that it hunts as ever. Empty: no showdown.")]
+                 "fear and every sound fall away, and it waits for the player to turn and look at it; then the scare's sting, " +
+                 "the flashlight dies with a blow to the picture, and it is gone at once. After that it hunts as ever. Empty: no showdown.")]
         public Valve showdownValve;
         [Tooltip("It comes to the light this fast (m/s) ...")]
         public float showdownRushSpeed = 6.5f;
@@ -329,6 +342,12 @@ namespace BodycamHorror.Enemies
         [Range(0f, 1f)] public float showdownFadeDepth = 0.85f;
         [Tooltip("How hard the picture shakes with the scream (camera trauma).")]
         [Range(0f, 1f)] public float showdownShake = 0.7f;
+        [Tooltip("The sting it goes with, in the player's head (not placed in the room). Empty: the scare stinger the other " +
+                 "scenes' jump scares use (ProceduralAudio.ScareStinger).")]
+        public AudioClip showdownSting;
+        [Range(0f, 1f)] public float showdownStingVolume = 1f;
+        [Tooltip("Gone this long after the sting (s): in the black of the blow to the picture it is away, out of sight, at once.")]
+        public float showdownLeave = 0.04f;
 
         [Header("Hiding, waiting")]
         [Tooltip("Peeks out from behind the wall every so often (s) ...")]
@@ -429,6 +448,9 @@ namespace BodycamHorror.Enemies
         float twistSign = 1f;
         readonly List<int> poseOrder = new List<int>();
         Transform[] samplePoints, feet, hands, spineBones, limbPoints;
+        Transform[] legBones;                       // both legs, hip to toes: the rampage run's legs are blended bone by bone
+        Quaternion[] legFrameA, legFrameB;
+        Transform leftUpperArm, rightUpperArm;
         Transform head, neck, hips, leftShoulder, rightShoulder;
         Vector3 headFace, headUp;   // the head's own forward and up (from the model's pose), in head space
         float gaitPhase, idleTime, upright = 0.8f, chargeMix;
@@ -481,7 +503,9 @@ namespace BodycamHorror.Enemies
         float chaseTime;
 
         // ---- the showdown
-        bool showdownDone, rushed, silenced;
+        bool showdownDone, rushed, silenced, showdownLeaving;
+        float showdownLeaveAt;
+        static AudioClip generatedSting;
         float lookedFor, listenerWas = 1f;
         Coroutine silenceFade;
 
@@ -497,6 +521,8 @@ namespace BodycamHorror.Enemies
 
         void Start()
         {
+            // the showdown's sting made now, not in the frame of the scare (making it stalls a frame)
+            if (showdownValve && !showdownSting && !generatedSting) generatedSting = Weapons.ProceduralAudio.ScareStinger();
             player = FindAnyObjectByType<BodycamPlayerController>();
             rig = player ? player.GetComponentInChildren<BodycamCameraRig>() : null;
             torch = player ? player.GetComponentInChildren<BodycamFlashlight>(true) : null;
@@ -749,6 +775,12 @@ namespace BodycamHorror.Enemies
                                  HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot);
             feet = Bones(HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, HumanBodyBones.LeftToes, HumanBodyBones.RightToes);
             hands = Bones(HumanBodyBones.LeftHand, HumanBodyBones.RightHand);
+            legBones = Bones(HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes,
+                             HumanBodyBones.RightUpperLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.RightFoot, HumanBodyBones.RightToes);
+            leftUpperArm = animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
+            rightUpperArm = animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+            legFrameA = new Quaternion[legBones.Length];
+            legFrameB = new Quaternion[legBones.Length];
             spineBones = Bones(HumanBodyBones.Spine, HumanBodyBones.Chest, HumanBodyBones.UpperChest);
             limbPoints = Bones(HumanBodyBones.LeftHand, HumanBodyBones.RightHand, HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm, HumanBodyBones.Head,
                                HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot);
@@ -804,9 +836,8 @@ namespace BodycamHorror.Enemies
                 // its own run, start to end, its pace lurching a little
                 float wobble = 1f + rampagePaceWobble * (Mathf.PerlinNoise(Time.time * 2.3f, 3.7f) * 2f - 1f);
                 gaitPhase = (gaitPhase + dt * speed * wobble / Mathf.Max(rampageStride * bodySize, 0.1f)) % 1f;
-                ClearPose();
-                AddPose(iRampage, 1f, At(iRampage, gaitPhase));
-                ApplyPose();
+                RampagePose(gaitPhase);
+                RampageHead();
                 Procedural(dt, true);
                 Ground();
                 return;
@@ -824,6 +855,101 @@ namespace BodycamHorror.Enemies
             ApplyPose();
             Procedural(dt, true);
             Ground();
+        }
+
+        /// <summary>
+        /// The rampage run at <paramref name="phase"/>. The run was baked onto the humanoid rig with one hind leg flipping
+        /// between two twist solutions from one frame to the next (its muscle curves jump: twist -2.7 to +2.7, stretch 0.3
+        /// to 4.2); every frame is a sound pose, but in between the muscles are blended and the leg kicks up over the back.
+        /// So the legs are taken from the two whole frames either side and blended as bone rotations, which never flips;
+        /// the rest of the body plays the clip as it is.
+        /// </summary>
+        void RampagePose(float phase)
+        {
+            AnimationClip clip = clipPlayables[iRampage].GetAnimationClip();
+            float fps = clip.frameRate > 0f ? clip.frameRate : 30f;
+            int frames = Mathf.Max(1, Mathf.RoundToInt(clip.length * fps));
+            if (legBones != null && legBones.Length > 0 && frames > 1)
+            {
+                float f = phase * frames;
+                int k = Mathf.FloorToInt(f) % frames;
+                float frac = f - Mathf.Floor(f);
+                ClearPose();
+                AddPose(iRampage, 1f, k / fps);
+                ApplyPose();
+                for (int i = 0; i < legBones.Length; i++) legFrameA[i] = legBones[i].localRotation;
+                ClearPose();
+                AddPose(iRampage, 1f, ((k + 1) % frames) / fps);
+                ApplyPose();
+                for (int i = 0; i < legBones.Length; i++) legFrameB[i] = legBones[i].localRotation;
+                ClearPose();
+                AddPose(iRampage, 1f, At(iRampage, phase));
+                ApplyPose();
+                for (int i = 0; i < legBones.Length; i++) legBones[i].localRotation = Quaternion.Slerp(legFrameA[i], legFrameB[i], frac);
+            }
+            else
+            {
+                ClearPose();
+                AddPose(iRampage, 1f, At(iRampage, phase));
+                ApplyPose();
+            }
+            StraightenRampage();
+        }
+
+        /// <summary>
+        /// The run straightened over its way: the whole body turned about the hips so its back points where it goes
+        /// (the clip has it some 30 deg off to one side, running crabwise), and the shoulders levelled out down the spine
+        /// (the clip has them tilted 20-50 deg). Measured afresh every frame, so it follows the clip as it sways.
+        /// </summary>
+        void StraightenRampage()
+        {
+            if (!hips || spineBones == null || spineBones.Length == 0) return;
+            Transform top = spineBones[spineBones.Length - 1];
+            Vector3 ahead = Flat(transform.forward).normalized;
+            Vector3 back = Flat(top.position - hips.position);
+            if (rampageStraighten > 0f && back.sqrMagnitude > 1e-4f)
+            {
+                float yaw = Vector3.SignedAngle(back, ahead, Vector3.up);
+                hips.rotation = Quaternion.AngleAxis(yaw * rampageStraighten, Vector3.up) * hips.rotation;
+            }
+            if (rampageLevel <= 0f || !leftUpperArm || !rightUpperArm) return;
+            Vector3 along = top.position - hips.position;
+            if (along.sqrMagnitude < 1e-4f) return;
+            along.Normalize();
+            Vector3 across = Vector3.ProjectOnPlane(rightUpperArm.position - leftUpperArm.position, along);
+            Vector3 level = Vector3.ProjectOnPlane(Vector3.ProjectOnPlane(across, Vector3.up), along);
+            if (across.sqrMagnitude < 1e-4f || level.sqrMagnitude < 1e-4f) return;
+            float roll = Vector3.SignedAngle(across, level, along) * rampageLevel;
+            float each = roll / spineBones.Length;   // the bones are nested: each takes its share, the top gets it all
+            foreach (Transform b in spineBones) b.rotation = Quaternion.AngleAxis(each, along) * b.rotation;
+        }
+
+        /// <summary>
+        /// On its run the clip carries the head low, under and to the side of the body: the neck is brought out straight
+        /// ahead and up towards the player, stretched, and the face turned to them (the body bobs on under a head that
+        /// holds on them). Set afresh over each frame's pose, so nothing builds up.
+        /// </summary>
+        void RampageHead()
+        {
+            if (!neck || !head || !player) return;
+            Vector3 eye = cam ? cam.transform.position : player.transform.position + Vector3.up * 1.6f;
+            Vector3 ahead = Flat(transform.forward).normalized;
+            Vector3 toEyes = (eye - neck.position).normalized;
+            Vector3 want = Vector3.Slerp(ahead, toEyes, rampageNeckToEyes);
+            if (Vector3.Dot(want, ahead) < 0.2f) want = ahead;   // the player behind it: the neck never folds back over it
+            Vector3 now = head.position - neck.position;
+            if (now.sqrMagnitude > 1e-6f && rampageNeckReach > 0f)
+                neck.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(now, want), rampageNeckReach) * neck.rotation;
+            if (rampageNeckStretch > 0f) head.position += want * (rampageNeckStretch * bodySize);
+            if (rampageFaceTrack <= 0f) return;
+            // the face on them, the top of the head kept roughly up
+            Vector3 look = eye - head.position;
+            if (look.sqrMagnitude < 1e-4f) return;
+            look.Normalize();
+            Vector3 up = Vector3.ProjectOnPlane(Vector3.up, look);
+            if (up.sqrMagnitude < 1e-4f) up = transform.up;
+            Quaternion aimed = Quaternion.LookRotation(look, up) * Quaternion.Inverse(Quaternion.LookRotation(headFace, headUp));
+            head.rotation = Quaternion.Slerp(head.rotation, aimed, rampageFaceTrack);
         }
 
         /// <summary>Standing: crouched on all fours, looking about, or standing hunched; <paramref name="tall"/> mixes them.</summary>
@@ -1257,6 +1383,15 @@ namespace BodycamHorror.Enemies
                 }
                 case Mode.Retreat:
                 {
+                    // after the showdown's sting: gone in the black, at once (no standing about while the light blinks out)
+                    if (showdownLeaving)
+                    {
+                        if (Time.time < showdownLeaveAt) break;
+                        showdownLeaving = false;
+                        transform.position = NavPoint(goal);
+                        BeginAmbush();
+                        break;
+                    }
                     // it goes only once the light is dead (after the blinks)
                     if (torch && torch.InBlackout && !torch.IsDead && Time.time < modeUntil - 8f) break;
                     float left = Travel(goal, retreatSpeed, Gait.Charge, dt);
@@ -1315,6 +1450,9 @@ namespace BodycamHorror.Enemies
                     RampageScream();
                     if (Time.time < staggerUntil) { FaceTowards(playerPos, dt, 1f); break; }
                     charging = true;
+                    // a clear run at them: square on to them the whole way, not turned off along the way's last bend
+                    if (NavReady() && !NavMesh.Raycast(NavPoint(transform.position), NavPoint(playerPos), out _, NavMesh.AllAreas))
+                        FaceTowards(playerPos, dt, 2f);
                     Travel(playerPos, rampageSpeed, Gait.Charge, dt);
                     Stamp(dt, dist, 1f, true);
                     break;
@@ -1901,16 +2039,23 @@ namespace BodycamHorror.Enemies
         }
 
         /// <summary>
-        /// Looked at long enough: the scream (the one it snaps with), the flashlight gone, the picture knocked dark and shaking
-        /// as from a blast; in that dark it is away, fast, and from then on it hunts as ever.
+        /// Looked at long enough: the scare's sting, the flashlight gone, the picture knocked dark and shaking as from a
+        /// blast; in that dark it is gone at once (<see cref="showdownLeave"/>), and from then on it hunts as ever.
         /// </summary>
         void Showdown()
         {
             showdownDone = true;
             EndSilence();
-            Vector3 mouth = head ? head.position : transform.position + Vector3.up * 2f;
-            AudioClip snap = enrageScream ? enrageScream : scream;
-            if (snap) Audio.SpatialSound.PlayAt(snap, mouth, 1f, 4f, 70f);
+            AudioClip sting = showdownSting ? showdownSting : generatedSting ? generatedSting : (generatedSting = Weapons.ProceduralAudio.ScareStinger());
+            if (sting)
+            {
+                var src = new GameObject("ShowdownSting").AddComponent<AudioSource>();
+                src.spatialBlend = 0f;   // in the head, as the other scares' stings
+                src.PlayOneShot(sting, showdownStingVolume);
+                Destroy(src.gameObject, sting.length + 0.2f);
+            }
+            showdownLeaveAt = Time.time + showdownLeave;
+            showdownLeaving = true;
             if (rig) { rig.AddTrauma(showdownShake); rig.AddTremor(1f); }
             if (torch) torch.Blackout(showdownBlackout);
             StartCoroutine(ShockFade());
@@ -2483,6 +2628,7 @@ namespace BodycamHorror.Enemies
             UpdateUpright(dt, true, room);
             // squeezing through, it slows down a little
             float squeeze = Mathf.Max(corridorK * 0.25f, doorK * 0.4f);
+            if (mode == Mode.Rampage) squeeze *= 0.25f;   // on its rampage nothing slows it much, not a doorway either
             float left = MoveTo(target, speed * (1f - squeeze), dt);
             CheckStuck(target, left);
             if (!Animated) return left;   // in the dark it is only its sound: the body is posed when the light finds it
@@ -2611,6 +2757,14 @@ namespace BodycamHorror.Enemies
                 if (Physics.ComputePenetration(probe, probe.transform.position, probe.transform.rotation,
                                                c, c.transform.position, c.transform.rotation, out Vector3 dir, out float depth))
                     push += Flat(dir) * depth;
+            }
+            if (mode == Mode.Rampage)
+            {
+                // on its rampage a wall only ever pushes it aside, never back: a door jamb its long body brushes going
+                // through, or a corner it cuts, would hold it there pushing against its own run
+                Vector3 ahead = Flat(transform.forward).normalized;
+                float against = Vector3.Dot(push, ahead);
+                if (against < 0f) push -= ahead * against;
             }
             if (push.sqrMagnitude < 1e-6f) return false;
             push = Vector3.ClampMagnitude(push, 0.25f);

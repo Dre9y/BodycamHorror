@@ -483,6 +483,32 @@ namespace BodycamHorror.Weapons
         static float ClickAt(float t, float noise, float freq) =>
             noise * Mathf.Exp(-t * 420f) + Mathf.Sin(2f * Mathf.PI * freq * t) * Mathf.Exp(-t * 260f) * 0.6f;
 
+        /// <summary>
+        /// A short circuit arcing: a buzz at mains hum and its harmonics chopped into stutters, sharp snaps of noise
+        /// through it, about a third of a second.
+        /// </summary>
+        public static AudioClip ElectricCrackle(int seed)
+        {
+            const float length = 0.38f;
+            int n = (int)(Rate * length);
+            var d = new float[n];
+            var rng = new System.Random(seed);
+            float hp = 0f, prev = 0f, gate = 1f, nextGate = 0f, snap = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0);
+                hp = 0.92f * (hp + noise - prev); prev = noise;                     // bright, thin noise
+                if (t >= nextGate) { gate = rng.NextDouble() < 0.65 ? 1f : 0.05f; nextGate = t + 0.008f + (float)rng.NextDouble() * 0.03f; }
+                if (rng.NextDouble() < 0.0009) snap = 1f;                           // a crack of the arc
+                snap *= 0.993f;
+                float buzz = Mathf.Sign(Mathf.Sin(2f * Mathf.PI * 100f * t)) * 0.4f + Mathf.Sin(2f * Mathf.PI * 300f * t) * 0.3f;
+                float env = Mathf.Clamp01(t / 0.004f) * Mathf.Clamp01((length - t) / 0.08f);
+                d[i] = (buzz * 0.5f * gate + hp * (0.35f * gate + 1.6f * snap)) * env;
+            }
+            return Finish("ElectricCrackle", d, 0.8f, 2.2f);
+        }
+
         static AudioClip Finish(string name, float[] d, float peak, float drive)
         {
             float max = 0.0001f;

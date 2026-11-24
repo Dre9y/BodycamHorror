@@ -46,7 +46,26 @@ namespace BodycamHorror.EditorTools
             ("CementBags", false, true), ("Planks_Pile", false, true), ("Bricks", true, true), ("Mattress", false, true),
             ("Trash_Set", true, false),
             ("Gate_Grille", false, false), ("Floor_Drain", false, false),
+            // the light fear level's working rooms (Blender/tools/rooms_props.py)
+            ("Pump_Unit", false, true), ("Butcher_Table", false, true), ("Meat_Hooks", false, false), ("Blood_Pools", true, false),
+            ("Severed_Head", false, false), ("Transformer", false, true), ("Cable_Tray_2m", false, false), ("Cable_Drop", false, false),
+            ("Breaker_Panel", false, true), ("Beacon_Lamp", false, false),
         };
+
+        /// <summary>Only the working rooms' props (rerunning the whole kit takes a while).</summary>
+        [MenuItem("BodycamHorror/Basement/Set Up Room Props")]
+        public static void SetUpRoomProps()
+        {
+            Directory.CreateDirectory(MaterialDir);
+            Directory.CreateDirectory(PrefabDir);
+            AssetDatabase.Refresh();
+            foreach (var (name, split, collide) in Props)
+                if (System.Array.IndexOf(RoomProps, name) >= 0) MakeProp(name, split, collide);
+            AssetDatabase.SaveAssets();
+        }
+
+        static readonly string[] RoomProps =
+            { "Pump_Unit", "Butcher_Table", "Meat_Hooks", "Blood_Pools", "Severed_Head", "Transformer", "Cable_Tray_2m", "Cable_Drop", "Breaker_Panel", "Beacon_Lamp" };
 
         /// <summary>Prefab names for the pieces of the split sets (the mesh names are short and clash: two sets have a CanA).</summary>
         static string PieceName(string set, string mesh)

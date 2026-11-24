@@ -31,6 +31,16 @@ namespace BodycamHorror.Weapons
         public float reach;
         [Tooltip("How directly they must look at it (deg). 0 = PlayerInteractor's pickup look angle.")]
         public float lookAngle;
+        [Tooltip("A side it is easier to take it from (world direction from it towards the player, flattened). Zero: none.")]
+        public Vector3 easySide;
+        [Tooltip("From that side: this much more reach (m)...")]
+        public float easySideReach = 0.5f;
+        [Tooltip("...and this look angle (deg, 0 = unchanged).")]
+        public float easySideLookAngle = 14f;
+
+        [Header("Showcase (the screen on pickup)")]
+        [Tooltip("Its pose to the camera (deg). Zero: turned to show its broad side.")]
+        public Vector3 showcaseEuler;
 
         [Header("Glow (optional)")]
         [Tooltip("A small light that marks the gun in the dark. It breathes a little.")]
@@ -50,6 +60,27 @@ namespace BodycamHorror.Weapons
 
         float glowIntensity;
         Vector3 centreLocal;
+
+        /// <summary>How much a player whose eye is at <paramref name="eye"/> stands on the easy side (0..1).</summary>
+        public float EasySide(Vector3 eye)
+        {
+            Vector3 side = new Vector3(easySide.x, 0f, easySide.z);
+            Vector3 to = eye - Centre; to.y = 0f;
+            if (side.sqrMagnitude < 0.0001f || to.sqrMagnitude < 0.0001f) return 0f;
+            return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.2f, 0.7f, Vector3.Dot(side.normalized, to.normalized)));
+        }
+
+        /// <summary>Reach and look angle for a player there (<paramref name="baseReach"/> / <paramref name="baseAngle"/>:
+        /// the interactor's defaults, used where this has none of its own).</summary>
+        public void Limits(Vector3 eye, float baseReach, float baseAngle, out float maxReach, out float maxAngle)
+        {
+            maxReach = reach > 0f ? reach : baseReach;
+            maxAngle = lookAngle > 0f ? lookAngle : baseAngle;
+            float k = EasySide(eye);
+            if (k <= 0f) return;
+            maxReach += easySideReach * k;
+            if (easySideLookAngle > 0f) maxAngle = Mathf.Lerp(maxAngle, Mathf.Max(maxAngle, easySideLookAngle), k);
+        }
 
         void Awake()
         {

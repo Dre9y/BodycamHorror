@@ -57,10 +57,14 @@ namespace BodycamHorror.Player
             messageAge = 0f;
         }
 
-        void Update() => messageAge += Time.unscaledDeltaTime;
+        void Update()
+        {
+            if (!UI.ItemShowcase.Blocking) messageAge += Time.unscaledDeltaTime;   // the line waits for the item screen to go
+        }
 
         void OnGUI()
         {
+            if (UI.ItemShowcase.Blocking) return;
             if (string.IsNullOrEmpty(message) || messageAge > messageTime || Event.current.type != EventType.Repaint) return;
             float a = Mathf.Clamp01(messageAge / 0.15f) * Mathf.Clamp01((messageTime - messageAge) / 0.6f);
             if (a <= 0.01f) return;

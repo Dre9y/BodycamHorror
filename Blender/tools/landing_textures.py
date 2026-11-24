@@ -86,7 +86,73 @@ def door_without_number():
     a[y0:y1, x0:x1] = a[y0:y1, x0:x1] * (1 - feather) + patch * feather
     to_img(a).save(os.path.join(PROP_TEX, "Door_NoNumber_BaseColor.png"))
 
+# ------------------------------------------------------------------ the blood arrow on the landing floor
+
+def g_blood_arrow():
+    """An arrow smeared on the floor with bloody fingers, pointing up the picture (to the iron door): a pool where the
+    hand started, a shaft dragged out of it thinning as the blood ran out, the head in two quick strokes; finger
+    streaks along every stroke, drops flicked round it."""
+    W, H = 1024, 2048; rng = np.random.default_rng(1313)
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
+    cover = np.zeros((H, W))   # how much blood (0..1+: thick)
+
+    def stroke(a, b, w0, w1, load0, load1, seed):
+        r = np.random.default_rng(seed)
+        a = np.array(a, float); b = np.array(b, float); v = b - a; L = np.linalg.norm(v); u = v / L; n = np.array([-u[1], u[0]])
+        px, py = xx - a[0], yy - a[1]
+        t = (px * u[0] + py * u[1]) / L
+        d = px * n[0] + py * n[1]
+        d = d + np.sin(t * r.uniform(5, 9) + r.uniform(0, 6)) * r.uniform(6, 14)   # the hand wavers
+        w = w0 + (w1 - w0) * np.clip(t, 0, 1)
+        inside = np.clip((w - np.abs(d)) / 6.0, 0, 1) * np.clip(t * L / 18.0 + 1, 0, 1) * np.clip((1 - t) * L / 30.0 + 1, 0, 1)
+        # four fingers: streaks along the stroke, the gaps between them thin
+        dn = d / w + 0.25 * np.sin(t * r.uniform(3, 6) + r.uniform(0, 6))   # fingers drift apart and together
+        fingers = 0.5 + 0.5 * np.cos(dn * np.pi * 3.6 + r.uniform(0, 6))
+        fibres = sum(np.sin(d * f + r.uniform(0, 6)) for f in r.uniform(0.15, 0.6, 5)) / 5
+        clot = fbm(H, W, 22, seed + 50)
+        load = load0 + (load1 - load0) * np.clip(t, 0, 1)
+        # the blood gives out in skips near the end of a stroke
+        skip = np.clip(load * 1.4 + 0.25 * fbm(H, W, 40, seed)[..., None].squeeze() - 0.15, 0, 1)
+        amount = inside * load * (0.7 + 0.22 * fingers + 0.12 * fibres + 0.35 * (clot - 0.5)) * skip
+        np.maximum(cover, amount, out=cover)
+
+    tip = (W * 0.5, 180)
+    stroke((W * 0.52, 1880), (W * 0.49, 380), 84, 52, 1.3, 0.6, 1)      # the shaft, out of the pool
+    stroke(tip, (W * 0.17, 760), 58, 40, 1.15, 0.45, 2)                   # head, left
+    stroke(tip, (W * 0.84, 730), 60, 38, 1.1, 0.4, 3)                     # head, right
+    stroke((W * 0.49, 560), tip, 50, 40, 1.0, 0.85, 4)                    # the shaft run into the tip
+
+    # the pool where the hand was pressed down first, and drops flicked about
+    blob = Image.new("L", (W, H), 0); dd = ImageDraw.Draw(blob)
+    cx, cy = W * 0.52, 1880
+    dd.ellipse((cx - 95, cy - 70, cx + 105, cy + 95), fill=255)
+    pool = arr(blob.filter(ImageFilter.GaussianBlur(40)))
+    pool = np.clip((pool + (fbm(H, W, 30, 1316) - 0.5) * 0.7 - 0.35) * 3.0, 0, 1.4)   # a ragged spread, not a disc
+    # drops shaken off the hand, along the strokes and near the pool
+    drops = Image.new("L", (W, H), 0); dr = ImageDraw.Draw(drops)
+    for _ in range(40):
+        k = rng.random()
+        if k < 0.4: x, y = cx + rng.normal(0, 120), cy + rng.normal(-40, 90)
+        else: x, y = W * 0.5 + rng.normal(0, 110), rng.uniform(150, 1800)
+        r = rng.uniform(2.5, 10) * (1.5 if k < 0.4 else 1)
+        dr.ellipse((x - r, y - r * rng.uniform(0.7, 1.2), x + r, y + r), fill=255)
+    pool = np.maximum(pool, arr(drops.filter(ImageFilter.GaussianBlur(1.2))) * 1.1)
+    cover = np.maximum(cover, pool)
+
+    # colour: thick blood near black-red, thin smears dried to brown-red; ragged dried edges
+    edge = fbm(H, W, 60, 1314)
+    a = np.clip(cover * 1.25 - 0.08 + (edge - 0.5) * 0.25, 0, 1)
+    thick = np.clip(cover - 0.55, 0, 1) / 0.45
+    thin_col = np.array([0.36, 0.06, 0.035]); thick_col = np.array([0.17, 0.012, 0.01])
+    rgb = thin_col[None, None, :] * (1 - thick[..., None]) + thick_col[None, None, :] * thick[..., None]
+    rgb *= (0.85 + 0.3 * fbm(H, W, 14, 1315))[..., None]
+    save_graffiti("BloodArrow", np.dstack((rgb, a * 0.95)))
+
 if __name__ == "__main__":
+    import sys
+    if "arrow" in sys.argv:
+        g_blood_arrow(); print("blood arrow"); sys.exit()
     for n in (1, 2, 3, 4):
         g_number(n); key_tag(n); print("number", n)
     door_without_number(); print("door without number")
+    g_blood_arrow(); print("blood arrow")

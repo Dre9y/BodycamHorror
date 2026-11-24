@@ -81,7 +81,11 @@ namespace BodycamHorror.Environment
         /// <summary>Latched and not yet opened from its open side.</summary>
         public bool IsLatched => latch != Latch.None && !latchReleased;
         /// <summary>Would not open for somebody standing here: locked, or latched on the other side.</summary>
-        public bool IsBarred(Vector3 from) => locked || (IsLatched && !FromLatchSide(from));
+        public bool IsBarred(Vector3 from) => locked || LatchedAgainst(from);
+        /// <summary>Bolted on the far side from here: from this side it is no door at all (no prompt, nothing to try).</summary>
+        public bool LatchedAgainst(Vector3 from) => IsLatched && !FromLatchSide(from);
+        /// <summary>Locked, and a key opens it (a padlock-only door has no key).</summary>
+        public bool NeedsKey => locked && !string.IsNullOrEmpty(keyId);
         /// <summary>Middle of the closed door, world space.</summary>
         public Vector3 Centre => transform.TransformPoint(centreLocal);
 

@@ -19,3 +19,13 @@ monster_screamer  the scream from screamer.mp4 (added by the project owner): sou
 
 monster_petrify   the first sound in rocks-moving.mp3 (added by the project owner): 1.04-1.50 s, mono,
                   normalised. Played when the flashlight catches the light monster (Manthing.petrifyClip).
+
+zombie_groan      a voice recording from the project owner: pitched down (x0.70 main, x0.45 sub layer, x0.82
+                  bit-crushed rasp), slowed to 0.88, vibrato/tremolo gurgle, soft-clip distortion, short
+                  room echo, loudness -14 LUFS. 6.5 s, mono 48 kHz. Not wired to anything yet.
+
+zombie_groan_2    a second voice recording from the project owner, same chain as zombie_groan.
+                  Not wired to anything yet.
+
+zombie_groan_3    a third voice recording from the project owner, same chain as zombie_groan.
+                  Not wired to anything yet.

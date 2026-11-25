@@ -7,8 +7,8 @@ namespace BodycamHorror.UI
     /// <summary>
     /// Escape (or Start on a gamepad) pauses the game and opens this menu: Continue, Settings, Quit.
     /// While it is open time stands still, the sound is paused and the cursor is free; the player's own
-    /// input is ignored (see <see cref="IsOpen"/>). Settings: V-Sync, and a frame cap for when it is off
-    /// (<see cref="GameSettings"/>), the frame counter and the ear ringing. Drawn with IMGUI like the rest of the game's prompts and installed
+    /// input is ignored (see <see cref="IsOpen"/>). Settings: the same screen as the main menu's
+    /// (<see cref="SettingsScreen"/>). Drawn with IMGUI like the rest of the game's prompts and installed
     /// automatically, so nothing has to be set up per scene.
     /// </summary>
     [DefaultExecutionOrder(-1000)]   // before anything reads input this frame
@@ -73,7 +73,7 @@ namespace BodycamHorror.UI
             if (!open && ItemShowcase.Blocking) return;   // Escape puts the item away, it does not pause
             if (!open && Player.DeathCam.Active) return;  // dead: the death cam plays out (it mutes and blacks out on its own)
             if (!open) Open();
-            else if (page != Page.Main) page = Page.Main;   // Escape steps back out of a sub-page first
+            else if (page != Page.Main) { if (!SettingsScreen.CloseList()) page = Page.Main; }   // Escape steps back out: an open list, then the sub-page
             else Close();
         }
 
@@ -139,14 +139,20 @@ namespace BodycamHorror.UI
             GUI.depth = -1000;
 
             Fill(new Rect(0f, 0f, Screen.width, Screen.height), Shade);
-            float w = 660f * k, h = (page == Page.Main ? 420f : 650f) * k;
+            if (page == Page.Settings)
+            {
+                Vector2 size = SettingsScreen.Size(k);
+                if (SettingsScreen.Draw(new Rect((Screen.width - size.x) * 0.5f, (Screen.height - size.y) * 0.5f, size.x, size.y), k))
+                    page = Page.Main;
+                return;
+            }
+            float w = 660f * k, h = 420f * k;
             var panel = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
             Fill(panel, Panel);
             Frame(panel, Edge, Mathf.Max(1f, Mathf.Round(2f * k)));
 
             GUILayout.BeginArea(new Rect(panel.x + 48f * k, panel.y + 40f * k, panel.width - 96f * k, panel.height - 80f * k));
-            if (page == Page.Main) MainPage(k);
-            else SettingsPage(k);
+            MainPage(k);
             GUILayout.EndArea();
         }
 
@@ -159,61 +165,10 @@ namespace BodycamHorror.UI
             if (Button("Выйти из игры", k)) Quit();
         }
 
-        void SettingsPage(float k)
-        {
-            GUILayout.Label("НАСТРОЙКИ", title);
-            GUILayout.Space(28f * k);
-
-            bool vsync = GameSettings.VSync;
-            if (Row("Вертикальная синхронизация", vsync ? "Вкл" : "Выкл", true, k)) GameSettings.VSync = !vsync;
-
-            int cap = GameSettings.FpsCap;
-            string capText = cap <= 0 ? "Без ограничения" : cap + " к/с";
-            if (Row("Ограничение кадров", vsync ? "по монитору" : capText, !vsync, k)) GameSettings.FpsCap = NextCap(cap);
-
-            GUILayout.Label(vsync
-                ? "Кадры идут с частотой монитора: без разрывов картинки."
-                : "Без синхронизации картинка может рваться при поворотах.", hint);
-            GUILayout.Space(14f * k);
-
-            bool fps = GameSettings.ShowFps;
-            if (Row("Счётчик кадров", fps ? "Вкл" : "Выкл", true, k)) GameSettings.ShowFps = !fps;
-
-            bool ringing = GameSettings.EarRinging;
-            if (Row("Писк в ушах при страхе", ringing ? "Вкл" : "Выкл", true, k)) GameSettings.EarRinging = !ringing;
-
-            int light = GameSettings.FlashlightColorIndex;
-            if (Row("Цвет фонарика", GameSettings.FlashlightColors[light].name, true, k)) GameSettings.FlashlightColorIndex = light + 1;
-
-            GUILayout.FlexibleSpace();
-            if (Button("Назад", k)) page = Page.Main;
-        }
-
-        static int NextCap(int cap)
-        {
-            int i = System.Array.IndexOf(GameSettings.FpsCaps, cap);
-            return GameSettings.FpsCaps[(i + 1) % GameSettings.FpsCaps.Length];
-        }
-
         bool Button(string text, float k)
         {
             bool clicked = GUILayout.Button(text, button, GUILayout.Height(58f * k));
             GUILayout.Space(10f * k);
-            return clicked;
-        }
-
-        /// <summary>A setting: its name on the left, its value on a button on the right (click to change).</summary>
-        bool Row(string name, string current, bool enabled, float k)
-        {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(name, label, GUILayout.Height(52f * k));
-            GUILayout.FlexibleSpace();
-            bool was = GUI.enabled;
-            GUI.enabled = enabled;
-            bool clicked = GUILayout.Button(current, value, GUILayout.Width(190f * k), GUILayout.Height(52f * k));
-            GUI.enabled = was;
-            GUILayout.EndHorizontal();
-            GUILayout.Space(8f * k);
             return clicked;
         }
 

@@ -3172,6 +3172,7 @@ MonoBehaviour:
   blurRadius: 1.2
   farBlur: 0.006
   focusSpeed: 7
+  fisheye: 0.5
   barrel: 0.42
   barrelScale: 1.04
   fringing: 0.32
@@ -3542,6 +3543,10 @@ MonoBehaviour:
   promptHeight: 0.22
   reach: 0
   lookAngle: 0
+  easySide: {x: 0, y: 0, z: 0}
+  easySideReach: 0.5
+  easySideLookAngle: 14
+  showcaseEuler: {x: 0, y: 0, z: 0}
   glow: {fileID: 1305745701}
   glowPulse: 0.18
   glowPeriod: 2.6
@@ -9259,6 +9264,7 @@ MonoBehaviour:
   stress: {fileID: 0}
   flashlight: {fileID: 0}
   concussion: {fileID: 0}
+  deathCam: {fileID: 0}
   debugHitKey: 99
   hitsTaken: 0
   woundTimeLeft: 0
@@ -9947,6 +9953,10 @@ MonoBehaviour:
   promptHeight: 0.15
   reach: 0
   lookAngle: 0
+  easySide: {x: 0, y: 0, z: 0}
+  easySideReach: 0.5
+  easySideLookAngle: 14
+  showcaseEuler: {x: 0, y: 0, z: 0}
   glow: {fileID: 1207846855}
   glowPulse: 0.18
   glowPeriod: 2.6
@@ -18971,6 +18981,10 @@ MonoBehaviour:
   promptHeight: 0.22
   reach: 0
   lookAngle: 0
+  easySide: {x: 0, y: 0, z: 0}
+  easySideReach: 0.5
+  easySideLookAngle: 14
+  showcaseEuler: {x: 0, y: 0, z: 0}
   glow: {fileID: 928743887}
   glowPulse: 0.18
   glowPeriod: 2.6
@@ -20190,6 +20204,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Environment.SteamLeak
   valve: {fileID: 1096896366}
   material: {fileID: 2100000, guid: b03a495adfe07dc4eb131f49e463e3a6, type: 2}
+  passageBlocker: {fileID: 0}
   length: 3
   startRadius: 0.1
   endRadius: 0.55

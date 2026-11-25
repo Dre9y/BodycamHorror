@@ -393,7 +393,8 @@ namespace BodycamHorror.Player
         void Look(float dt)
         {
             Vector2 mouse = Cursor.lockState == CursorLockMode.Locked ? lookAction.ReadValue<Vector2>() * mouseSensitivity : Vector2.zero;
-            Vector2 d = mouse + lookStickAction.ReadValue<Vector2>() * (gamepadLookSpeed * dt);
+            Vector2 d = (mouse + lookStickAction.ReadValue<Vector2>() * (gamepadLookSpeed * dt)) * UI.GameSettings.MouseSensitivity;
+            if (UI.GameSettings.InvertY) d.y = -d.y;
             if (inputLocked) d = Vector2.zero;
             if (State == MoveState.Stumbling || State == MoveState.Bumped || State == MoveState.HardLanding) d *= 0.35f;
             else if (State == MoveState.Rolling) d *= 0.5f;

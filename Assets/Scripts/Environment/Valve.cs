@@ -89,7 +89,11 @@ namespace BodycamHorror.Environment
 
         void OnEnable() => All.Add(this);
         void OnDisable() => All.Remove(this);
-        void Start() => PlayerInteractor.Ensure();
+        void Start()
+        {
+            PlayerInteractor.Ensure();
+            HandsAway.Ensure();
+        }
 
         /// <summary>Called by the player every frame the use key is down on this valve (pressed: this frame).</summary>
         public void Use(bool pressed)
@@ -107,6 +111,7 @@ namespace BodycamHorror.Environment
             bool turning = !IsClosed && (latched || Time.time <= heldUntil);
             if (turning)
             {
+                HandsAway.Request();   // the hands are on the wheel, out of the shot
                 Progress = Mathf.Min(1f, Progress + dt / Mathf.Max(turnTime, 0.05f));
                 if (Progress >= 1f) Close();
             }

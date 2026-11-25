@@ -318,7 +318,7 @@ namespace BodycamHorror.Player
             UpdateBlackout();
 
             Firearm gun = mountOnWeapon && shooting && shooting.isActiveAndEnabled ? shooting.CurrentWeapon : null;
-            if (gun && gun.muzzle && gun.HasLight)
+            if (gun && gun.muzzle && gun.HasLight && owned)   // no light of their own yet: nothing to fit under the gun
             {
                 // weapon light: rigid on the gun, no trailing
                 if (gun != MountedOn) { EnsureLightBody(gun); MountedOn = gun; }

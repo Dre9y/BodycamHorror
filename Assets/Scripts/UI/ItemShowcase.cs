@@ -75,7 +75,71 @@ namespace BodycamHorror.UI
 
         // keys sit further off than guns: close up, a little key filled the screen
         void OnKey(KeyPickup key, GameObject player) => Show(key.gameObject, key.showcaseEuler, 0.7f);
-        void OnWeapon(WeaponPickup pickup, GameObject player) => Show(pickup.gameObject, pickup.showcaseEuler);
+        void OnWeapon(WeaponPickup pickup, GameObject player)
+        {
+            // the weapon light is shown as it will be carried: fitted under the pistol
+            if (pickup.weapon == WeaponPickup.Kind.PistolLight)
+            {
+                var fitted = PistolWithLight(pickup, player);
+                if (fitted)
+                {
+                    Show(fitted, pickup.showcaseEuler);
+                    Destroy(fitted);
+                    return;
+                }
+            }
+            Show(pickup.gameObject, pickup.showcaseEuler);
+        }
+
+        /// <summary>A throwaway copy of the player's pistol (its own model, meshes only) with the pickup's light model where
+        /// the weapon light rides (muzzle + flashlightOffset, as BodycamFlashlight fits it).
+        /// Null if the player has no pistol.</summary>
+        static GameObject PistolWithLight(WeaponPickup pickup, GameObject player)
+        {
+            var shooting = player ? player.GetComponentInChildren<PlayerShooting>(true) : null;
+            var gun = shooting ? shooting.FindWeapon<Pistol>() : null;
+            var lightModel = pickup.transform.Find("Model");
+            if (!gun || !gun.muzzle || !lightModel) return null;
+
+            // built inactive, far below the level, with every script taken off before anything wakes up
+            var holder = new GameObject("PistolWithLight");
+            holder.SetActive(false);
+            holder.transform.position = StagePos + Vector3.down * 50f;
+            var copy = Instantiate(gun.gameObject, holder.transform, false);
+            copy.transform.localPosition = Vector3.zero;
+            copy.transform.localRotation = Quaternion.identity;
+            copy.transform.localScale = gun.transform.lossyScale;
+            copy.SetActive(true);
+            foreach (var b in copy.GetComponentsInChildren<MonoBehaviour>(true)) DestroyImmediate(b);
+            foreach (var l in copy.GetComponentsInChildren<Light>(true)) DestroyImmediate(l);
+            var flash = FindPath(copy.transform, gun.transform, gun.muzzle);
+            if (flash) foreach (var r in flash.GetComponentsInChildren<Renderer>(true)) r.enabled = false;   // no muzzle flash
+            // in the hands the pistol is part of the arms' mesh; the gun keeps its own model switched off: show that
+            var model = copy.transform.Find("Model");
+            if (model) model.gameObject.SetActive(true);
+
+            // the light rides at the muzzle + offset in the gun's own space (BodycamFlashlight puts it there on the
+            // gun anchor, which sits where the gun is)
+            var fitted = Instantiate(lightModel.gameObject, copy.transform, false);
+            fitted.name = "WeaponLight";
+            fitted.transform.localPosition = gun.muzzle.localPosition + gun.flashlightOffset;
+            fitted.transform.localRotation = Quaternion.identity;
+            fitted.transform.localScale = Vector3.one;
+            foreach (var l in fitted.GetComponentsInChildren<Light>(true))
+                if (l.type != LightType.Spot) DestroyImmediate(l);   // its glow and bounce stay with the pickup
+            holder.SetActive(true);
+            return holder;
+        }
+
+        /// <summary>The object under copyRoot at the same place as target is under sourceRoot.</summary>
+        static Transform FindPath(Transform copyRoot, Transform sourceRoot, Transform target)
+        {
+            if (!target) return null;
+            if (target == sourceRoot) return copyRoot;
+            var names = new List<string>();
+            for (var t = target; t && t != sourceRoot; t = t.parent) names.Insert(0, t.name);
+            return copyRoot.Find(string.Join("/", names));
+        }
 
         /// <summary>Shows a copy of <paramref name="source"/>'s meshes. <paramref name="euler"/>: its pose to the camera
         /// (zero: turned to show its broad side).</summary>

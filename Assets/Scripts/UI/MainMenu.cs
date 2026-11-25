@@ -7,7 +7,7 @@ namespace BodycamHorror.UI
     /// <summary>
     /// The main menu, drawn over a 3D shot (a pistol on the wet floor of a dark corridor, a figure far down it).
     /// The scene comes up out of black; on the right the title, and under it Play, Settings and Exit.
-    /// Settings: the same options as the pause menu's settings page (<see cref="GameSettings"/>).
+    /// Settings: the same screen as in the pause menu (<see cref="SettingsScreen"/>: tabs, lists), over the dimmed shot.
     /// Play: the words and the picture go down to black; then the lore comes up in white in the middle, stays
     /// ten seconds and fades out again, the music fading out with it (Enter / Space / click skips it). The first
     /// level loads behind all this and opens on black too (the wake-up cutscene), so it follows straight on.
@@ -65,6 +65,8 @@ namespace BodycamHorror.UI
         public float loreFadeOut = 1.5f;
         [Tooltip("Black after the lore before the level comes in (s).")]
         public float loreAfter = 0.4f;
+        [Tooltip("Words beside the eye in the corner while the lore is up (SaveIndicator).")]
+        public string saveLabel = "СОХРАНЕНИЕ";
 
         [Header("Music")]
         public AudioClip music;
@@ -81,6 +83,7 @@ namespace BodycamHorror.UI
         float alpha = 1f;          // the words
         float loreAlpha;           // the lore card
         float skipAt = -1f;        // when the lore was skipped (time since start), or -1
+        bool saveShown, saveEnded; // the eye in the corner (SaveIndicator)
         float opened;              // seconds since the menu opened
         float startTime, fadeIn;
         float[] hover = new float[8];   // 0..1 per row: how lit it is (eases after the selection)
@@ -149,10 +152,15 @@ namespace BodycamHorror.UI
             {
                 fadeIn += dt;
                 if (source) source.volume = musicVolume * Mathf.Clamp01(fadeIn / Mathf.Max(musicFadeInTime, 0.01f));
+                if (page == Page.Settings)
+                {
+                    // the settings screen is worked with the mouse; Escape closes an open list, then goes back
+                    if (back.WasPressedThisFrame() && !SettingsScreen.CloseList()) OpenPage(Page.Main, 1);
+                    return;
+                }
                 if (up.WasPressedThisFrame()) selected = (selected + RowCount - 1) % RowCount;
                 if (down.WasPressedThisFrame()) selected = (selected + 1) % RowCount;
                 if (choose.WasPressedThisFrame()) Choose(selected);
-                if (back.WasPressedThisFrame() && page == Page.Settings) OpenPage(Page.Main, 1);
                 return;
             }
 
@@ -195,6 +203,23 @@ namespace BodycamHorror.UI
             }
             if (source) source.volume = musicVolume * m * m;   // quicker at first, a quiet tail
 
+            // the eye in the corner while the lore is up. The lore is long, so the clip plays at its own speed, as
+            // drawn (about 10 s: the fill, then the full eye twitching), not rushed to the level's loading: it is held
+            // short of full only if the level is somehow still loading by then.
+            if (state == State.Starting && hasLore)
+            {
+                if (!saveShown && since >= loreStart)
+                {
+                    saveShown = true;
+                    SaveIndicator.Begin(saveLabel, SaveIndicator.NaturalFillSeconds, false, itemFont, SaveIndicator.NaturalFullSeconds);
+                }
+                if (saveShown && !saveEnded && (loading == null || loading.progress >= 0.9f))
+                {
+                    saveEnded = true;
+                    SaveIndicator.End();
+                }
+            }
+
             bool done = hasLore ? since >= loreEnd + loreAfter : since >= Mathf.Max(loreEnd, musicFadeTime);
             if (state == State.Starting && done)
             {
@@ -214,28 +239,10 @@ namespace BodycamHorror.UI
         void Choose(int row)
         {
             if (state != State.Menu) return;
-            if (page == Page.Main)
-            {
-                if (row == 0) StartGame();
-                else if (row == 1) OpenPage(Page.Settings, 0);
-                else Quit();
-                return;
-            }
-            switch (row)
-            {
-                case 0: GameSettings.VSync = !GameSettings.VSync; break;
-                case 1: if (!GameSettings.VSync) GameSettings.FpsCap = NextCap(GameSettings.FpsCap); break;
-                case 2: GameSettings.ShowFps = !GameSettings.ShowFps; break;
-                case 3: GameSettings.EarRinging = !GameSettings.EarRinging; break;
-                case 4: GameSettings.FlashlightColorIndex = GameSettings.FlashlightColorIndex + 1; break;
-                default: OpenPage(Page.Main, 1); break;
-            }
-        }
-
-        static int NextCap(int cap)
-        {
-            int i = System.Array.IndexOf(GameSettings.FpsCaps, cap);
-            return GameSettings.FpsCaps[(i + 1) % GameSettings.FpsCaps.Length];
+            if (page != Page.Main) return;
+            if (row == 0) StartGame();
+            else if (row == 1) OpenPage(Page.Settings, 0);
+            else Quit();
         }
 
         void StartGame()
@@ -273,6 +280,7 @@ namespace BodycamHorror.UI
             }
             GUI.depth = -100;
             MakeStyles();
+            if (itemFont) SettingsScreen.Font = itemFont;
             float h = Screen.height, w = Screen.width;
 
             // the picture: up out of black when the menu opens, down to black when the game starts
@@ -321,28 +329,14 @@ namespace BodycamHorror.UI
                     if (Item(r, items[i], null, i, a, mouseMoved, mouse)) Choose(i);
                 }
             }
-            else
+            else if (state == State.Menu)
             {
-                bool vsync = GameSettings.VSync;
-                int cap = GameSettings.FpsCap;
-                string[] labels = { "Вертикальная синхронизация", "Ограничение кадров", "Счётчик кадров", "Писк в ушах при страхе", "Цвет фонарика", backLabel };
-                string[] values =
-                {
-                    vsync ? "Вкл" : "Выкл",
-                    vsync ? "по монитору" : cap <= 0 ? "нет" : cap.ToString(),
-                    GameSettings.ShowFps ? "Вкл" : "Выкл",
-                    GameSettings.EarRinging ? "Вкл" : "Выкл",
-                    GameSettings.FlashlightColors[GameSettings.FlashlightColorIndex].name,
-                    null,
-                };
-                float rowH = h * 0.068f, top = h * itemsY - h * 0.02f;
-                for (int i = 0; i < labels.Length; i++)
-                {
-                    float y = top + i * rowH + (i == labels.Length - 1 ? rowH * 0.6f : 0f);
-                    var r = new Rect(x, y - rowH * 0.5f, colWidth, rowH);
-                    bool enabled = !(i == 1 && vsync);
-                    if (Item(r, labels[i], values[i], i, a * (enabled ? 1f : 0.5f), mouseMoved, mouse) && enabled) Choose(i);
-                }
+                // the settings: the shared panel over the dimmed shot, in place of the title and items
+                GUI.color = Color.white;
+                Fill(new Rect(0, 0, w, h), new Color(0f, 0f, 0f, 0.55f * a));
+                float k = h / 1080f;
+                Vector2 size = SettingsScreen.Size(k);
+                if (SettingsScreen.Draw(new Rect((w - size.x) * 0.5f, (h - size.y) * 0.5f, size.x, size.y), k)) OpenPage(Page.Main, 1);
             }
             GUI.color = Color.white;
         }

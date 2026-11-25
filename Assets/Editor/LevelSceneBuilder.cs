@@ -127,6 +127,7 @@ namespace BodycamHorror.EditorTools
                     shooting.startUnarmed = true;   // the gun is found here
                     EditorUtility.SetDirty(shooting);
                     foreach (Firearm w in shooting.weapons) if (w is Pistol p) pistol = p;
+                    if (pistol) { pistol.startWithLight = false; EditorUtility.SetDirty(pistol); }   // its light is found later, in the basement
                 }
                 // no flashlight at this point of the game: the level's own lamps have to show the way
                 var flashlight = player.GetComponentInChildren<BodycamFlashlight>(true);

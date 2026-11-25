@@ -1334,15 +1334,76 @@ namespace BodycamHorror.EditorTools
             var lights = Group("Lights", null);
             GameObject prefab = LightingTestSceneBuilder.BuildLampPrefab();
             Lamp(prefab, lights, "Lamp_Vestibule", V(18f, -3f), 0.5f, false, false);
-            Lamp(prefab, lights, "Lamp_Hall_South", V(18f, 5.6f), 0.6f, false, false);
-            Lamp(prefab, lights, "Lamp_Hall_West", V(13.9f, 11f), 0.4f, false, true);
             Lamp(prefab, lights, "Lamp_Hall_East", V(22.2f, 11f), 0.4f, false, false);
             Lamp(prefab, lights, "Lamp_Hall_SideDoor", V(14.9f, 16.0f), 0.6f, true, false);   // on the side door: what comes through is lit (clear of the main's joint)
-            Lamp(prefab, lights, "Lamp_Hall_Trigger", V(18f, 17.3f), 0.55f, false, false);
+            WarmWallLamp(lights);
             Lamp(prefab, lights, "Lamp_Pump", V(6f, 20.5f), 0.35f, false, true);
             Lamp(prefab, lights, "Lamp_Workshop", V(5.5f, 5f), 0.35f, false, true);
             Lamp(prefab, lights, "Lamp_Switch", V(30.5f, 15f), 0.35f, false, false);
             return lights;
+        }
+
+        const string WallLampPrefab = "Assets/Prefabs/Props/WallLamp.prefab";
+        static readonly Color WarmLamp = new Color(1f, 0.72f, 0.36f);
+
+        /// <summary>
+        /// Over the way out (past it, the shotgun): no cold hanging lamp, a dim yellow bulkhead lamp on the hall's north
+        /// wall beside the exit gate, facing the hall. It dies in the blackout with the rest (it is one of the Lights).
+        /// </summary>
+        static void WarmWallLamp(Transform lights)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(WallLampPrefab);
+            if (!prefab) { Debug.LogWarning("WallLamp prefab missing (BodycamHorror > Set Up Utility Props)"); return; }
+            var lamp = (GameObject)PrefabUtility.InstantiatePrefab(prefab, lights);
+            lamp.name = "WallLamp_Exit";
+            lamp.transform.SetPositionAndRotation(new Vector3(20.1f, 2.35f, 19.35f), Quaternion.Euler(0f, 180f, 0f));
+            foreach (var l in lamp.GetComponentsInChildren<Light>(true))
+            {
+                l.color = WarmLamp;
+                l.intensity = l.name == "Light" ? 0.9f : 0.25f;
+                if (l.name == "Light") l.range = 6f;
+                l.shadows = LightShadows.None;
+            }
+            var glass = WarmLampGlass();
+            foreach (var r in lamp.GetComponentsInChildren<Renderer>(true))
+                if (r.name.EndsWith("_Glass") && glass) r.sharedMaterial = glass;
+        }
+
+        /// <summary>The bulkhead lamp's glass, glowing a dim yellow (a copy of its own glow material).</summary>
+        static Material WarmLampGlass()
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(WallLampPrefab);
+            Material src = null;
+            foreach (var r in prefab.GetComponentsInChildren<Renderer>(true)) if (r.name.EndsWith("_Glass")) src = r.sharedMaterial;
+            if (!src) return null;
+            string path = $"{KitMaterials}/LightFear_WallLampWarm.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (!mat) { mat = new Material(src); AssetDatabase.CreateAsset(mat, path); }
+            else mat.CopyPropertiesFromMaterial(src);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", mat.GetColor("_BaseColor") * WarmLamp);
+            mat.EnableKeyword("_EMISSION");
+            mat.SetColor("_EmissionColor", WarmLamp * 0.8f);
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        /// <summary>The open scene's hall lamps as now built: the two cold ones near the start gone, the one by the
+        /// way out swapped for the yellow wall lamp.</summary>
+        [MenuItem("BodycamHorror/Light Fear/Update Hall Lamps")]
+        public static void UpdateHallLamps()
+        {
+            Transform lights = null;
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (t.name == "Lights" && !t.parent) { lights = t; break; }
+            if (!lights) { Debug.LogError("No Lights in the open scene (open LightFear_Greybox)"); return; }
+            foreach (var n in new[] { "Lamp_Hall_South", "Lamp_Hall_West", "Lamp_Hall_Trigger", "WallLamp_Exit" })
+            {
+                var old = lights.Find(n);
+                if (old) Object.DestroyImmediate(old.gameObject);
+            }
+            WarmWallLamp(lights);
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.MarkSceneDirty(lights.gameObject.scene);
         }
 
         static void Lamp(GameObject prefab, Transform parent, string name, Vector2 at, float dim, bool shadows, bool flicker)
@@ -1448,10 +1509,11 @@ namespace BodycamHorror.EditorTools
 
         /// <summary>
         /// A rotating beacon (Beacon_Lamp, after the old Soviet ones: a grey can, a red glass dome) hung from the
-        /// ceiling over <paramref name="lamp"/>'s spot, dome down: a dim red beam sweeps round with its reflector, a faint
-        /// glow stays in the dome. False when the kit has no beacon yet (the plain red block then).
+        /// ceiling over <paramref name="lamp"/>'s spot, dome down: a wide dim red beam sweeps round with its reflector,
+        /// its top edge kept just under level so the ceiling round the lamp stays dark (no point glow there either: the
+        /// dome's own emission is all that shows of it). False when the kit has no beacon yet (the plain red block then).
         /// </summary>
-        const float BeaconBeam = 5.5f, BeaconGlow = 1f;
+        const float BeaconBeam = 10f, BeaconBeamAngle = 76f, BeaconBeamTilt = 40f;
 
         static bool Beacon(Transform lamp)
         {
@@ -1488,12 +1550,13 @@ namespace BodycamHorror.EditorTools
             }
             var beacon = lamp.gameObject.AddComponent<RotatingBeacon>();
             beacon.rotor = rotor;
-            beacon.glow = Make("Glow", lamp, LightType.Point, BeaconGlow, 4.5f);   // enough to make out the monster's shape near one
+            beacon.glow = null;
+            beacon.beamTilt = BeaconBeamTilt;   // half the cone and a little more: the top edge misses the ceiling
             if (rotor)
             {
-                beacon.beam = Make("Beam", rotor, LightType.Spot, BeaconBeam, 11f);
-                beacon.beam.spotAngle = 60f;
-                beacon.beam.innerSpotAngle = 18f;
+                beacon.beam = Make("Beam", rotor, LightType.Spot, BeaconBeam, 13f);
+                beacon.beam.spotAngle = BeaconBeamAngle;
+                beacon.beam.innerSpotAngle = 28f;
             }
             EditorUtility.SetDirty(beacon);
             return true;
@@ -1771,8 +1834,35 @@ namespace BodycamHorror.EditorTools
             var gun = shooting ? shooting.FindWeapon<Weapons.Shotgun>() : null;
             var pickup = DarkRoomSceneBuilder.PlaceGunPickup(gun, Weapons.WeaponPickup.Kind.Shotgun, ShotgunAt, Quaternion.Euler(0f, 74f, 90f));
             if (env) pickup.transform.SetParent(env, true);
+            DullShotgun(pickup);
             EditorUtility.SetDirty(pickup);
             return pickup;
+        }
+
+        /// <summary>
+        /// The shotgun on the floor in darker, duller copies of its materials (the held one keeps the originals): the
+        /// polished metal no longer shines out of the gloom, but under the torch and its small glow it still reads.
+        /// </summary>
+        static void DullShotgun(Weapons.WeaponPickup pickup)
+        {
+            foreach (var r in pickup.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    Material src = mats[i];
+                    if (!src || src.name.EndsWith("_Floor")) continue;
+                    string path = $"{KitMaterials}/{src.name}_Floor.mat";
+                    var dull = AssetDatabase.LoadAssetAtPath<Material>(path);
+                    if (!dull) { dull = new Material(src); AssetDatabase.CreateAsset(dull, path); }
+                    else dull.CopyPropertiesFromMaterial(src);
+                    dull.SetColor("_BaseColor", new Color(0.42f, 0.42f, 0.42f, 1f));
+                    dull.SetFloat("_Smoothness", 0.6f);
+                    EditorUtility.SetDirty(dull);
+                    mats[i] = dull;
+                }
+                r.sharedMaterials = mats;
+            }
         }
 
         public static void AssignManthingClips(Manthing thing)

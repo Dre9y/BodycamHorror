@@ -4,8 +4,8 @@ namespace BodycamHorror.Environment
 {
     /// <summary>
     /// A rotating warning beacon: the reflector in the dome (<see cref="rotor"/>) turns round the lamp's axis and a dim
-    /// red beam (<see cref="beam"/>, a spot light on the reflector) sweeps the walls with it, over a faint steady glow
-    /// in the dome. Each beacon starts at its own angle, so a row of them never turns in step.
+    /// red beam (<see cref="beam"/>, a spot light on the reflector) sweeps the walls with it, over an optional faint
+    /// steady glow in the dome. Each beacon starts at its own angle, so a row of them never turns in step.
     /// </summary>
     public class RotatingBeacon : MonoBehaviour
     {
@@ -18,7 +18,7 @@ namespace BodycamHorror.Environment
         [Tooltip("Turns a second.")]
         public float turnsPerSecond = 1.1f;
         [Tooltip("The beam leans this far towards the floor from level (deg).")]
-        public float beamTilt = 18f;
+        public float beamTilt = 40f;
 
         float phase;
         Quaternion rotorRest;

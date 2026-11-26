@@ -34,11 +34,11 @@ namespace BodycamHorror.Audio
         [Range(0f, 1f)] public float ringStart = 0.65f;
         [Tooltip("Fear at which the ringing is at full loudness.")]
         [Range(0f, 1f)] public float ringFull = 0.95f;
-        [Range(0f, 1f)] public float ringVolume = 0.1f;
+        [Range(0f, 1f)] public float ringVolume = 0.065f;
         [Tooltip("How fast the ringing comes in (per second).")]
         public float ringFadeIn = 0.6f;
         [Tooltip("How fast the ringing dies away once the fear drops (per second): it lingers.")]
-        public float ringFadeOut = 0.15f;
+        public float ringFadeOut = 0.5f;
 
         [Header("Recordings (loaded from Resources/Audio/Fear when empty)")]
         public AudioClip heartbeat;

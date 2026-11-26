@@ -176,7 +176,7 @@ namespace BodycamHorror.EditorTools
             scare.runClip = head ? head.moveClip : null;
             scare.animationSpeed = head ? scare.speed / Mathf.Max(head.strideSpeed * scare.modelScale, 0.1f) : 2f;
 
-            scare.scream = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_scream.wav");
+            scare.scream = null;                  // no scream: the crying head is only heard when it attacks
             scare.screamVolume = 1f;
             scare.screamPitch = head ? head.shriekPitch : 1.55f;
             scare.steps = new AudioClip[0];

@@ -6363,7 +6363,7 @@ MonoBehaviour:
   stripBehaviours: 1
   runClip: {fileID: 2845759425010373711, guid: c9e99e75def25a74ba26e7103ae58521, type: 3}
   animationSpeed: 2.5641026
-  scream: {fileID: 8300000, guid: 5707389f09153974191e93e3c4ce47d2, type: 3}
+  scream: {fileID: 0}
   screamVolume: 1
   screamPitch: 1.55
   steps: []
@@ -8605,7 +8605,7 @@ MonoBehaviour:
   slideFov: 78
   fovSharpness: 6
   strideWalk: 3
-  strideSprint: 5.6
+  strideSprint: 3
   bobVertical: 0.05
   bobHorizontal: 0.04
   bobRoll: 1.8

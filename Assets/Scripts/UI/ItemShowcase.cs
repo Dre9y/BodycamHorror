@@ -83,7 +83,7 @@ namespace BodycamHorror.UI
                 var fitted = PistolWithLight(pickup, player);
                 if (fitted)
                 {
-                    Show(fitted, pickup.showcaseEuler);
+                    Show(fitted, pickup.showcaseEuler, 1f, false);   // a gun: in the middle, not laid out as a shining torch
                     Destroy(fitted);
                     return;
                 }
@@ -118,15 +118,17 @@ namespace BodycamHorror.UI
             var model = copy.transform.Find("Model");
             if (model) model.gameObject.SetActive(true);
 
-            // the light rides at the muzzle + offset in the gun's own space (BodycamFlashlight puts it there on the
-            // gun anchor, which sits where the gun is)
+            // the light rides at the muzzle + offset in the gun's own space. The static model's muzzle, not gun.muzzle:
+            // with animated hands that one is moved into the hands' gun space and the light ended up off the barrel
             var fitted = Instantiate(lightModel.gameObject, copy.transform, false);
             fitted.name = "WeaponLight";
-            fitted.transform.localPosition = gun.muzzle.localPosition + gun.flashlightOffset;
+            fitted.transform.localPosition = gun.ModelMuzzleLocal + gun.flashlightOffset;
             fitted.transform.localRotation = Quaternion.identity;
             fitted.transform.localScale = Vector3.one;
-            foreach (var l in fitted.GetComponentsInChildren<Light>(true))
-                if (l.type != LightType.Spot) DestroyImmediate(l);   // its glow and bounce stay with the pickup
+            // no lights at all: a shining spot made the stage show it as a lit torch, small and off to the left of its
+            // beam; the pistol with its light goes in the middle, like any gun
+            // (switched off, not destroyed: URP's light data hangs on the Light and keeps it from being removed)
+            foreach (var l in fitted.GetComponentsInChildren<Light>(true)) l.enabled = false;
             holder.SetActive(true);
             return holder;
         }
@@ -142,13 +144,14 @@ namespace BodycamHorror.UI
         }
 
         /// <summary>Shows a copy of <paramref name="source"/>'s meshes. <paramref name="euler"/>: its pose to the camera
-        /// (zero: turned to show its broad side).</summary>
-        public void Show(GameObject source, Vector3 euler = default, float size = 1f)
+        /// (zero: turned to show its broad side). <paramref name="beams"/>: a spot light on it that is on is shown as its beam,
+        /// the item small and off to the left.</summary>
+        public void Show(GameObject source, Vector3 euler = default, float size = 1f, bool beams = true)
         {
             if (!source || open) return;
             BuildStage();
             if (item) Destroy(item.gameObject);
-            item = CopyMeshes(source);
+            item = CopyMeshes(source, beams);
             if (!item) return;
             Frame(item, euler, size);
             AddBeams(item);
@@ -364,7 +367,7 @@ namespace BodycamHorror.UI
 
         /// <summary>The source's static and skinned meshes, as they look now, rebuilt under a fresh object (no scripts,
         /// colliders, lights or particles come along).</summary>
-        Transform CopyMeshes(GameObject source)
+        Transform CopyMeshes(GameObject source, bool beams = true)
         {
             var root = new GameObject("ShowcaseItem").transform;
             var renderers = new List<Renderer>();
@@ -409,7 +412,7 @@ namespace BodycamHorror.UI
             beamDir = Vector3.zero;
             foreach (var l in source.GetComponentsInChildren<Light>())
             {
-                if (!l.enabled || l.type != LightType.Spot) continue;
+                if (!beams || !l.enabled || l.type != LightType.Spot) continue;
                 var go = new GameObject("Beam");
                 go.transform.SetParent(root, false);
                 Matrix4x4 m = toLocal * l.transform.localToWorldMatrix;

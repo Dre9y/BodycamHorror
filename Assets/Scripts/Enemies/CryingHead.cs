@@ -147,9 +147,9 @@ namespace BodycamHorror.Enemies
         [Range(0f, 1f)] public float stressOnHit = 0.2f;
 
         [Header("Sound")]
-        [Tooltip("Sobs, played one after another while it sits. Left empty: generated.")]
+        [Tooltip("Sobs, played one after another while it sits. Left empty: it sits silent.")]
         public AudioClip[] sobs;
-        [Tooltip("When it notices the player.")]
+        [Tooltip("Its attack cry: the leap and the bite. (Silent when it notices the player and when it dies.)")]
         public AudioClip shriek;
         [Range(0.3f, 3f)] public float shriekPitch = 1.55f;
         [Tooltip("Fingertip taps while it runs. Left empty: generated.")]
@@ -222,9 +222,7 @@ namespace BodycamHorror.Enemies
 
             // generated sounds live in fields of their own: written into the serialized lists they would
             // outlive the play session as missing references and silence it the next time
-            sobClips = Usable(sobs);
-            if (sobClips.Length == 0)
-                sobClips = new[] { ProceduralAudio.CryingSob(1), ProceduralAudio.CryingSob(2), ProceduralAudio.CryingSob(3), ProceduralAudio.CryingSob(4) };
+            sobClips = Usable(sobs);   // no generated fallback: without sob recordings it sits silent
             skitterClips = Usable(skitters);
             if (skitterClips.Length == 0)
             {
@@ -233,10 +231,6 @@ namespace BodycamHorror.Enemies
             }
 
             voice = MakeSource("Voice", 1.5f, 24f);
-            var moan = gameObject.AddComponent<Audio.MonsterMoan>();   // rare, never on top of another monster's
-            moan.height = 0.3f;
-            moan.canMoan = () => state != State.Dead && state != State.Bite;
-            moan.mayStart = () => !voice.isPlaying;   // not over its own sobbing
             feet = MakeSource("Feet", 1f, 14f);
             if (scurryLoop)
             {
@@ -425,7 +419,7 @@ namespace BodycamHorror.Enemies
 
         void Weep(float dt)
         {
-            if (voice.isPlaying) return;
+            if (sobClips.Length == 0 || voice.isPlaying) return;
             sobTimer -= dt;
             if (sobTimer > 0f) return;
             voice.pitch = Random.Range(0.94f, 1.06f);
@@ -447,11 +441,7 @@ namespace BodycamHorror.Enemies
 
         void Shriek()
         {
-            if (shriek)
-            {
-                voice.pitch = shriekPitch * Random.Range(0.95f, 1.05f);
-                voice.PlayOneShot(shriek, 1f);
-            }
+            // no shriek on noticing: its voice is heard only when it attacks (leap, bite)
             if (playerStress) playerStress.Add(stressOnShriek);
             if (playerLight) playerLight.Flicker(0.3f);
             leapCooldownTimer = Random.Range(0.6f, 3f);   // sometimes the first thing it does is jump, mostly not
@@ -1062,7 +1052,6 @@ namespace BodycamHorror.Enemies
             }
             SetState(State.Dead);
             voice.Stop();
-            if (shriek) { voice.pitch = shriekPitch * 0.7f; voice.PlayOneShot(shriek, 0.8f); }
             rb.freezeRotation = true;
             rb.linearVelocity = push * 1.6f + Vector3.up * 2.2f;
             // the slippery ball it runs on would let the corpse glide away across the tiles

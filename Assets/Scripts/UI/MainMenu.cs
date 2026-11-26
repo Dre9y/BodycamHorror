@@ -310,10 +310,13 @@ namespace BodycamHorror.UI
             float tw = titleStyle.CalcSize(new GUIContent(title)).x;
             if (tw > colWidth) titleStyle.fontSize = Mathf.Max(8, Mathf.FloorToInt(titleStyle.fontSize * colWidth / tw));
             var titleRect = new Rect(x - h * 0.01f, h * titleY - h * 0.09f, colWidth + h * 0.02f, h * 0.18f);
-            GUI.color = new Color(0f, 0f, 0f, a * 0.55f);
-            GUI.Label(new Rect(titleRect.x + h * 0.004f, titleRect.y + h * 0.006f, titleRect.width, titleRect.height), title, titleStyle);
-            GUI.color = new Color(0.86f, 0.85f, 0.8f, a * flicker);
-            GUI.Label(titleRect, title, titleStyle);
+            if (page == Page.Main)   // the settings screen has its own title
+            {
+                GUI.color = new Color(0f, 0f, 0f, a * 0.55f);
+                GUI.Label(new Rect(titleRect.x + h * 0.004f, titleRect.y + h * 0.006f, titleRect.width, titleRect.height), title, titleStyle);
+                GUI.color = new Color(0.86f, 0.85f, 0.8f, a * flicker);
+                GUI.Label(titleRect, title, titleStyle);
+            }
 
             Vector2 mouse = Event.current.mousePosition;
             bool mouseMoved = Event.current.type == EventType.Repaint && (mouse - lastMouse).sqrMagnitude > 0.5f;
@@ -331,12 +334,9 @@ namespace BodycamHorror.UI
             }
             else if (state == State.Menu)
             {
-                // the settings: the shared panel over the dimmed shot, in place of the title and items
+                // the settings: the shared full-frame screen over the shot, in place of the title and items
                 GUI.color = Color.white;
-                Fill(new Rect(0, 0, w, h), new Color(0f, 0f, 0f, 0.55f * a));
-                float k = h / 1080f;
-                Vector2 size = SettingsScreen.Size(k);
-                if (SettingsScreen.Draw(new Rect((w - size.x) * 0.5f, (h - size.y) * 0.5f, size.x, size.y), k)) OpenPage(Page.Main, 1);
+                if (SettingsScreen.Draw()) OpenPage(Page.Main, 1);
             }
             GUI.color = Color.white;
         }

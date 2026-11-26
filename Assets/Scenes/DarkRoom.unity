@@ -9202,7 +9202,7 @@ MonoBehaviour:
   slideFov: 78
   fovSharpness: 6
   strideWalk: 3
-  strideSprint: 5.6
+  strideSprint: 3
   bobVertical: 0.05
   bobHorizontal: 0.04
   bobRoll: 1.8

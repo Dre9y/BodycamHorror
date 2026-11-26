@@ -221,6 +221,20 @@ namespace BodycamHorror.Environment
             return true;
         }
 
+        /// <summary>Puts the door open at once, silently (it was opened while nobody was there to see or hear it).</summary>
+        public void OpenNow(Vector3 from)
+        {
+            latchReleased |= latch != Latch.None;
+            float side = transform.InverseTransformPoint(from).z >= 0f ? 1f : -1f;
+            float target = (swingBothWays ? side : reverseSwing ? -1f : 1f) * openAngle;
+            lastOpenAngle = target;
+            fromAngle = target;
+            targetAngle = target;
+            progress = 1f;
+            IsMoving = false;
+            SetAngle(target);
+        }
+
         public void Close()
         {
             if (!IsOpen) return;

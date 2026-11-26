@@ -54,9 +54,11 @@ namespace BodycamHorror.Enemies
                 var box = hips.gameObject.AddComponent<BoxCollider>();
                 Vector3 l = hips.InverseTransformPoint(lThigh.position), r = hips.InverseTransformPoint(rThigh.position);
                 Vector3 s = hips.InverseTransformPoint(spine.position);
-                float width = (r - l).magnitude;
+                // sizes in world metres (AbsAxisSize takes them so): a scaled-up skeleton is not scaled twice
+                float width = (rThigh.position - lThigh.position).magnitude;
+                float rise = (spine.position - (lThigh.position + rThigh.position) * 0.5f).magnitude;
                 box.center = (l + r) * 0.25f + s * 0.5f;
-                box.size = AbsAxisSize(hips, width * 1.5f, (s - (l + r) * 0.5f).magnitude * 1.6f + width * 0.25f, width * 0.85f);
+                box.size = AbsAxisSize(hips, width * 1.5f, rise * 1.6f + width * 0.25f, width * 0.85f);
                 AddPart(HumanBodyBones.Hips, hips, box, totalMass * 0.18f, null);
             }
             // torso: spine up to the neck (the chest bones ride along rigidly)

@@ -18,15 +18,17 @@ namespace BodycamHorror.EditorTools
     /// A cramped hall wrapped round a lift shaft (a ring the player can always walk round the monster on), three rooms off
     /// it, each with two ways out, joined by short corridors:
     ///   - the pump room (north-west): through the side door the monster beats down, or down the corridor to the crossing;
-    ///   - the crossing (west), lit by chemical sticks: a safe zone, with the corridor on to the switch room;
-    ///   - the switch room (south-west): by the crossing, or by a short corridor from the hall's bottom corner;
-    ///   - the workshop (east): through a shutter in the hall's east wall, or by a corridor with a second safe zone at its
-    ///     bend that comes back into the hall by the trigger.
-    /// Every room starts shut behind steel shutters, and they open a stage at a time:
+    ///   - the crossing (west), lit by chemical sticks: a safe zone, with the corridor on to the workshop;
+    ///   - the workshop (south-west): by the crossing, or by a short corridor from the hall's bottom corner;
+    ///   - the switch room (east): through a shutter in the hall's east wall, or by a corridor with a second safe zone at
+    ///     its bend that comes back into the hall by the trigger.
+    /// Every room starts shut behind steel grilles (no doors: the monster cannot squeeze through one), and they open a stage at a time:
     /// the trigger at the hall's far end (the way in slams shut, the side door is beaten down: the pump room; the lights die)
-    /// -> the valve in the pump room (shutters up: the workshop, the pump room's back way to the crossing, the crossing to the hall)
-    /// -> the fuse in the workshop (small enemies: markers only; shutters up: the workshop's back corridor, the switch room both ways)
-    /// -> the emergency power crank in the switch room (red lamps, the exit gate past the trigger opens) -> out.
+    /// -> the valve in the pump room (grilles up: the pump room's back way to the crossing, the crossing to the hall, the
+    ///    workshop from the crossing and from the hall, the switch room from the hall and from its back corridor)
+    /// -> the fuse on the workshop's bench (small enemies: markers only)
+    /// -> the fuse into the fuse box in the switch room, and the emergency power crank beside it turned (red lamps, the
+    ///    exit gate past the trigger opens) -> out.
     /// Every corridor mouth is a Doorway: the monster shoots through and cannot be frozen half inside one.
     /// Coordinates (m): x east, z north, as in the sketch; the hall's middle is about (18, 11).
     ///
@@ -35,9 +37,9 @@ namespace BodycamHorror.EditorTools
     /// the player where to go without a word:
     ///   - the big main comes in over the way in, runs round the hall's west side, through the wall over the side door
     ///     the monster beats down and across the pump room straight down to the valve (job 1);
-    ///   - the power line (two thin pipes) joins the power box by the crank in the switch room to an open fuse box in
-    ///     the workshop beside the fuse: from the hall it leads east into the workshop (job 2), and with the fuse in
-    ///     hand it leads back the other way, down the corridor into the switch room (job 3).
+    ///   - the power line (two thin pipes) comes out of the workshop's wall by the bench with the fuse and runs to an
+    ///     open fuse box on the switchgear in the switch room: with the fuse in hand it leads east to where it goes in,
+    ///     beside the crank (job 3).
     /// Menu: BodycamHorror > Build Light Fear Greybox.
     /// </summary>
     public static class LightFearSceneBuilder
@@ -46,6 +48,10 @@ namespace BodycamHorror.EditorTools
         const string SourceScenePath = "Assets/Scenes/LightingTest.unity";
         const string ChainAudio = "Assets/Audio/ChainRoom";
         const string AmbienceAudio = "Assets/Audio/Ambience";
+        const string RampageRunPath = "Assets/NowYouSeeMee/ManthingSecond/SnifferHostileRun.fbx";
+        /// <summary>The shotgun lies in the way out, past its gate and short of the end; the monster comes back across the hall.</summary>
+        static readonly Vector3 ShotgunAt = new Vector3(18f, 0f, 21.6f);
+        static readonly Vector3 AttackFrom = new Vector3(18f, 0f, 4.8f);
 
         const float H = 3.2f;          // floor to ceiling
         const float T = 0.3f;          // wall thickness
@@ -185,13 +191,18 @@ namespace BodycamHorror.EditorTools
             Doors();
             Clutter();
             Pipes();
+            RoomDressing();
             Scatter();
             Door entry = EntryDoor();
             Transform lights = Lamps();
             SafeZones();
             GameObject emergency = EmergencyLights();
-            var (valve, crank, workshopGate, exitGate) = Mechanisms();
+            var (valve, crank, exitGate, fuseSlot, fuseIn) = Mechanisms();
+            FuseSparks(fuseIn);
             Manthing thing = PlaceManthing();
+            // the first job is where it shows itself: it comes to the light while the valve turns (Manthing's showdown)
+            thing.showdownValve = valve;
+            EditorUtility.SetDirty(thing);
             Markers();
             Doorways();
 
@@ -212,12 +223,16 @@ namespace BodycamHorror.EditorTools
             e.bulbBurst = Clip(ChainAudio + "/bulb_burst.wav");
             e.bulbBurstLayer = Clip(ChainAudio + "/lamp_break_drop.mp3");
             e.powerCrank = crank;
+            e.fuseBox = fuseSlot;
+            e.fuseInBox = fuseIn;
             e.openOnFuse = fuseGates;
             e.emergencyLights = emergency;
             e.exitGate = exitGate;
             e.powerOnClip = Clip(AmbienceAudio + "/Prepared/creak_metallic_groan.wav");
             e.exitCenter = new Vector3(18f, 1.5f, 23.6f);
             e.exitSize = new Vector3(2.4f, 3f, 2f);
+            e.shotgun = PlaceShotgun(player);
+            e.attackFrom = AttackFrom;
             EditorUtility.SetDirty(e);
 
             GameLook.ApplyAtmosphere();
@@ -265,8 +280,8 @@ namespace BodycamHorror.EditorTools
             shaft = Add(new Room("Shaft", V(16.32f, 14.7f), V(19.68f, 14.7f), V(20.64f, 11.28f), V(19.32f, 7.92f), V(16.68f, 7.92f), V(15.36f, 11.28f)));
             pump = Add(new Room("PumpRoom", V(1.2f, 23.28f), V(9.6f, 24f), V(11.1f, 19.8f), V(9.0f, 16.5f), V(1.8f, 16.8f)));
             crossing = Add(new Room("Crossing", V(3f, 10.2f), V(6.6f, 10.2f), V(6.6f, 13.8f), V(3f, 13.8f)));
-            switchRoom = Add(new Room("SwitchRoom", V(1.2f, 9f), V(9f, 9.3f), V(10.5f, 5.4f), V(8.4f, 0.9f), V(1.8f, 1.2f)));
-            workshop = Add(new Room("Workshop", V(26.04f, 16.08f), V(33.6f, 17.4f), V(35.4f, 12f), V(33.6f, 7.2f), V(26.52f, 7.8f)));
+            workshop = Add(new Room("Workshop", V(1.2f, 9f), V(9f, 9.3f), V(10.5f, 5.4f), V(8.4f, 0.9f), V(1.8f, 1.2f)));
+            switchRoom = Add(new Room("SwitchRoom", V(26.04f, 16.08f), V(33.6f, 17.4f), V(35.4f, 12f), V(33.6f, 7.2f), V(26.52f, 7.8f)));
             vestibule = Add(new Room("Vestibule", V(16.68f, -6f), V(19.32f, -6f), V(19.32f, 3.48f), V(16.68f, 3.48f)));
             exitRoom = Add(new Room("ExitRoom", V(16.8f, 19.5f), V(16.8f, 25f), V(19.2f, 25f), V(19.2f, 19.5f)));
 
@@ -276,12 +291,12 @@ namespace BodycamHorror.EditorTools
             Open(hall, 4, V(19.2f, 19.5f), V(16.8f, 19.5f), H);
             Open(exitRoom, 3, V(19.2f, 19.5f), V(16.8f, 19.5f), H);
 
-            // doors that go nowhere: sealed bunker doors on three walls, a locked steel door in the switch room
+            // doors that go nowhere: sealed bunker doors on three walls, a locked steel door in the workshop
             doorHoles.Clear(); doorSpots.Clear();
             DoorHole(hall, 6, 0.628f, false);        // hall's west wall, between the crate and the corridor to the crossing
             DoorHole(pump, 1, 0.5f, false);
-            DoorHole(workshop, 2, 0.5f, false);
-            DoorHole(switchRoom, 1, 0.5f, true);
+            DoorHole(switchRoom, 2, 0.5f, false);
+            DoorHole(workshop, 1, 0.5f, true);
         }
 
         static readonly List<Vector2> doorHoles = new List<Vector2>();
@@ -388,15 +403,15 @@ namespace BodycamHorror.EditorTools
             // the side door the monster beats down: hall -> pump room (narrower: one door's width)
             var mouth = Corridor(corridors, "Corridor_SideDoor", new[] { V(13.08f, 16.8f), V(9.955f, 18f) }, hall, 5, pump, 2, 1.6f, DoorTop, H);
             brokenL = mouth.Item1; brokenR = mouth.Item2;
-            // pump room -> crossing -> switch room, and the crossing out to the hall
+            // pump room -> crossing -> workshop, and the crossing out to the hall
             Corridor(corridors, "Corridor_PumpCrossing", new[] { V(4.8f, 16.7f), V(4.8f, 13.8f) }, pump, 3, crossing, 2);
-            Corridor(corridors, "Corridor_CrossingSwitch", new[] { V(4.8f, 10.2f), V(4.8f, 9.14f) }, crossing, 0, switchRoom, 0);
+            Corridor(corridors, "Corridor_CrossingWorkshop", new[] { V(4.8f, 10.2f), V(4.8f, 9.14f) }, crossing, 0, workshop, 0);
             Corridor(corridors, "Corridor_CrossingHall", new[] { V(6.6f, 12f), V(12.59f, 12f) }, crossing, 1, hall, 6);
-            // switch room -> the hall's bottom-left corner
-            Corridor(corridors, "Corridor_SwitchHall", new[] { V(9.45f, 3.15f), V(14.11f, 4.4f) }, switchRoom, 2, hall, 7);
-            // hall -> workshop (the shutter), and the workshop's back corridor round to the hall by the trigger
-            Corridor(corridors, "Corridor_Shutter", new[] { V(23.41f, 12f), V(26.28f, 12f) }, hall, 2, workshop, 4);
-            Corridor(corridors, "Corridor_WorkshopBack", new[] { V(31.2f, 16.98f), V(30f, 21f), V(24.3f, 21.3f), V(22.21f, 18.48f) }, workshop, 0, hall, 3);
+            // workshop -> the hall's bottom-left corner
+            Corridor(corridors, "Corridor_WorkshopHall", new[] { V(9.45f, 3.15f), V(14.11f, 4.4f) }, workshop, 2, hall, 7);
+            // hall -> switch room (the shutter), and the switch room's back corridor round to the hall by the trigger
+            Corridor(corridors, "Corridor_HallSwitch", new[] { V(23.41f, 12f), V(26.28f, 12f) }, hall, 2, switchRoom, 4);
+            Corridor(corridors, "Corridor_SwitchBack", new[] { V(31.2f, 16.98f), V(30f, 21f), V(24.3f, 21.3f), V(22.21f, 18.48f) }, switchRoom, 0, hall, 3);
 
             var walls = Group("Rooms", env);
             foreach (Room r in rooms)
@@ -823,12 +838,31 @@ namespace BodycamHorror.EditorTools
             float width = Vector2.Distance(brokenL, brokenR) - 0.04f;
             var leaf = LocalBox("Leaf", go.transform, new Vector3(-width / 2, 0.01f, -0.05f), new Vector3(width / 2, DoorTop - 0.02f, 0.05f), wood, 1f);
             leaf.isStatic = false;
+            DoorModel(leaf);
             var d = go.AddComponent<BashedDoor>();
             d.leaf = leaf.transform;
             d.blowClip = Clip(ChainAudio + "/door_slam_boom.wav");
             d.burstClip = Clip(AmbienceAudio + "/bang_pipe_concrete.mp3");
             EditorUtility.SetDirty(d);
             return d;
+        }
+
+        /// <summary>
+        /// The side door's leaf: the level's steel door (MetalDoor: rim, ribs, rivets, vent, kick plate, its scanned
+        /// metal) made to the hole's size and beaten out of shape from behind (DoorBuilder.BeatenLeaf). Its mesh and
+        /// materials go on the leaf itself, so the box collider and BashedDoor's throw stay as they were.
+        /// </summary>
+        static void DoorModel(GameObject leaf)
+        {
+            var box = leaf.GetComponent<BoxCollider>();
+            Vector3 size = box ? box.size : new Vector3(1.565f, 2.27f, 0.1f);
+            Mesh mesh = DoorBuilder.BeatenLeaf(size.x, size.y, size.z, LightingTestSceneBuilder.PrefabDir + "/SideDoor_BeatenLeaf.asset", out Material[] mats);
+            leaf.GetComponent<MeshFilter>().sharedMesh = mesh;
+            leaf.GetComponent<MeshRenderer>().sharedMaterials = mats;
+            // behind the mouth the corridor narrows (its walls 0.65 m off the middle, the mouth's 0.8): the leaf sits
+            // forward in the mouth, its back face and back handle clear of the narrow part, or the bricks show through it
+            Vector3 p = leaf.transform.localPosition;
+            leaf.transform.localPosition = new Vector3(p.x, p.y, size.z * 0.5f + 0.08f);
         }
 
         /// <summary>The steel door across the way in (the player opens it; the event slams and locks it).</summary>
@@ -895,7 +929,7 @@ namespace BodycamHorror.EditorTools
             var keepOff = new List<(Vector2 at, float r)>
             {
                 (V(2.9f, 20f), 1.7f), (V(4.8f, 12f), 1.9f), (V(30f, 21f), 1.8f),   // safe zones
-                (V(2.6f, 20f), 1.4f), (V(2.6f, 5f), 1.6f), (V(33f, 12f), 1.2f),     // valve, crank, the fuse's bench
+                (V(2.6f, 20f), 1.4f), (V(30f, 8.3f), 1.6f), (V(2.4f, 5f), 1.4f),    // valve, crank, the workshop's bench
                 (V(18f, 18.2f), 1.0f),                                              // the trigger's middle
             };
             foreach (var c in doorHoles) keepOff.Add((c, 1.1f));
@@ -972,39 +1006,206 @@ namespace BodycamHorror.EditorTools
             Prop(g, "Trash_BottleB", 21.6f, 7.0f, 75f);
             Prop(g, "Trash_Debris", 22.6f, 13.3f);
             Prop(g, "Trash_Rag", 15.0f, 18.9f, 20f);
-            // the workshop's big machine stays a block to walk round; the fuse lies on a workbench past it
-            var machineMat = AssetDatabase.LoadAssetAtPath<Material>(LightingTestSceneBuilder.MaterialDir + "/PaintedMetal006.mat");   // the valve's flaking green paint
-            Box("Machine_Workshop", g, new Vector3(28.8f, 0f, 10.4f), new Vector3(31.2f, 2.3f, 13.2f), machineMat ? machineMat : metal, machineMat ? 1.6f : 1f);
-            Prop(g, "Workbench", 33.0f, 12.0f, -90f);   // its front (the vise) to whoever comes round the machine
+            // switch room (east): the transformer in the middle (RoomDressing), the fuse box on its cabinet's east face; the crank on the south wall
             Prop(g, "Shelf_Metal", 28.0f, 16.07f, 170f);
-            Prop(g, "Cabinet_Metal", 32.6f, 7.66f, -5f);
-            Prop(g, "GasCylinder", 33.95f, 15.6f);
+            Prop(g, "Cabinet_Metal", 33.0f, 7.75f, -5f);
             Prop(g, "Barrel", 27.3f, 8.6f, 10f);
             Prop(g, "Barrel_Open", 27.95f, 8.45f, 200f);
-            Prop(g, "Tyre", 34.4f, 13.4f);   // clear of the sealed door in the south-east wall
-            Prop(g, "Trash_Debris", 29.6f, 8.4f, 90f);
+            Prop(g, "Crate", 34.0f, 11.2f, 15f);
+            Prop(g, "Trash_Cardboard", 33.6f, 13.4f, 35f);
             Prop(g, "Trash_TinCan_A", 31.8f, 14.0f, 40f);
             // pump room (the valve's corner, x < 4.2 round z 20, stays clear)
             Prop(g, "Shelf_Wood", 8.8f, 23.45f, 175f);
             Prop(g, "CementBags", 6.5f, 23.2f, 178f);
             Prop(g, "Pallet", 5.0f, 23.35f, 0f, 0.41f, Quaternion.Euler(0f, 175f, 0f) * Quaternion.Euler(-80f, 0f, 0f));
             Prop(g, "Barrel", 2.5f, 22.75f, 70f);
-            Prop(g, "Brick_Pile", 6.6f, 17.4f, 15f);
-            Prop(g, "Trash_Debris", 8.3f, 17.4f);
+            Prop(g, "Brick_Pile", 3.2f, 17.6f, 15f);      // (the pump unit stands along the south wall)
+            Prop(g, "Trash_Debris", 9.9f, 21.5f);
             // crossing: its corners only (the safe zone and three corridors take the rest)
             Prop(g, "Crate_Open", 3.5f, 13.3f, 10f);
             Prop(g, "Bucket", 3.4f, 10.6f);
             Prop(g, "Trash_BottleA", 6.2f, 10.6f);
-            // switch room
-            Prop(g, "Crate", 7.5f, 2.1f, -20f);
-            Prop(g, "Trash_Cardboard", 6.6f, 2.9f, 35f);
+            // workshop (south-west): the bench with the fuse against the west wall, its front to the room
+            var bench = Prop(g, "Workbench", 2.05f, 5.0f, 90f);
+            // its collider only up to the top (the whole bench, vise and all, hid the fuse from the player's look)
+            if (bench)
+                foreach (var box in bench.GetComponentsInChildren<BoxCollider>())
+                {
+                    Vector3 c = box.center, s = box.size;
+                    float bottom = c.y - s.y * 0.5f, top = (BenchTop - 0.01f - box.transform.position.y) / Mathf.Max(box.transform.lossyScale.y, 1e-4f);
+                    box.size = new Vector3(s.x, top - bottom, s.z);
+                    box.center = new Vector3(c.x, (top + bottom) * 0.5f, c.z);
+                }
             Prop(g, "Shelf_Metal", 6.0f, 8.8f, 178f);
-            Prop(g, "Mattress", 4.0f, 1.75f, 2f);
-            Prop(g, "Planks_Pile", 8.4f, 6.4f, 70f);
+            Prop(g, "Cabinet_Metal", 7.0f, 1.6f, -3f);
+            Prop(g, "GasCylinder", 8.3f, 8.5f);           // (the meat hooks hang along the west wall)
+            Prop(g, "Barrel", 3.0f, 1.9f, 30f);
+            Prop(g, "Tyre", 6.9f, 3.6f);
+            Prop(g, "Trash_Debris", 4.6f, 2.6f, 90f);
             // corridors and the way in
             Prop(g, "Trash_Rag", 26.0f, 20.7f, 60f);
             Prop(g, "Trash_Newspaper", 17.2f, -4.5f, 10f);
             Prop(g, "Brick_Single", 19.0f, -1.5f, 70f);
+        }
+
+        // ---------------------------------------------------------------- the working rooms (Blender/tools/rooms_props.py)
+
+        /// <summary>Ground the dressing takes up (centre, radius): the rubbish keeps off it.</summary>
+        static readonly List<(Vector2 at, float r)> dressed = new List<(Vector2, float)>();
+
+        /// <summary>A point by a room's wall (on the edge from corner i to the next, t along it), off its inner face by
+        /// <paramref name="off"/>, and the way into the room from there.</summary>
+        static (Vector2 at, Vector2 inward) OnWall(Room r, int i, float t, float off)
+        {
+            Vector2 a = r.p[i], b = r.p[(i + 1) % r.p.Length];
+            Vector2 n = Left(b - a).normalized, c = Vector2.zero;
+            foreach (var v in r.p) c += v;
+            c /= r.p.Length;
+            Vector2 mid = Vector2.Lerp(a, b, t);
+            if (Vector2.Dot(n, c - mid) < 0f) n = -n;
+            return (mid + n * (T / 2 + off), n);
+        }
+
+        static GameObject Place(Transform g, string prefab, Vector3 at, Quaternion rot, float keepOff = 0f)
+        {
+            var go = Prop(g, prefab, at.x, at.z);
+            if (!go) return null;
+            go.transform.SetPositionAndRotation(at, rot);
+            if (keepOff > 0f) { dressed.Add((V(at.x, at.z), keepOff)); occupied.Add(V(at.x, at.z)); }
+            return go;
+        }
+
+        /// <summary>
+        /// The rooms with the jobs in them dressed: a pump unit along the pump room's south wall; in the workshop a
+        /// butcher's table with the officer's head on it, meat hooks along the west wall and blood on the floor; in the
+        /// switch room a transformer where the switchgear block stood (the fuse box on its cabinet), a breaker board
+        /// in the north-east corner and cable trays under the ceiling between them.
+        /// </summary>
+        static void RoomDressing()
+        {
+            dressed.Clear();
+            var g = Group("RoomDressing", env);
+            // pump room: its back to the south wall, between the crossing's corridor and the side door
+            var (pa, pin) = OnWall(pump, 3, (9f - 7.2f) / 7.2f, 0.72f);
+            Place(g, "Pump_Unit", W(pa), Quaternion.LookRotation(W(pin), Vector3.up), 1.3f);
+            dressed.Add((pa + new Vector2(-0.8f, 0f), 0.9f)); dressed.Add((pa + new Vector2(0.8f, 0f), 0.9f));
+
+            // workshop: the table along the bench, its bloody side to the room; the head stood up on it, facing the room
+            var table = Place(g, "Butcher_Table", new Vector3(4.4f, 0f, 5.2f), Quaternion.Euler(0f, 90f, 0f), 1.1f);
+            dressed.Add((V(4.4f, 4.5f), 0.7f)); dressed.Add((V(4.4f, 5.9f), 0.7f));
+            if (table)
+            {
+                // the wet pool on the block's top (Blender x 0.12, y 0.04: x mirrors into Unity)
+                Vector3 spot = table.transform.TransformPoint(new Vector3(-0.15f, 0.9f, -0.04f));
+                // upright on the cut (hidden under it), looking out past the table's end towards the way in from the crossing
+                var head = Place(g, "Severed_Head", spot, Quaternion.LookRotation(new Vector3(1f, 0f, 0.45f), Vector3.up));
+                if (head) RestOn(head, 0.9f);
+            }
+            Place(g, "Meat_Hooks", new Vector3(2.45f, 0f, 7.4f), Quaternion.Euler(0f, 90f, 0f));
+            dressed.Add((V(2.45f, 6.6f), 0.6f)); dressed.Add((V(2.45f, 8.2f), 0.6f));
+            Place(g, "Blood_PoolA", new Vector3(2.55f, 0f, 7.15f), Quaternion.Euler(0f, 20f, 0f), 0.8f);
+            Place(g, "Blood_PoolB", new Vector3(5.15f, 0f, 4.6f), Quaternion.Euler(0f, 70f, 0f), 0.5f);
+            Vector3 drag = new Vector3(-1.15f, 0f, 0.8f).normalized;   // from the table towards the hooks
+            Place(g, "Blood_Smear", new Vector3(3.95f, 0f, 6.2f), Quaternion.FromToRotation(Vector3.left, drag), 0.6f);
+
+            // switch room: the transformer where the switchgear block stood, its cabinet's face at x 31.2 (the fuse box)
+            Place(g, "Transformer", new Vector3(30f, 0f, 11.8f), Quaternion.Euler(0f, 90f, 0f), 1.6f);
+            dressed.Add((V(30f, 10.8f), 1.2f)); dressed.Add((V(30f, 12.8f), 1.2f));
+            // the breaker board on the north-east wall by the corner, cables from it up into a tray along the north wall,
+            // a second tray from that over the transformer, the cables dropping onto its cover
+            var (ba, bin) = OnWall(switchRoom, 1, 0.14f, 0f);
+            Quaternion boardRot = Quaternion.LookRotation(W(bin), Vector3.up);
+            Place(g, "Breaker_Panel", W(ba, 0.9f), boardRot, 0.9f);
+            var dropA = Place(g, "Cable_Drop", W(ba, 2.0f), boardRot);
+            if (dropA) dropA.transform.localScale = new Vector3(1f, (2.95f - 2.0f) / 2f, 1f);
+            Vector2 north = (switchRoom.p[1] - switchRoom.p[0]).normalized;
+            foreach (float x in new[] { 32.3f, 30.3f })
+            {
+                var (ta, _) = OnWall(switchRoom, 0, (x - switchRoom.p[0].x) / (switchRoom.p[1].x - switchRoom.p[0].x), 0.35f);
+                Tray(g, W(ta, 2.95f), W(north));
+            }
+            foreach (float z in new[] { 13.45f, 15.45f }) Tray(g, new Vector3(29.75f, 2.85f, z), Vector3.forward);
+            var dropB = Place(g, "Cable_Drop", new Vector3(29.75f, 1.72f, 12.45f), Quaternion.Euler(0f, 90f, 0f));
+            if (dropB) dropB.transform.localScale = new Vector3(1f, (2.85f - 1.72f) / 2f, 1f);
+        }
+
+        /// <summary>A 2 m cable tray under the ceiling, hung on two rods.</summary>
+        static void Tray(Transform g, Vector3 at, Vector3 along)
+        {
+            Place(g, "Cable_Tray_2m", at, Quaternion.FromToRotation(Vector3.right, along.normalized));
+            foreach (float k in new[] { -0.7f, 0.7f }) Hanger(g, at + along.normalized * k + Vector3.up * 0.06f, 0f);
+        }
+
+        /// <summary>Drops <paramref name="go"/> straight down until its lowest point rests at <paramref name="y"/>.</summary>
+        static void RestOn(GameObject go, float y)
+        {
+            float low = float.MaxValue;
+            foreach (var f in go.GetComponentsInChildren<MeshFilter>())
+                foreach (var v in f.sharedMesh.vertices) low = Mathf.Min(low, f.transform.TransformPoint(v).y);
+            if (low < float.MaxValue) go.transform.position += Vector3.up * (y + 0.002f - low);
+        }
+
+        /// <summary>The fuse box arcs now and then until the fuse is in (SparkEmitter on the cable at its foot).</summary>
+        static void FuseSparks(GameObject fuseIn)
+        {
+            if (!fuseIn || !fuseIn.transform.parent) { Debug.LogWarning("No fuse box: no sparks"); return; }
+            Transform box = fuseIn.transform.parent;
+            var go = new GameObject("FuseBox_Sparks");
+            go.transform.SetParent(box, false);
+            go.transform.localPosition = new Vector3(-0.1f, -0.04f, 0.17f);   // where the cable leaves its foot, in front of the door (Blender x 0.1 mirrored)
+            var s = go.AddComponent<SparkEmitter>();
+            s.sparkMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Weapons/ImpactParticle.mat");
+            s.stopWhenActive = fuseIn;
+            EditorUtility.SetDirty(s);
+        }
+
+        /// <summary>
+        /// The working rooms dressed in the scene that is open, without building the level again: the old dressing and
+        /// the switchgear block go, the props in the new pieces' way move, the rubbish under them goes.
+        /// </summary>
+        [MenuItem("BodycamHorror/Light Fear/Dress Working Rooms")]
+        public static void DressOpenScene()
+        {
+            LevelSceneBuilder.LoadMaterials();
+            rust = LevelSceneBuilder.rust;
+            Layout();
+            var envGo = GameObject.Find("Environment");
+            if (!envGo) { Debug.LogError("No Environment in the open scene (open LightFear_Greybox)"); return; }
+            env = envGo.transform;
+            var all = env.GetComponentsInChildren<Transform>(true);
+            foreach (Transform t in all)
+            {
+                if (!t) continue;
+                if (t.name == "RoomDressing" || t.name == "Switchgear") { Object.DestroyImmediate(t.gameObject); continue; }
+                Vector2 q = V(t.position.x, t.position.z);
+                void Move(string name, Vector2 from, Vector2 to)
+                {
+                    if (t && t.name == name && Vector2.Distance(q, from) < 0.3f) t.position = new Vector3(to.x, t.position.y, to.y);
+                }
+                Move("Brick_Pile", V(6.6f, 17.4f), V(3.2f, 17.6f));
+                Move("Trash_Debris", V(8.3f, 17.4f), V(9.9f, 21.5f));
+                Move("GasCylinder", V(2.3f, 8.35f), V(8.3f, 8.5f));
+            }
+            foreach (var old in Object.FindObjectsByType<SparkEmitter>(FindObjectsInactive.Include)) Object.DestroyImmediate(old.gameObject);
+            occupied.Clear();
+            RoomDressing();
+            var rubbish = env.Find("Rubbish");
+            if (rubbish)
+                for (int i = rubbish.childCount - 1; i >= 0; i--)
+                {
+                    Transform c = rubbish.GetChild(i);
+                    Vector2 q = V(c.position.x, c.position.z);
+                    if (dressed.Exists(d => Vector2.Distance(d.at, q) < d.r)) Object.DestroyImmediate(c.gameObject);
+                }
+            var fuseIn = Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            GameObject fi = null;
+            foreach (var t in fuseIn) if (t.name == "FuseIn") { fi = t.gameObject; break; }
+            FuseSparks(fi);
+            UpgradeEmergencyLights();
+            var bashed = Object.FindAnyObjectByType<BashedDoor>();
+            if (bashed && bashed.leaf) { DoorModel(bashed.leaf.gameObject); EditorUtility.SetDirty(bashed.leaf.gameObject); }
+            EditorSceneManager.MarkSceneDirty(env.gameObject.scene);
+            Debug.Log("Working rooms dressed");
         }
 
         // ---------------------------------------------------------------- pipes: the way, told without words
@@ -1015,9 +1216,9 @@ namespace BodycamHorror.EditorTools
         /// <summary>
         /// The big main: in over the way in, round the hall's west side, through the wall over the side door and
         /// straight across the pump room to the valve, where it drops to the floor beside the valve's own pipe (which
-        /// ends against it). The power line: from the power box by the crank, out of the switch room by its corridor,
-        /// along the hall's south and east sides and through the wall into the workshop, down to an open fuse box on
-        /// the machine beside the fuse's bench.
+        /// ends against it). The power line: from the power box by the fuse's bench, out of the workshop by its corridor,
+        /// along the hall's south and east sides and through the shutter into the switch room, down to an open fuse box
+        /// on the switchgear by the crank.
         /// </summary>
         static void Pipes()
         {
@@ -1035,9 +1236,11 @@ namespace BodycamHorror.EditorTools
                 for (int i = 0; i < power.Length; i++) pts[i] = W(power[i], y);
                 PipeRun(g, "Power" + (k + 1), false, pts);
             }
-            // the fuse box at the line's workshop end: on the machine's east face, door to the bench, empty
-            Prop(g, "Fusebox", 31.2f, 12f, 90f, 2.55f - 1.26f);
+            // the fuse box at the line's switch room end: on the switchgear's east face, empty (the fuse goes in here)
+            fuseBoxProp = Prop(g, "Fusebox", 31.2f, 12f, 90f, 2.55f - 1.26f);
         }
+
+        static GameObject fuseBoxProp;
 
         static Vector3 straightAxis, elbowLegA;   // the kit pipes' own axes, read off their meshes
 
@@ -1137,8 +1340,8 @@ namespace BodycamHorror.EditorTools
             Lamp(prefab, lights, "Lamp_Hall_SideDoor", V(14.9f, 16.0f), 0.6f, true, false);   // on the side door: what comes through is lit (clear of the main's joint)
             Lamp(prefab, lights, "Lamp_Hall_Trigger", V(18f, 17.3f), 0.55f, false, false);
             Lamp(prefab, lights, "Lamp_Pump", V(6f, 20.5f), 0.35f, false, true);
-            Lamp(prefab, lights, "Lamp_Switch", V(5.5f, 5f), 0.35f, false, false);
-            Lamp(prefab, lights, "Lamp_Workshop", V(30.5f, 15f), 0.35f, false, true);
+            Lamp(prefab, lights, "Lamp_Workshop", V(5.5f, 5f), 0.35f, false, true);
+            Lamp(prefab, lights, "Lamp_Switch", V(30.5f, 15f), 0.35f, false, false);
             return lights;
         }
 
@@ -1220,6 +1423,7 @@ namespace BodycamHorror.EditorTools
                 var lamp = new GameObject("Emergency_" + i).transform;
                 lamp.SetParent(g, false);
                 lamp.position = W(spots[i], H - 0.1f);
+                if (Beacon(lamp)) continue;
                 var fixture = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 fixture.name = "Fixture";
                 Object.DestroyImmediate(fixture.GetComponent<Collider>());
@@ -1242,14 +1446,110 @@ namespace BodycamHorror.EditorTools
             return g.gameObject;
         }
 
+        /// <summary>
+        /// A rotating beacon (Beacon_Lamp, after the old Soviet ones: a grey can, a red glass dome) hung from the
+        /// ceiling over <paramref name="lamp"/>'s spot, dome down: a dim red beam sweeps round with its reflector, a faint
+        /// glow stays in the dome. False when the kit has no beacon yet (the plain red block then).
+        /// </summary>
+        const float BeaconBeam = 5.5f, BeaconGlow = 1f;
+
+        static bool Beacon(Transform lamp)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{KitPrefabs}/Beacon_Lamp.prefab");
+            if (!prefab) return false;
+            Vector3 p = lamp.position; p.y = H;
+            lamp.position = p;
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab, lamp);
+            model.transform.localPosition = Vector3.zero;
+            model.transform.localRotation = Quaternion.Euler(180f, Random.Range(0f, 360f), 0f);   // from the ceiling, dome down
+            Material glass = BeaconGlass(), bulb = LightingTestSceneBuilder.EmissiveMaterial("LightFear_BeaconBulb", new Color(1f, 0.25f, 0.12f), 3f);
+            Transform rotor = null;
+            foreach (var r in model.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (r.name.Contains("Glass")) r.sharedMaterial = glass;
+                if (r.name.Contains("Bulb")) r.sharedMaterial = bulb;
+                if (r.name.Contains("Mirror")) rotor = r.transform;
+            }
+            Vector3 centre = model.transform.TransformPoint(new Vector3(0f, 0.12f, 0f));
+            Light Make(string name, Transform parent, LightType type, float intensity, float range)
+            {
+                var go = new GameObject(name);
+                go.transform.SetParent(parent, false);
+                go.transform.position = centre;
+                var l = go.AddComponent<Light>();
+                l.type = type;
+                l.color = new Color(1f, 0.08f, 0.04f);
+                l.intensity = intensity;
+                l.range = range;
+                l.shadows = LightShadows.None;
+                ViewModelLighting.SetLightLayers(l, ViewModelLighting.WorldLayer | ViewModelLighting.ViewModelLayer);
+                go.AddComponent<MonsterBlindLight>();
+                return l;
+            }
+            var beacon = lamp.gameObject.AddComponent<RotatingBeacon>();
+            beacon.rotor = rotor;
+            beacon.glow = Make("Glow", lamp, LightType.Point, BeaconGlow, 4.5f);   // enough to make out the monster's shape near one
+            if (rotor)
+            {
+                beacon.beam = Make("Beam", rotor, LightType.Spot, BeaconBeam, 11f);
+                beacon.beam.spotAngle = 60f;
+                beacon.beam.innerSpotAngle = 18f;
+            }
+            EditorUtility.SetDirty(beacon);
+            return true;
+        }
+
+        /// <summary>The beacon's dome: red glass, see-through, glowing a little from the bulb inside.</summary>
+        static Material BeaconGlass()
+        {
+            const string path = KitMaterials + "/LightFear_BeaconGlass.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (!mat)
+            {
+                mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            mat.SetFloat("_Surface", 1f);
+            mat.SetFloat("_Blend", 0f);
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.renderQueue = (int)RenderQueue.Transparent;
+            mat.SetColor("_BaseColor", new Color(0.55f, 0.03f, 0.02f, 0.72f));
+            mat.SetFloat("_Metallic", 0f);
+            mat.SetFloat("_Smoothness", 0.9f);
+            mat.EnableKeyword("_EMISSION");
+            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            mat.SetColor("_EmissionColor", new Color(1f, 0.05f, 0.02f) * 0.8f);
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        /// <summary>The open scene's red emergency lamps swapped for beacons (the lamps keep their names and spots).</summary>
+        static void UpgradeEmergencyLights()
+        {
+            var g = GameObject.Find("EmergencyLights");
+            if (!g)
+                foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                    if (t.name == "EmergencyLights" && !t.parent) { g = t.gameObject; break; }
+            if (!g) { Debug.LogWarning("No EmergencyLights in the scene"); return; }
+            foreach (Transform lamp in g.transform)
+            {
+                var old = lamp.GetComponent<RotatingBeacon>();
+                if (old) Object.DestroyImmediate(old);
+                for (int i = lamp.childCount - 1; i >= 0; i--) Object.DestroyImmediate(lamp.GetChild(i).gameObject);
+                if (!Beacon(lamp)) Debug.LogWarning("Beacon_Lamp prefab missing (BodycamHorror > Basement > Set Up Room Props)");
+            }
+        }
+
         // ---------------------------------------------------------------- the jobs
 
-        static (Valve, Valve, SlidingGate, SlidingGate) Mechanisms()
+        static (Valve, Valve, SlidingGate, UseSpot, GameObject) Mechanisms()
         {
             var g = Group("Mechanisms", null);
-            // the workshop shutter (hall's east wall) and the exit gate (past the trigger)
-            SlidingGate workshopGate = Gate(g, "Gate_Workshop", new Vector3(23.9f, 0f, 12f), new Vector3(-0.08f, 0f, -1.05f), new Vector3(0.08f, H, 1.05f),
-                                            "Затвор мастерской поднялся");
+            // the exit gate (past the trigger)
             SlidingGate exitGate = Gate(g, "Gate_Exit", new Vector3(18f, 0f, 19.85f), new Vector3(-1.25f, 0f, -0.08f), new Vector3(1.25f, H, 0.08f), null);
 
             // 1: the valve on the pump room's far (west) wall: turning it, the player's back is to both ways in
@@ -1257,16 +1557,22 @@ namespace BodycamHorror.EditorTools
             pipe.name = "Valve_Pump";
             Valve valve = pipe.GetComponentInChildren<Valve>();
             valve.turnTime = 8f;
-            UnityEventTools.AddPersistentListener(valve.closed, workshopGate.Open);
-            // every room starts shut; the valve also opens the pump room's back way to the crossing, and the crossing to the hall
-            UnityEventTools.AddPersistentListener(valve.closed, MouthGate(g, "Gate_PumpBack", "Corridor_PumpCrossing_A", null).Open);
+            // every room starts shut behind grilles (doors would stop the monster: it cannot squeeze through one); the valve
+            // opens them all: the pump room's back way to the crossing, the crossing to the hall, the workshop from the
+            // crossing and from the hall, and the switch room from the hall (the shutter in its east wall) and from its back corridor
+            UnityEventTools.AddPersistentListener(valve.closed, MouthGate(g, "Gate_PumpBack", "Corridor_PumpCrossing_A", "Где-то поднялись затворы").Open);
             UnityEventTools.AddPersistentListener(valve.closed, MouthGate(g, "Gate_CrossingHall", "Corridor_CrossingHall_B", null).Open);
+            UnityEventTools.AddPersistentListener(valve.closed, MouthGate(g, "Gate_WorkshopFromCrossing", "Corridor_CrossingWorkshop_B", null).Open);
+            UnityEventTools.AddPersistentListener(valve.closed, MouthGate(g, "Gate_WorkshopHall", "Corridor_WorkshopHall_B", null).Open);
+            UnityEventTools.AddPersistentListener(valve.closed, Gate(g, "Gate_SwitchFront", new Vector3(23.9f, 0f, 12f),
+                new Vector3(-0.08f, 0f, -1.05f), new Vector3(0.08f, H, 1.05f), null).Open);
+            UnityEventTools.AddPersistentListener(valve.closed, MouthGate(g, "Gate_SwitchBack", "Corridor_SwitchBack_A", null).Open);
             EditorUtility.SetDirty(valve);
 
-            // 2: the fuse on the table at the workshop's far end
+            // 2: the fuse on the workshop's bench
             var fuse = new GameObject("Fuse");
             fuse.transform.SetParent(g, false);
-            fuse.transform.position = new Vector3(33f, 0.865f, 12f);   // on the workbench's top
+            fuse.transform.position = new Vector3(2.1f, BenchTop, 4.75f);   // on the workbench's top
             var body = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             body.name = "Body";
             Object.DestroyImmediate(body.GetComponent<Collider>());
@@ -1291,26 +1597,41 @@ namespace BodycamHorror.EditorTools
             pickup.glow = glow;
             EditorUtility.SetDirty(pickup);
 
-            // 3: the emergency power crank on the switch room's west wall (dead until the fuse is in)
-            var crankPipe = ValveBuilder.Place(new Vector3(1.66f, 1.25f, 5f), Vector3.right, g);
+            // 3: the emergency power crank on the switch room's south wall, by the switchgear (dead until the fuse is in)
+            Vector2 wallDir = (V(26.52f, 7.8f) - V(33.6f, 7.2f)).normalized, inward = -Left(wallDir);
+            Vector2 onWall = V(30f, 7.2f + (33.6f - 30f) / 7.08f * 0.6f) + inward * (T / 2);
+            var crankPipe = ValveBuilder.Place(W(onWall, 1.25f), W(inward), g);
             crankPipe.name = "Crank_EmergencyPower";
             Valve crank = crankPipe.GetComponentInChildren<Valve>();
             crank.turnTime = 10f;
             EditorUtility.SetDirty(crank);
-            // the power box beside it, where the power line starts (back on the wall, door into the room)
-            if (!Prop(g, "Fusebox", 1.55f, 7f, 90f, PowerY - 0.05f - 1.26f))
-                Box("PowerBox", g, new Vector3(1.66f, 1.6f, 6.4f), new Vector3(1.9f, 2.4f, 7.2f), metal, 1f);
 
-            // the fuse taken opens the rest: the workshop's back corridor, and the switch room from the crossing and from the hall
-            fuseGates = new[]
+            // the fuse box on the switchgear: the player puts the fuse in by hand (LightFearEvent), and it shows in there
+            UseSpot fuseSlot = null;
+            GameObject fuseIn = null;
+            if (fuseBoxProp)
             {
-                MouthGate(g, "Gate_WorkshopBack", "Corridor_WorkshopBack_A", "Где-то поднялись затворы"),
-                MouthGate(g, "Gate_SwitchFromCrossing", "Corridor_CrossingSwitch_B", null),
-                MouthGate(g, "Gate_SwitchHall", "Corridor_SwitchHall_B", null),
-            };
+                fuseSlot = fuseBoxProp.AddComponent<UseSpot>();
+                fuseSlot.promptOffset = new Vector3(0f, 0.33f, 0.22f);   // the box's open front (the prop faces +z)
+                fuseIn = new GameObject("FuseIn");
+                fuseIn.transform.SetParent(fuseBoxProp.transform, false);
+                fuseIn.transform.localPosition = new Vector3(0f, 0.33f, 0.1f);
+                var inBody = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                inBody.name = "Body";
+                Object.DestroyImmediate(inBody.GetComponent<Collider>());
+                inBody.transform.SetParent(fuseIn.transform, false);
+                inBody.transform.localScale = new Vector3(0.045f, 0.05f, 0.045f);
+                inBody.GetComponent<MeshRenderer>().sharedMaterial = LevelSceneBuilder.enamel;
+                EditorUtility.SetDirty(fuseSlot);
+            }
+            else Debug.LogWarning("No fuse box prop: the fuse goes in at the crank");
 
-            return (valve, crank, workshopGate, exitGate);
+            fuseGates = new SlidingGate[0];   // the fuse opens nothing now: the valve opens every room
+            return (valve, crank, exitGate, fuseSlot, fuseIn);
         }
+
+        /// <summary>The workbench's top (m): its collider is cut down to it, so what lies there can be looked at and taken.</summary>
+        const float BenchTop = 0.865f;
 
         static SlidingGate[] fuseGates;
 
@@ -1438,6 +1759,22 @@ namespace BodycamHorror.EditorTools
         /// The clips its gait and poses are made of: the hunched run and the crawl on all fours mixed while it moves,
         /// crouched or hunched standing, the gallop when it charges, the scream. Also for patching a built scene.
         /// </summary>
+        /// <summary>
+        /// The shotgun on the floor of the way out (the player's own, still put away): taking it brings the monster back
+        /// for the last attack (LightFearEvent). Also for patching a built scene.
+        /// </summary>
+        public static Weapons.WeaponPickup PlaceShotgun(BodycamPlayerController player)
+        {
+            var old = GameObject.Find("Pickup_Shotgun");
+            if (old) Object.DestroyImmediate(old);
+            var shooting = player ? player.GetComponentInChildren<Weapons.PlayerShooting>(true) : null;
+            var gun = shooting ? shooting.FindWeapon<Weapons.Shotgun>() : null;
+            var pickup = DarkRoomSceneBuilder.PlaceGunPickup(gun, Weapons.WeaponPickup.Kind.Shotgun, ShotgunAt, Quaternion.Euler(0f, 74f, 90f));
+            if (env) pickup.transform.SetParent(env, true);
+            EditorUtility.SetDirty(pickup);
+            return pickup;
+        }
+
         public static void AssignManthingClips(Manthing thing)
         {
             thing.runClip = ManthingSetup.Clip("standing run");
@@ -1447,13 +1784,30 @@ namespace BodycamHorror.EditorTools
             thing.idleClip = ManthingSetup.Clip("idle standing");
             thing.screechClip = ManthingSetup.Clip("screech");
             thing.freezeClips = new AnimationClip[0];
-            thing.killScream = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_screamer.wav");
-            thing.petrifyClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_petrify.wav");
-            thing.enrageHowls = new[]
+            // the last attack (the shotgun taken): the Sniffer's hostile run, baked onto a humanoid rig
+            // (Blender/tools/sniffer_run_rig.py), screaming as it comes
+            thing.rampageWalkClip = null;
+            foreach (var o in AssetDatabase.LoadAllAssetsAtPath(RampageRunPath))
+                if (o is AnimationClip c && c.name == "RampageRun") thing.rampageWalkClip = c;
+            var screams = new List<AudioClip>();
+            foreach (string s in new[] { "monster_screamer.wav", "monster_scream.wav", "distorted_screech.mp3" })
             {
-                AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_scream.wav"),
-                AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/distorted_screech.mp3"),
-            };
+                var clip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/" + s);
+                if (clip) screams.Add(clip);
+            }
+            thing.rampageScreams = screams.ToArray();
+            // the screamer's scream is the rage, once, when it snaps; then the rampage roar, looped, while it comes.
+            // The kill keeps the plain scream for now (a placeholder until the screamer gets its own)
+            var screamer = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_screamer.wav");
+            thing.killScream = null;
+            thing.enrageScream = screamer;
+            thing.enrageHowls = new AudioClip[0];
+            // the valve's scare: the death scream made infernal (InfernalScream), made now if it is not there yet
+            var sting = AssetDatabase.LoadAssetAtPath<AudioClip>(InfernalScream.OutPath);
+            thing.showdownSting = sting ? sting : InfernalScream.Make();
+            thing.enrageLoop = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_rampage_loop.wav");
+            thing.retreatWail = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_rampage_wail.wav");
+            thing.petrifyClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/monster_petrify.wav");
             thing.poses = Manthing.DefaultPoses(thing.runClip, thing.walkClip, thing.crawlRunClip, thing.searchClip, thing.idleClip);
             EditorUtility.SetDirty(thing);
         }
@@ -1462,7 +1816,7 @@ namespace BodycamHorror.EditorTools
         static void Markers()
         {
             var g = Group("Markers", null);
-            foreach (var (name, at) in new[] { ("SmallEnemy_1", V(27.5f, 15.2f)), ("SmallEnemy_2", V(34f, 14.5f)), ("SmallEnemy_3", V(32.5f, 8.5f)) })
+            foreach (var (name, at) in new[] { ("SmallEnemy_1", V(3.5f, 7.8f)), ("SmallEnemy_2", V(8.3f, 4.2f)), ("SmallEnemy_3", V(5.0f, 2.0f)) })
             {
                 var m = new GameObject("Marker_" + name);
                 m.transform.SetParent(g, false);

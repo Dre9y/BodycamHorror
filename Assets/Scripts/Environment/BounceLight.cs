@@ -28,12 +28,39 @@ namespace BodycamHorror.Environment
         [Tooltip("How quickly the bounce follows a moving lamp (1/s). Smooths the flashlight sweeping over edges.")]
         public float follow = 14f;
         public LayerMask mask = ~(1 << 2);   // not Ignore Raycast (the player)
+        [Tooltip("How much of the surface's colour the bounce takes (0 = the lamp's own colour, 1 = fully the surface's hue).")]
+        [Range(0f, 1f)] public float tint = 1f;
+        [Tooltip("When something that moves (an enemy) is in the way, the bounce fades out instead of coming off the wall behind it.")]
+        public bool blockedByDynamic;
+        [Tooltip("Longest reach of the bounce (m); 0 = up to the lamp's own range.")]
+        public float maxRange;
+        [Tooltip("How fast the bounce fades in and out (1/s): no pop when the lit surface changes.")]
+        public float fade = 8f;
 
         Light source, bounce;
         Vector3 smoothedPos, smoothedNormal = Vector3.up;
         Color albedo;
         Renderer lastRenderer;
-        bool placed;
+        bool placed, jumping;
+        float level;   // 0..1 of the full bounce
+
+        /// <summary>Settings for a light carried around (the flashlight): faint, neutral, short, and never off an enemy's back wall.</summary>
+        public void MakeHandheld()
+        {
+            strength = 0.45f;
+            standOff = 0.35f;
+            rangeScale = 0.9f;
+            maxRange = 6f;
+            tint = 0.2f;
+            blockedByDynamic = true;
+            follow = 10f;
+            fade = 5f;
+            // the light monster stands on Ignore Raycast, like the player: look at that layer too, minus the one carrying the light
+            mask = ~0;
+            ignoreRoot = transform.root;
+        }
+
+        Transform ignoreRoot;
 
         void Awake()
         {
@@ -64,15 +91,20 @@ namespace BodycamHorror.Environment
         {
             if (!source) { Destroy(this); return; }
             bool lit = source.enabled && source.intensity > 0.001f;
-            if (!lit) { bounce.enabled = false; return; }
+            if (!lit) { bounce.enabled = false; level = 0f; return; }
 
             Vector3 origin = source.transform.position;
             Vector3 dir = source.type == LightType.Spot ? source.transform.forward : Vector3.down;
             float reach = source.range;
-            if (!FirstStaticHit(origin, dir, reach, out RaycastHit hit))
+            float step = 1f - Mathf.Exp(-fade * Time.deltaTime);
+            bool blocked;
+            if (!FirstStaticHit(origin, dir, reach, out RaycastHit hit, out blocked))
             {
-                bounce.enabled = false;
-                placed = false;
+                // nothing to bounce off: fade out where it is
+                level = Mathf.Lerp(level, 0f, step);
+                bounce.intensity *= 1f - step;
+                bounce.enabled = level > 0.01f;
+                if (!bounce.enabled) placed = false;
                 return;
             }
 
@@ -88,11 +120,19 @@ namespace BodycamHorror.Environment
             // the pool (an enemy, the player's legs) gets blown out the way it would next to a point source.
             Vector3 target = hit.point - hit.normal * standOff;
             Vector3 normal = hit.normal;
+            // a jump to a far surface (the beam off an edge, onto the far wall) fades out, moves, and fades back in,
+            // instead of the patch of light sliding across the room
+            if (placed && (target - smoothedPos).sqrMagnitude > 2.25f) jumping = true;
+            if (jumping && level < 0.08f) { jumping = false; placed = false; }
             float k = placed ? 1f - Mathf.Exp(-follow * Time.deltaTime) : 1f;
-            smoothedPos = Vector3.Lerp(smoothedPos, target, k);
-            smoothedNormal = placed ? Vector3.Slerp(smoothedNormal, normal, k) : normal;
-            placed = true;
+            if (!jumping)
+            {
+                smoothedPos = Vector3.Lerp(smoothedPos, target, k);
+                smoothedNormal = placed ? Vector3.Slerp(smoothedNormal, normal, k) : normal;
+                placed = true;
+            }
             bounce.transform.SetPositionAndRotation(smoothedPos, Quaternion.LookRotation(smoothedNormal));
+            level = Mathf.Lerp(level, blocked || jumping ? 0f : 1f, step);
 
             // flux the lamp sends into its cone, I * 2pi(1 - cos(half angle)), comes back times the albedo from a
             // Lambertian patch, whose peak intensity is flux / pi: I_bounce = albedo * I * 2(1 - cos). Flux is kept,
@@ -100,11 +140,13 @@ namespace BodycamHorror.Environment
             float cone = source.type == LightType.Spot ? 1f - Mathf.Cos(source.spotAngle * 0.5f * Mathf.Deg2Rad) : 0.5f;
             float lum = albedo.r * 0.3f + albedo.g * 0.59f + albedo.b * 0.11f;
             float peak = Mathf.Max(albedo.r, Mathf.Max(albedo.g, albedo.b), 1e-4f);
-            bounce.color = source.color * (albedo / peak);   // hue of the surface; brightness goes in intensity
-            bounce.intensity = source.intensity * strength * 2f * cone * lum;
+            Color hue = Color.Lerp(Color.white, albedo / peak, tint);
+            bounce.color = source.color * hue;   // hue of the surface (as much as tint lets); brightness goes in intensity
+            bounce.intensity = source.intensity * strength * 2f * cone * lum * level;
             // stays local: a pool of reflected light around the lit patch, not a fill for the whole room
-            bounce.range = Mathf.Clamp((hit.distance + 2f) * rangeScale, 2.5f, source.range) + standOff;
-            bounce.enabled = true;
+            float far = maxRange > 0f ? Mathf.Min(maxRange, source.range) : source.range;
+            bounce.range = Mathf.Clamp((hit.distance + 2f) * rangeScale, Mathf.Min(2.5f, far), far) + standOff;
+            bounce.enabled = level > 0.01f;
         }
 
         static readonly RaycastHit[] hits = new RaycastHit[16];
@@ -113,18 +155,21 @@ namespace BodycamHorror.Environment
         /// Nearest hit on level geometry. Enemies, props with rigidbodies and anything animated are skipped: they are
         /// small and move, so light bounced off them would hang in front of them and light them up.
         /// </summary>
-        bool FirstStaticHit(Vector3 origin, Vector3 dir, float reach, out RaycastHit best)
+        bool FirstStaticHit(Vector3 origin, Vector3 dir, float reach, out RaycastHit best, out bool blocked)
         {
             best = default;
             int n = Physics.RaycastNonAlloc(origin, dir, hits, reach, mask, QueryTriggerInteraction.Ignore);
-            float nearest = float.MaxValue;
+            float nearest = float.MaxValue, nearestDynamic = float.MaxValue;
             for (int i = 0; i < n; i++)
             {
                 Collider c = hits[i].collider;
-                if (hits[i].distance >= nearest || IsDynamic(c)) continue;
+                if (ignoreRoot && c.transform.IsChildOf(ignoreRoot)) continue;
+                if (IsDynamic(c) || c.gameObject.layer == 2) { nearestDynamic = Mathf.Min(nearestDynamic, hits[i].distance); continue; }
+                if (hits[i].distance >= nearest) continue;
                 nearest = hits[i].distance;
                 best = hits[i];
             }
+            blocked = blockedByDynamic && nearestDynamic < nearest;
             return nearest < float.MaxValue;
         }
 
@@ -207,7 +252,8 @@ namespace BodycamHorror.Environment
                 if (l.shadows == LightShadows.None) continue;
                 if (l.type != LightType.Spot && l.type != LightType.Point) continue;
                 if (l.GetComponent<BounceLight>() || l.GetComponent<NoBounce>()) continue;
-                l.gameObject.AddComponent<BounceLight>();
+                var b = l.gameObject.AddComponent<BounceLight>();
+                if (l.GetComponentInParent<Player.BodycamFlashlight>()) b.MakeHandheld();
             }
         }
     }

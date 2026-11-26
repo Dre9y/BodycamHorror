@@ -405,6 +405,22 @@ namespace BodycamHorror.Weapons
             return null;
         }
 
+        /// <summary>
+        /// Takes one of the guns away from the player (a level that hands it to them later, as a pickup). In their hands,
+        /// they switch to the next gun they still have.
+        /// </summary>
+        public void Withhold(Firearm weapon)
+        {
+            int i = weapon ? Array.IndexOf(weapons, weapon) : -1;
+            if (i < 0 || owned == null || !owned[i]) return;
+            owned[i] = false;
+            if (slot == i || TargetSlot == i)
+            {
+                int next = StepSlot(i, 1);
+                if (next != i) RequestSlot(next);
+            }
+        }
+
         /// <summary>Hands the player one of the guns in <see cref="weapons"/> (and the use of their fists).
         /// False if it is not one of them or they have it already.</summary>
         public bool Give(Firearm weapon, bool equip = true)

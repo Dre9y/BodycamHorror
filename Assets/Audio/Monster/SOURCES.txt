@@ -14,11 +14,23 @@ creature_moan  (Assets/Resources/Audio/Monster/creature_moan.wav) "Creature Moan
                https://freesound.org/s/445196/ (added as downloaded; licence not checked here - see the Freesound page).
                Played by MonsterMoan on Infected, Manthing and CryingHead: rare, one monster at a time.
 
-monster_screamer  the scream from screamer.mp4 (added by the project owner): sound track decoded, mono,
-                  0.14-1.38 s, normalised. Played in the player's face at the end (Manthing.killScream).
+monster_screamer  the scream from screamer.mp4 (added by the project owner): sound track decoded, mono, at its own pitch,
+                  its held middle stretched (overlap-add) to 2.4 s, heavy saturation (louder), long fade out. Played in the
+                  its rage, once, when it snaps (Manthing.enrageScream).
 
 monster_petrify   the first sound in rocks-moving.mp3 (added by the project owner): 1.04-1.50 s, mono,
                   normalised. Played when the flashlight catches the light monster (Manthing.petrifyClip).
+
+monster_rampage_loop  the roar from RAMPAGE.mp4 (added by the project owner): sound track decoded, mono, the steady
+                      0.75-9.0 s, played ~1.8 semitones lower (resampled x10/9), soft-clipped (tanh, part clean under it),
+                      high-passed at 45 Hz, the last 0.4 s crossfaded over the start for a seamless loop, normalised.
+                      Looped from its head while it runs at the player in its rage (Manthing.enrageLoop).
+
+monster_rampage_wail  also from RAMPAGE.mp4: its 0.75-4.5 s joined (0.3 s crossfade) to its own fade-out (8.7-12.8 s),
+                      mono, ~3.9 semitones lower (resampled x5/4), layered with itself an octave down (low-passed) and
+                      a hair flat (phase-vocoder shifts), a 23 Hz flutter through it, soft-clipped, a short dark room
+                      tail, high-passed at 40 Hz, faded to nothing. Played once from its head as it runs off out of its
+                      rage (Manthing.retreatWail).
 
 zombie_groan      a voice recording from the project owner: pitched down (x0.70 main, x0.45 sub layer, x0.82
                   bit-crushed rasp), slowed to 0.88, vibrato/tremolo gurgle, soft-clip distortion, short
@@ -29,3 +41,9 @@ zombie_groan_2    a second voice recording from the project owner, same chain as
 
 zombie_groan_3    a third voice recording from the project owner, same chain as zombie_groan.
                   Not wired to anything yet.
+
+death_scream_infernal  made from "Death Scream Sound Effect.mp3" (Assets/Audio, added by the project owner) by
+                       Assets/Editor/InfernalScream.cs: mono, the quiet lead-in cut, played at 0.8 speed, an octave
+                       under it and a fifth under that (pitch-shifted, same length), a 38 Hz ring-modulated growl,
+                       tanh drive, a long dark comb/all-pass reverb, the tail faded. The valve scare's sting
+                       (Manthing.showdownSting).

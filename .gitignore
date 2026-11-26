@@ -143,3 +143,7 @@ crashlytics-build.properties
 
 # Blender backup copies outside Assets
 *.blend1
+
+# Poly Haven source scans (CC0), re-downloadable: see Blender/tools/basement_textures.py
+/Blender/tex/polyhaven/
+/Blender/bake_log.txt

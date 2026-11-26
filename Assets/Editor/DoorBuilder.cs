@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using BodycamHorror.Environment;
 using UnityEditor;
@@ -199,12 +200,18 @@ namespace BodycamHorror.EditorTools
         /// in with sloped walls; domed rivets round the rim, a louvred vent, a raised kick plate. The same on both
         /// faces. Everything that stands out or sinks in does so through a slope: a flashlight is held next to
         /// the eye, so square steps vanish under it, while a slope always shades differently from the flat.</summary>
-        static Mesh LeafMesh(out Mesh recessed)
+        static Mesh LeafMesh(out Mesh recessed) =>
+            LeafMesh(LeafWidth, LeafHeight, Thickness, FloorGap, new[] { 0.74f, 1.4f }, 0.42f, 1.56f, 1.84f, "MetalDoor_Leaf", out recessed);
+
+        /// <summary>The leaf of any size: <paramref name="ribs"/> the heights of the two ribs across, the kick plate up to
+        /// <paramref name="kickTop"/>, the vent between <paramref name="ventBottom"/> and <paramref name="ventTop"/>.</summary>
+        static Mesh LeafMesh(float w, float leafHeight, float thickness, float floorGap, float[] ribs, float kickTop, float ventBottom, float ventTop,
+                             string name, out Mesh recessed)
         {
             MeshShape m = new MeshShape(), d = new MeshShape();   // what stands out; what is pressed in or turned away
-            float w = LeafWidth, y0 = FloorGap, y1 = FloorGap + LeafHeight;
-            const float slab = 0.006f, proud = Thickness * 0.5f, rim = 0.07f, rib = 0.03f, slope = 0.022f;
-            float[] ribs = { 0.74f, 1.4f };
+            float y0 = floorGap, y1 = floorGap + leafHeight;
+            float slab = 0.006f, proud = thickness * 0.5f;
+            const float rim = 0.07f, rib = 0.03f, slope = 0.022f;
 
             d.Box(new Vector3(rim, y0 + rim, -slab), new Vector3(w - rim, y1 - rim, slab));
             for (int s = -1; s <= 1; s += 2)
@@ -229,8 +236,8 @@ namespace BodycamHorror.EditorTools
                     Slopes(d, rim, edges[i], w - rim, edges[i + 1], zTop, slope, zFloor, facing);
 
                 // kick plate on the bottom panel, vent on the top one: raised, with sloped edges
-                Raised(m, d, rim + 0.05f, edges[0] + 0.045f, w - rim - 0.05f, 0.42f, zFloor, s * (slab + 0.008f), 0.012f, facing);
-                float vx0 = w * 0.5f - 0.18f, vx1 = w * 0.5f + 0.18f, vy0 = 1.56f, vy1 = 1.84f, zVent = s * (slab + 0.007f);
+                Raised(m, d, rim + 0.05f, edges[0] + 0.045f, w - rim - 0.05f, kickTop, zFloor, s * (slab + 0.008f), 0.012f, facing);
+                float vx0 = w * 0.5f - 0.18f, vx1 = w * 0.5f + 0.18f, vy0 = ventBottom, vy1 = ventTop, zVent = s * (slab + 0.007f);
                 Raised(d, d, vx0, vy0, vx1, vy1, zFloor, zVent, 0.01f, facing);
                 // louvres: each slat leans out at the bottom, and its underside is in its own shade
                 for (int i = 0; i < 5; i++)
@@ -247,14 +254,14 @@ namespace BodycamHorror.EditorTools
 
                 // rivets round the rim
                 Vector3 face = Vector3.forward * zTop, head = facing * 0.008f;
-                int up = Mathf.RoundToInt((LeafHeight - rim) / 0.19f);
+                int up = Mathf.RoundToInt((leafHeight - rim) / 0.19f);
                 for (int i = 0; i <= up; i++)
                 {
-                    float y = y0 + rim * 0.5f + (LeafHeight - rim) * i / up;
+                    float y = y0 + rim * 0.5f + (leafHeight - rim) * i / up;
                     Rivet(m, new Vector3(rim * 0.5f, y, 0f) + face, head);
                     Rivet(m, new Vector3(w - rim * 0.5f, y, 0f) + face, head);
                 }
-                const int across = 4;
+                int across = Mathf.Max(4, Mathf.RoundToInt((w - rim) / 0.21f));
                 for (int i = 1; i < across; i++)
                 {
                     float x = rim * 0.5f + (w - rim) * i / across;
@@ -266,8 +273,8 @@ namespace BodycamHorror.EditorTools
                     for (int i = 1; i < across; i++)
                         Rivet(m, new Vector3(rim * 0.5f + (w - rim) * i / across, at, 0f) + face, head);
             }
-            recessed = d.Build("MetalDoor_LeafRecessMesh");
-            return m.Build("MetalDoor_LeafMesh");
+            recessed = d.Build(name + "RecessMesh");
+            return m.Build(name + "Mesh");
         }
 
         /// <summary>Four sloped walls from the rectangle x0..x1, y0..y1 at depth zEdge to the same rectangle drawn in
@@ -294,12 +301,14 @@ namespace BodycamHorror.EditorTools
         static void Rivet(MeshShape m, Vector3 at, Vector3 head) => m.Stud(at, at + head, 0.017f, 0.008f, 10);
 
         /// <summary>Hinge barrels down the hinge edge and a lever handle on each face.</summary>
-        static Mesh HardwareMesh()
+        static Mesh HardwareMesh() => HardwareMesh(LeafWidth, Thickness, new[] { 0.26f, 1.03f, 1.8f }, "MetalDoor_HardwareMesh");
+
+        static Mesh HardwareMesh(float leafWidth, float thickness, float[] hinges, string name)
         {
             var m = new MeshShape();
-            float face = Thickness * 0.5f;
+            float face = thickness * 0.5f;
 
-            foreach (float at in new[] { 0.26f, 1.03f, 1.8f })
+            foreach (float at in hinges)
             {
                 m.Cylinder(new Vector3(-0.008f, at - 0.06f, face + 0.004f), new Vector3(-0.008f, at + 0.06f, face + 0.004f), 0.011f, 10);
                 m.Box(new Vector3(0f, at - 0.05f, face), new Vector3(0.055f, at + 0.05f, face + 0.004f));
@@ -307,7 +316,7 @@ namespace BodycamHorror.EditorTools
 
             for (int s = -1; s <= 1; s += 2)
             {
-                float x = LeafWidth - 0.09f, y = HandleHeight;
+                float x = leafWidth - 0.09f, y = HandleHeight;
                 float z0 = s * face, plate = s * (face + 0.005f), lever = s * (face + 0.05f);
                 m.Box(new Vector3(x - 0.022f, y - 0.1f, Mathf.Min(z0, plate)), new Vector3(x + 0.022f, y + 0.06f, Mathf.Max(z0, plate)));
                 m.Cylinder(new Vector3(x, y, plate), new Vector3(x, y, lever + s * 0.008f), 0.01f, 10);
@@ -315,7 +324,103 @@ namespace BodycamHorror.EditorTools
                 // keyhole boss under the lever
                 m.Cylinder(new Vector3(x, y - 0.065f, plate), new Vector3(x, y - 0.065f, plate + s * 0.004f), 0.012f, 10);
             }
-            return m.Build("MetalDoor_HardwareMesh");
+            return m.Build(name);
+        }
+
+        // ------------------------------------------------------------------ the beaten-in leaf (the light fear level's side door)
+
+        /// <summary>
+        /// A wide leaf of the same steel door, <paramref name="width"/> by <paramref name="height"/>, its middle at the origin
+        /// (front +Z), beaten out of shape from behind: the whole leaf bowed towards the front, three dents punched out
+        /// where the blows landed, the top corner on the latch side bent out. One mesh, three materials: the door's metal,
+        /// its recess darkening, the steel of the hinges and handles (the same materials as MetalDoor). Saved as an asset.
+        /// </summary>
+        public static Mesh BeatenLeaf(float width, float height, float thickness, string assetPath, out Material[] materials)
+        {
+            const string mats = LightingTestSceneBuilder.MaterialDir, tex = LightingTestSceneBuilder.TextureDir;
+            Material metal = EnvironmentTextures.ScannedMaterial("Metal021", mats, tex, new Color(0.46f, 0.48f, 0.47f), 1.8f);
+            Material recess = DarkCopy(metal, mats + "/Metal021_Recess.mat", new Color(0.2f, 0.21f, 0.2f));
+            Material steel = LightingTestSceneBuilder.SimpleMaterial("DoorHandle", new Color(0.32f, 0.32f, 0.31f), 0.85f, 0.55f);
+            materials = new[] { metal, recess, steel };
+
+            // the plain leaf, its panels and vent placed in proportion to the small door's
+            float k = height / LeafHeight;
+            Mesh face = LeafMesh(width, height, thickness, 0f, new[] { 0.74f * k, 1.4f * k }, 0.42f * k, 1.56f * k, 1.84f * k, "SideDoor_Leaf", out Mesh sunk);
+            Mesh hardware = HardwareMesh(width, thickness, new[] { 0.26f * k, 1.03f * k, 1.8f * k }, "SideDoor_Hardware");
+
+            var verts = new List<Vector3>(); var uvs = new List<Vector2>();
+            var subs = new List<int>[3];
+            Mesh[] parts = { face, sunk, hardware };
+            for (int p = 0; p < 3; p++)
+            {
+                subs[p] = new List<int>();
+                Vector3[] v = parts[p].vertices; Vector2[] uv = parts[p].uv; int[] t = parts[p].triangles;
+                for (int i = 0; i < t.Length; i += 3)
+                    Split(verts, uvs, subs[p], v[t[i]], v[t[i + 1]], v[t[i + 2]], uv[t[i]], uv[t[i + 1]], uv[t[i + 2]], p < 2 ? 0.12f : 10f);
+                Object.DestroyImmediate(parts[p]);
+            }
+            // beaten out from behind, then centred on the origin
+            for (int i = 0; i < verts.Count; i++)
+            {
+                Vector3 q = verts[i];
+                float u = q.x / width, w = q.y / height;
+                float bulge = 0.035f * Mathf.Sin(Mathf.PI * Mathf.Clamp01(u)) * Mathf.Sin(Mathf.PI * Mathf.Clamp01(w));
+                bulge += Dent(u, w, 0.48f, 0.47f, 0.2f, 0.055f) + Dent(u, w, 0.33f, 0.64f, 0.13f, 0.035f) + Dent(u, w, 0.66f, 0.3f, 0.12f, 0.03f);
+                if (u > 0.78f && w > 0.84f) bulge += 0.07f * ((u - 0.78f) / 0.22f) * ((w - 0.84f) / 0.16f);   // the corner bent out
+                verts[i] = new Vector3(q.x - width * 0.5f, q.y - height * 0.5f, q.z + bulge);
+            }
+            var mesh = new Mesh { name = "SideDoor_BeatenLeaf", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.subMeshCount = 3;
+            for (int p = 0; p < 3; p++) mesh.SetTriangles(subs[p], p);
+            mesh.RecalculateNormals();   // every triangle its own corners: the bent steel stays faceted
+            mesh.RecalculateBounds();
+            mesh.RecalculateTangents();
+            // written into the asset through the mesh API: CopySerialized (Save) left a 32-bit index buffer drawing
+            // only a few of its triangles
+            var existing = AssetDatabase.LoadAssetAtPath<Mesh>(assetPath);
+            if (!existing) { AssetDatabase.CreateAsset(mesh, assetPath); return mesh; }
+            existing.Clear();
+            existing.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            existing.SetVertices(mesh.vertices);
+            existing.SetNormals(mesh.normals);
+            existing.SetTangents(mesh.tangents);
+            existing.SetUVs(0, mesh.uv);
+            existing.subMeshCount = mesh.subMeshCount;
+            for (int p = 0; p < mesh.subMeshCount; p++) existing.SetTriangles(mesh.GetTriangles(p), p);
+            existing.RecalculateBounds();
+            EditorUtility.SetDirty(existing);
+            Object.DestroyImmediate(mesh);
+            return existing;
+        }
+
+        /// <summary>A rounded punch out of the face (u, w: across and up the leaf, 0..1).</summary>
+        static float Dent(float u, float w, float cu, float cw, float r, float depth)
+        {
+            float du = (u - cu) / r, dw = (w - cw) / r;
+            return depth * Mathf.Exp(-(du * du + dw * dw) * 2.2f);
+        }
+
+        /// <summary>A triangle added on its own corners, halved across its longest side while that is longer than
+        /// <paramref name="maxEdge"/> (so a flat panel can be bent; a long thin strip only gets cut along its length).</summary>
+        static void Split(List<Vector3> verts, List<Vector2> uvs, List<int> tris, Vector3 a, Vector3 b, Vector3 c, Vector2 ua, Vector2 ub, Vector2 uc, float maxEdge)
+        {
+            float ab = (a - b).magnitude, bc = (b - c).magnitude, ca = (c - a).magnitude;
+            if (Mathf.Max(ab, Mathf.Max(bc, ca)) > maxEdge)
+            {
+                // turn the corners round so a-b is the longest side, then cut it at its middle
+                if (bc >= ab && bc >= ca) { (a, b, c) = (b, c, a); (ua, ub, uc) = (ub, uc, ua); }
+                else if (ca >= ab && ca >= bc) { (a, b, c) = (c, a, b); (ua, ub, uc) = (uc, ua, ub); }
+                Vector3 m = (a + b) * 0.5f; Vector2 um = (ua + ub) * 0.5f;
+                Split(verts, uvs, tris, a, m, c, ua, um, uc, maxEdge);
+                Split(verts, uvs, tris, m, b, c, um, ub, uc, maxEdge);
+                return;
+            }
+            int i0 = verts.Count;
+            verts.Add(a); verts.Add(b); verts.Add(c);
+            uvs.Add(ua); uvs.Add(ub); uvs.Add(uc);
+            tris.Add(i0); tris.Add(i0 + 1); tris.Add(i0 + 2);
         }
 
         /// <summary>The steel frame: two jambs and a head, as deep as the wall and a little proud of it.</summary>

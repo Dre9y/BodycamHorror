@@ -226,6 +226,14 @@ namespace BodycamHorror.Enemies
 
         static readonly RaycastHit[] Hits = new RaycastHit[12];
         static readonly Dictionary<string, AudioClip> ClipCache = new Dictionary<string, AudioClip>();
+        /// <summary>The zombies' own long, low moan (ZombieTest.ogg pitched down and dragged out).</summary>
+        const string ZombieMoanClip = "Audio/Monster/zombie_moan";
+        static AudioClip zombieMoan;
+        /// <summary>Recorded voice, played whatever voiceEnabled says: one while it idles, one when it lunges.</summary>
+        const string IdleClipPath = "Audio/Monster/zombie_idle", AttackClipPath = "Audio/Monster/zombie_attack";
+        static AudioClip idleClip, attackClip;
+        AudioSource recordedVoice;
+        float idleSoundTimer;
         int voiceVariant;
 
         void Awake()
@@ -261,8 +269,22 @@ namespace BodycamHorror.Enemies
             Audio.SoundOcclusion.Attach(voice, transform, 1.4f);
             voiceVariant = Random.Range(0, 4);
 
+            recordedVoice = gameObject.AddComponent<AudioSource>();
+            recordedVoice.playOnAwake = false;
+            recordedVoice.spatialBlend = 1f;
+            recordedVoice.dopplerLevel = 0f;
+            recordedVoice.rolloffMode = AudioRolloffMode.Linear;
+            recordedVoice.minDistance = 2f;
+            recordedVoice.maxDistance = 30f;
+            Audio.SoundOcclusion.Attach(recordedVoice, transform, 1.4f);
+            if (!idleClip) idleClip = Resources.Load<AudioClip>(IdleClipPath);
+            if (!attackClip) attackClip = Resources.Load<AudioClip>(AttackClipPath);
+            idleSoundTimer = Random.Range(2f, 12f);   // a pack does not start in chorus
+
             var moan = gameObject.AddComponent<Audio.MonsterMoan>();   // rare, never on top of another monster's
-            moan.canMoan = () => !invulnerable && state != State.Dead && state != State.Scream && !BangingWall;   // the head-banger is silent at the wall
+            moan.clip = zombieMoan ? zombieMoan : (zombieMoan = Resources.Load<AudioClip>(ZombieMoanClip));   // null: the shared creature moan
+            moan.mayStart = () => !recordedVoice || !recordedVoice.isPlaying;   // not over its idle or attack sound
+            moan.canMoan =() => !invulnerable && state != State.Dead && state != State.Scream && !BangingWall;   // the head-banger is silent at the wall
 
             health = maxHealth;
             runSpeed = Random.Range(runSpeedRange.x, runSpeedRange.y);
@@ -352,6 +374,26 @@ namespace BodycamHorror.Enemies
                 voiceTimer = alerted ? Random.Range(1.8f, 4.5f) : Random.Range(5f, 11f);
                 if (state != State.Fallen && !BangingWall) Say("growl", alerted ? 0.9f : 0.5f, Random.Range(0.85f, 1.12f));
             }
+
+            // the idle sound: only while it has not noticed the player, never over its own voice
+            if (!alerted && idleClip && !recordedVoice.isPlaying && state != State.Fallen && !Ragdolled && !BangingWall)
+            {
+                idleSoundTimer -= dt;
+                if (idleSoundTimer <= 0f)
+                {
+                    idleSoundTimer = Random.Range(6f, 14f);   // counted from when this one ends
+                    PlayRecorded(idleClip, 0.55f, Random.Range(0.92f, 1.05f));
+                }
+            }
+        }
+
+        void PlayRecorded(AudioClip clip, float volume, float pitch)
+        {
+            recordedVoice.Stop();
+            recordedVoice.clip = clip;
+            recordedVoice.volume = volume;
+            recordedVoice.pitch = pitch;
+            recordedVoice.Play();
         }
 
         void Sense()
@@ -1022,6 +1064,9 @@ namespace BodycamHorror.Enemies
             attackHitDone = false;
             if (body) body.TriggerAttack();
             Say("grunt", 1f, Random.Range(0.95f, 1.2f));
+            // cuts the idle sound off; a lunge straight after another does not restart a roar still going
+            if (attackClip && !(recordedVoice.isPlaying && recordedVoice.clip == attackClip))
+                PlayRecorded(attackClip, 1f, Random.Range(0.95f, 1.05f));
         }
 
         void AttackMove(float dt)
@@ -1172,6 +1217,7 @@ namespace BodycamHorror.Enemies
                 rb.AddTorque(Random.insideUnitSphere * 2f, ForceMode.VelocityChange);
             }
             voice.Stop();
+            recordedVoice.Stop();
             Say("growl", 0.8f, Random.Range(0.6f, 0.75f));   // last gurgle
             Died?.Invoke(this);
             CorpseDecay.Begin(gameObject, corpsePhysicsTime, corpseLifetime, corpseDissolveTime);   // freezes, later dissolves and goes

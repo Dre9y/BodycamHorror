@@ -16,7 +16,7 @@ namespace BodycamHorror.Player
     {
         public static PlayerInteractor Instance { get; private set; }
         /// <summary>A door or a pickup is in reach and looked at right now.</summary>
-        public static bool HasTarget => Instance && Instance.isActiveAndEnabled && (Instance.Target || Instance.Pickup || Instance.Key || Instance.Valve);
+        public static bool HasTarget => Instance && Instance.isActiveAndEnabled && (Instance.Target || Instance.Pickup || Instance.Key || Instance.Valve || Instance.Spot);
 
         [Tooltip("How far the player can reach (m, from the camera).")]
         public float reach = 2.2f;
@@ -42,6 +42,7 @@ namespace BodycamHorror.Player
         public WeaponPickup Pickup { get; private set; }
         public KeyPickup Key { get; private set; }
         public Valve Valve { get; private set; }
+        public UseSpot Spot { get; private set; }
 
         Camera cam;
         InputAction useAction;
@@ -95,6 +96,7 @@ namespace BodycamHorror.Player
             Pickup = cam && !Target ? FindPickup(cam.transform.position, cam.transform.forward) : null;
             Key = cam && !Target && !Pickup ? FindKey(cam.transform.position, cam.transform.forward) : null;
             Valve = cam && !Target && !Pickup && !Key ? FindValve(cam.transform.position, cam.transform.forward) : null;
+            Spot = cam && !Target && !Pickup && !Key && !Valve ? FindSpot(cam.transform.position, cam.transform.forward) : null;
 
             if (Target)
             {
@@ -122,7 +124,12 @@ namespace BodycamHorror.Player
                 promptPoint = Valve.PromptPoint;
                 if (useAction.IsPressed()) Valve.Use(useAction.WasPressedThisFrame());
             }
-            promptAlpha = Mathf.MoveTowards(promptAlpha, Target || Pickup || Key || Valve ? 1f : 0f, Time.unscaledDeltaTime * 7f);
+            else if (Spot)
+            {
+                promptPoint = Spot.PromptPoint;
+                if (useAction.WasPressedThisFrame()) Spot.Use(gameObject);
+            }
+            promptAlpha = Mathf.MoveTowards(promptAlpha, Target || Pickup || Key || Valve || Spot ? 1f : 0f, Time.unscaledDeltaTime * 7f);
 
             // the lock badge stays while the player keeps looking at that door, until it is shot or unlocked open
             if (triedLocked && (Target != triedLocked || !triedLocked.IsBarred(cam.transform.position))) triedLocked = null;
@@ -151,6 +158,27 @@ namespace BodycamHorror.Player
                 if (Physics.Raycast(eye, to / distance, out RaycastHit block, distance - 0.05f, mask, QueryTriggerInteraction.Ignore)
                     && !block.collider.transform.IsChildOf(valve.transform)) continue;
                 best = valve;
+                bestAngle = a;
+            }
+            return best;
+        }
+
+        UseSpot FindSpot(Vector3 eye, Vector3 forward)
+        {
+            UseSpot best = null;
+            float bestAngle = pickupLookAngle;
+            foreach (UseSpot spot in UseSpot.All)
+            {
+                if (!spot.CanUse) continue;
+                Vector3 to = spot.PromptPoint - eye;
+                float distance = to.magnitude;
+                if (distance > (spot.reach > 0f ? spot.reach : reach) || distance < 0.01f) continue;
+                float a = Vector3.Angle(forward, to);
+                if (a >= bestAngle) continue;
+                // not through a wall
+                if (Physics.Raycast(eye, to / distance, out RaycastHit block, distance - 0.05f, mask, QueryTriggerInteraction.Ignore)
+                    && !block.collider.transform.IsChildOf(spot.transform)) continue;
+                best = spot;
                 bestAngle = a;
             }
             return best;

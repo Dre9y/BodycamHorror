@@ -61,10 +61,16 @@ namespace BodycamHorror.Player
         [SerializeField, Range(0f, 1f)] float threat;
         [SerializeField, Range(0f, 1f)] float floor;
 
+        /// <summary>
+        /// Set by a scripted moment that wants the fear gone for a while (heartbeat, breathing, shaking hands): reads as
+        /// none while set; the fear itself keeps being counted underneath and is back the moment it is cleared.
+        /// </summary>
+        public static bool Hushed;
+
         /// <summary>0..1.</summary>
-        public float Value => current;
+        public float Value => Hushed ? 0f : current;
         /// <summary>0..1, eased so low stress shows almost nothing and high stress shows a lot.</summary>
-        public float Tremor => current * current * (3f - 2f * current);
+        public float Tremor => Hushed ? 0f : current * current * (3f - 2f * current);
 
         /// <summary>0..1: how frightening the monsters around are right now (distance, in view, hunting).</summary>
         public float Threat => threat;

@@ -607,7 +607,8 @@ namespace BodycamHorror.Enemies
             }
             var stressed = player ? player.GetComponentInChildren<PlayerStress>() : null;
             if (stressed) stressed.Add(stress);
-            burstTimer = Mathf.Max(burstDelay, 0f);
+            if (burstDelay <= 0f) BurstLamp();   // the lamp goes with the sting itself
+            else burstTimer = burstDelay;
         }
 
         void Flee()

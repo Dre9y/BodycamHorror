@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using BodycamHorror.Enemies;
 using BodycamHorror.Environment;
 using BodycamHorror.Player;
@@ -147,7 +148,7 @@ namespace BodycamHorror.EditorTools
             FurnishBigRoom(level);
             FurnishStartRoom(level);
             Rubbish(level);
-            Leaks(level);
+            // no leak streaks: flat see-through boxes on the walls, they showed as hard-edged dark bands (a bug, not damp)
             WeaponPickup pickup = PlacePistol(pistol);
             Lights(level);
             BuildAnnex(level, LightingTestSceneBuilder.BuildLampPrefab());
@@ -198,7 +199,7 @@ namespace BodycamHorror.EditorTools
             }
             BuildShell(level);
             Rubbish(level);
-            Leaks(level);
+            // no leak streaks: flat see-through boxes on the walls, they showed as hard-edged dark bands (a bug, not damp)
             GameObject lampPrefab = LightingTestSceneBuilder.BuildLampPrefab();
             Transform lights = level.Find("Lights") ? level.Find("Lights") : Group(level, "Lights");
             PassageLights(lights, lampPrefab);
@@ -830,10 +831,15 @@ namespace BodycamHorror.EditorTools
                 var banger = (GameObject)PrefabUtility.InstantiatePrefab(bangerPrefab, annex);
                 // a little under the floor: the spawner looks for ground from 3 m above itself, which must stay under the ceiling
                 banger.transform.SetPositionAndRotation(new Vector3(NorthLegX1 - 0.45f, -0.5f, legMidZ), Quaternion.Euler(0f, 90f, 0f));
-                // its knocks are heard only once round the zigzag's second corner, in the leg itself
+                // its knocks are heard only in the leg itself, from the corner where you step into it (a little
+                // before, so the first knock meets you as you come round); a recorded voice once it has seen you,
+                // and no stopping to scream: it just comes
                 var spawner = banger.GetComponent<InfectedSpawner>();
-                spawner.bangHearZone = new Bounds(new Vector3((ZigX0 + NorthLegX1) * 0.5f, 1f, legMidZ),
-                                                  new Vector3(NorthLegX1 - ZigX0, 4f, NorthZ1 - NorthLegZ0 + 0.2f));
+                spawner.bangHearZone = new Bounds(new Vector3((ZigX0 - 1.6f + NorthLegX1) * 0.5f, 1f, legMidZ),
+                                                  new Vector3(NorthLegX1 - ZigX0 + 1.6f, 4f, NorthZ1 - NorthLegZ0 + 0.5f));
+                spawner.screams = false;
+                spawner.voiceClips = new[] { "zombie_groan", "zombie_groan_2", "zombie_groan_3" }
+                    .Select(n => AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Monster/" + n + ".wav")).Where(c => c).ToArray();
                 EditorUtility.SetDirty(spawner);
             }
             else Debug.LogWarning("Level: no head-banger prefab at " + HeadBangerPrefab);
@@ -1119,8 +1125,8 @@ namespace BodycamHorror.EditorTools
             AmbienceBuilder.Loop(root, "Bed_Drone", Vector3.zero, 0.22f, 0f, 0f, 0f, "loop_bed_drone");
             AmbienceBuilder.Loop(root, "Bed_Hum", Vector3.zero, 0.05f, 0f, 0f, 0f, "loop_bed_hum");
             AmbienceBuilder.Loop(root, "Hum_ColdLight", new Vector3(7.37f, Height - 0.1f, 6.8f), 0.14f, 1f, 0.4f, 5f, "loop_hum_bulb");
-            AmbienceBuilder.Shots(root, "Drip_Small", new Vector3(3.3f, Height - 0.1f, RoomD - 0.6f), 0.35f, new Vector2(1.2f, 4f), 0f, 1f, 10f, AmbienceBuilder.Named("drip_"));
-            AmbienceBuilder.Shots(root, "Drip_Big", new Vector3(4.25f, Height - 0.1f, 2.15f), 0.4f, new Vector2(0.9f, 3f), 0f, 1f, 12f, AmbienceBuilder.Named("drip_"));
+            AmbienceBuilder.Shots(root, "Drip_Small", new Vector3(3.3f, Height - 0.1f, RoomD - 0.6f), 0.35f, new Vector2(4f, 11f), 0f, 1f, 10f, AmbienceBuilder.Named("drip_"));
+            AmbienceBuilder.Shots(root, "Drip_Big", new Vector3(4.25f, Height - 0.1f, 2.15f), 0.4f, new Vector2(3f, 9f), 0f, 1f, 12f, AmbienceBuilder.Named("drip_"));
             AmbienceBuilder.Shots(root, "Creaks", new Vector3(4.5f, Height + 0.5f, 4f), 0.4f, new Vector2(14f, 34f), 6f, 2f, 30f, AmbienceBuilder.Named("creak_"));
         }
 

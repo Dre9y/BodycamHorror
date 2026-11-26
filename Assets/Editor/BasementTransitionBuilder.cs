@@ -17,7 +17,7 @@ namespace BodycamHorror.EditorTools
         const float ApproachStart = 9.4f;
         const float ApproachLength = 29.2f;
         const float JunctionZ = ApproachStart + ApproachLength;
-        const float ScareLead = 10f;
+        const float ScareLead = 15f;   // the crawl sets off well before the turn, not right at it
         const float RoomStart = JunctionZ + 2.6f;
         const float StairStart = RoomStart + 9.4f;
         const float WorkbenchZ = StairStart - 2.1f;
@@ -553,8 +553,48 @@ namespace BodycamHorror.EditorTools
 
             var torch=FindIn<WeaponPickup>(scene,p=>p.weapon==WeaponPickup.Kind.PistolLight);
             var bench=Prop("Workbench",4.3f,0,WorkbenchZ,90);
-            var top=bench.GetComponentsInChildren<Collider>().Max(c=>c.bounds.max.y);
-            Copy(torch.gameObject,new Vector3(4.3f,top-root.position.y,WorkbenchZ),Quaternion.Euler(0,80,0));
+            // The bench's box collider is its whole outline (up to the back board): the worktop itself is lower.
+            // Read the worktop off the mesh, a little to the side of the gap between the planks.
+            var placed=Copy(torch.gameObject,new Vector3(4.45f,0,WorkbenchZ),Quaternion.Euler(0,80,0)).transform;
+            float top=MeshTop(bench,new Vector3(placed.position.x,0,placed.position.z),.06f);
+            float under=placed.position.y-placed.GetComponentsInChildren<Renderer>().Min(r=>r.bounds.min.y);
+            placed.position=new Vector3(placed.position.x,top+under+.002f,placed.position.z);
+            // the box round the bench stops at the worktop: up to the back board it swallowed the torch, and the
+            // interaction ray never reached it
+            foreach(var box in bench.GetComponentsInChildren<BoxCollider>())
+            {
+                var t=box.transform;
+                float lo=box.center.y-box.size.y*.5f;
+                float hi=t.InverseTransformPoint(new Vector3(t.position.x,top,t.position.z)).y;
+                if(hi<=lo || hi>=box.center.y+box.size.y*.5f) continue;
+                box.size=new Vector3(box.size.x,hi-lo,box.size.z);
+                box.center=new Vector3(box.center.x,(hi+lo)*.5f,box.center.z);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(box);
+            }
+        }
+
+        /// <summary>The highest point of a prop's render meshes under a small square round a spot (world xz).</summary>
+        static float MeshTop(GameObject prop,Vector3 at,float half)
+        {
+            float top=float.MinValue;
+            foreach(var mf in prop.GetComponentsInChildren<MeshFilter>())
+            {
+                if(!mf.sharedMesh) continue;
+                var probe=new GameObject("MeshTop probe");
+                probe.transform.SetPositionAndRotation(mf.transform.position,mf.transform.rotation);
+                probe.transform.localScale=mf.transform.lossyScale;
+                var mc=probe.AddComponent<MeshCollider>();
+                mc.sharedMesh=mf.sharedMesh;
+                Physics.SyncTransforms();
+                for(int i=0;i<5;i++)
+                {
+                    Vector3 o=at+(i==4?Vector3.zero:new Vector3(i%2==0?-half:half,0,i<2?-half:half));
+                    o.y=mc.bounds.max.y+1f;
+                    if(mc.Raycast(new Ray(o,Vector3.down),out var hit,10f)) top=Mathf.Max(top,hit.point.y);
+                }
+                Object.DestroyImmediate(probe);
+            }
+            return top>float.MinValue?top:prop.GetComponentsInChildren<Collider>().Max(c=>c.bounds.max.y);
         }
 
         void PlaceCrossing(Scene scene)

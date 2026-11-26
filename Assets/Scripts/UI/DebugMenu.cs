@@ -74,6 +74,9 @@ namespace BodycamHorror.UI
         public static float FlashlightOuterSize => Rows[3].value;
 
         bool open;
+        // a button's action, run in the next Update: from OnGUI (late in the frame, around rendering) a gun drawn
+        // for the first time - its hands instantiated and bound right there - stayed undrawn
+        System.Action pending;
         static Section shown;   // the open section, kept while the game runs
         GUIStyle head, line, value, hint, reset, tab, tabOn, action;
         float styleScale = -1f;
@@ -110,6 +113,7 @@ namespace BodycamHorror.UI
 
         void Update()
         {
+            if (pending != null) { var run = pending; pending = null; run(); }
             var kb = Keyboard.current;
             if (kb == null || PauseMenu.IsPaused || !kb.tabKey.wasPressedThisFrame) return;
             open = !open;
@@ -153,7 +157,7 @@ namespace BodycamHorror.UI
                 bool was = GUI.enabled;
                 GUI.enabled = light && !has;
                 string label = !light ? "Фонарика нет в сцене" : has ? "Фонарик уже есть" : "Выдать фонарик";
-                if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), label, action)) GiveFlashlight(light);
+                if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), label, action)) pending = () => GiveFlashlight(light);
                 GUI.enabled = was;
                 y += actionH;
             }
@@ -166,7 +170,7 @@ namespace BodycamHorror.UI
                 bool was = GUI.enabled;
                 GUI.enabled = pistol && !has;
                 string label = !pistol ? "Пистолета нет у игрока" : has ? "Пистолет уже есть" : "Выдать пистолет";
-                if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), label, action)) shooting.Give(pistol, true);
+                if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), label, action)) pending = () => shooting.Give(pistol, true);
                 GUI.enabled = was;
                 y += actionH;
             }
@@ -189,7 +193,7 @@ namespace BodycamHorror.UI
                     bool was = GUI.enabled;
                     GUI.enabled = anchor;
                     string label = anchor ? tp.label : tp.label + " (нет в сцене)";
-                    if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), label, action)) TeleportTo(anchor.transform, tp.local, tp.yaw);
+                    if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), label, action)) { var t = tp; var a = anchor.transform; pending = () => TeleportTo(a, t.local, t.yaw); }
                     GUI.enabled = was;
                     y += actionH;
                 }
@@ -198,7 +202,7 @@ namespace BodycamHorror.UI
                 bool wasOn = GUI.enabled;
                 GUI.enabled = health && !health.IsDead;
                 string killLabel = !health ? "Игрока нет в сцене" : health.IsDead ? "Игрок уже мёртв" : "Умереть (deathcam)";
-                if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), killLabel, action)) Kill(health);
+                if (GUI.Button(new Rect(x, y, inner, actionH - 8f * k), killLabel, action)) pending = () => Kill(health);
                 GUI.enabled = wasOn;
                 y += actionH;
             }

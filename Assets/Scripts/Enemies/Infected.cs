@@ -25,7 +25,7 @@ namespace BodycamHorror.Enemies
         public enum HuntPhase { Chase, GoToLastSeen, Search }
 
         [Header("Health")]
-        public float maxHealth = 100f;
+        public float maxHealth = 165f;   // pistol (34): five to the body, two to the head (x2.5)
         public float headshotMultiplier = 2.5f;
         [Tooltip("A single hit at least this strong makes it stagger back.")]
         public float staggerDamage = 30f;
@@ -163,6 +163,11 @@ namespace BodycamHorror.Enemies
         [Header("Voice")]
         [Tooltip("Growls, shrieks and grunts (placeholder synth). Off for now.")]
         public bool voiceEnabled = false;
+        [Tooltip("Recorded voice: growls, the cry when it spots you and the grunts of its blows all come from these " +
+                 "(no synth). Set: it has a voice whatever Voice Enabled says.")]
+        public AudioClip[] voiceClips;
+        [Tooltip("Off: it never stops to scream (the Scream clip) when it spots you or is woken; it just comes.")]
+        public bool screams = true;
 
         [Tooltip("Nothing hurts it and nothing wakes it: hits are ignored outright (apparitions, see PickupScare).")]
         public bool invulnerable;
@@ -269,7 +274,11 @@ namespace BodycamHorror.Enemies
             Audio.SoundOcclusion.Attach(voice, transform, 1.4f);
             voiceVariant = Random.Range(0, 4);
 
-            recordedVoice = gameObject.AddComponent<AudioSource>();
+            // on an object of its own: the spatial filter (SpatialSound) can serve only one source per object
+            var recorded = new GameObject("RecordedVoice");
+            recorded.transform.SetParent(transform, false);
+            recorded.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+            recordedVoice = recorded.AddComponent<AudioSource>();
             recordedVoice.playOnAwake = false;
             recordedVoice.spatialBlend = 1f;
             recordedVoice.dopplerLevel = 0f;
@@ -471,7 +480,7 @@ namespace BodycamHorror.Enemies
             if (state == State.Idle)
             {
                 bool far = !player || Vector3.Distance(rb.position, player.position) > 7f;
-                if (!wasAlerted && body && body.IsAnimated && far && Random.value < screamChance)
+                if (!wasAlerted && screams && body && body.IsAnimated && far && Random.value < screamChance)
                 {
                     SetState(State.Scream);   // stop and scream at the prey first
                     body.TriggerScream();
@@ -502,7 +511,7 @@ namespace BodycamHorror.Enemies
             alerted = true;
             everAlerted = true;
             MarkPlayerSeen();
-            if (idle && body && body.IsAnimated)
+            if (idle && screams && body && body.IsAnimated)
             {
                 SetState(State.Scream);   // stands and turns to the prey while it screams
                 body.TriggerScream();
@@ -1239,6 +1248,16 @@ namespace BodycamHorror.Enemies
 
         void Say(string kind, float volume, float pitch)
         {
+            if (kind != "thud" && voiceClips != null && voiceClips.Length > 0)
+            {
+                if (kind == "grunt" && attackClip) return;   // the blow has its own recorded roar (PlayRecorded)
+                // recordings: one voice for everything, the cry louder, the grunts short and higher
+                var rec = voiceClips[Random.Range(0, voiceClips.Length)];
+                if (!rec) return;
+                voice.pitch = kind == "grunt" ? pitch * 1.15f : pitch;
+                voice.PlayOneShot(rec, kind == "shriek" ? 1f : volume);
+                return;
+            }
             if (!voiceEnabled) return;
             string key = kind + voiceVariant;
             if (!ClipCache.TryGetValue(key, out AudioClip clip) || !clip)

@@ -234,6 +234,9 @@ namespace BodycamHorror.Audio
             foreach (var a in FindObjectsByType<AudioSource>())
             {
                 if (!a || a.spatialBlend < 0.5f || a.GetComponent<SpatialSound>()) continue;
+                // the filter callback serves one source per object: two sources on one object would share it (and Unity
+                // logs an error for every one); those keep Unity's own panning
+                if (a.GetComponents<AudioSource>().Length > 1) continue;
                 if (body && a.transform.IsChildOf(body)) continue;
                 a.gameObject.AddComponent<SpatialSound>();
             }

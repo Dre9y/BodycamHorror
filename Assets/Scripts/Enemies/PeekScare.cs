@@ -214,6 +214,15 @@ namespace BodycamHorror.Enemies
                 }
                 if (restoreTimer >= 0f && (restoreTimer -= dt) <= 0f) Unsilence();
             }
+            // the pickup's showcase is up (the game is frozen behind it): what was to happen while the player looked
+            // up from the gun happens now, out of sight, so it is already standing there in the open door when the
+            // showcase goes away
+            if (UI.ItemShowcase.Blocking && (phase == Phase.Waiting || phase == Phase.Watching))
+            {
+                if (phase == Phase.Waiting) Appear(true);
+                if (monster) { peekTimer = peekTime; Pose(1f); }
+                return;
+            }
             switch (phase)
             {
                 case Phase.Idle:
@@ -252,14 +261,18 @@ namespace BodycamHorror.Enemies
 
         // ------------------------------------------------------------------ appearing, peeking
 
-        void Appear()
+        void Appear(bool unseen = false)
         {
             phase = Phase.Watching;
             timer = 0f;
             peekTimer = -peekDelay;
             if (!monster) Spawn();
             Show(true);
-            if (door && !door.IsOpen) door.Open(monster.transform.position);   // the creak is the cue to look up
+            if (door && !door.IsOpen)
+            {
+                if (unseen) door.OpenNow(monster.transform.position);   // opened behind the showcase: already open
+                else door.Open(monster.transform.position);              // the creak is the cue to look up
+            }
         }
 
         bool shown = true;

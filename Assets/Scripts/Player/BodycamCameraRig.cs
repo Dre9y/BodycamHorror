@@ -22,7 +22,9 @@ namespace BodycamHorror.Player
         [Header("Footstep bob")]
         [Tooltip("Meters travelled per left+right step cycle at walk / sprint.")]
         public float strideWalk = 3f;
-        public float strideSprint = 5.6f;
+        [Tooltip("At a run the body's run clip (Rifle Run, 0.67 s a cycle at 4.5 m/s) covers 3 m a cycle: longer and its legs " +
+                 "go in slow motion while the floor goes by faster than their steps.")]
+        public float strideSprint = 3f;
         public float bobVertical = 0.05f;
         public float bobHorizontal = 0.04f;
         public float bobRoll = 1.8f;
@@ -101,6 +103,8 @@ namespace BodycamHorror.Player
 
         /// <summary>Footstep phase in radians (one full cycle = left + right step).</summary>
         public float StepPhase { get; private set; }
+        /// <summary>Footfalls a second right now (two per cycle): what the arms' run clip keeps time with.</summary>
+        public float StepsPerSecond { get; private set; }
         /// <summary>A foot just came down, in step with the bob (0 walk .. 1 sprint). See PlayerFootsteps.</summary>
         public event System.Action<float> Footstep;
         /// <summary>0..1 bob strength this frame.</summary>
@@ -174,6 +178,7 @@ namespace BodycamHorror.Player
             BobAmount = bob;
             float stride = Mathf.Lerp(strideWalk, strideSprint, sprint01);
             StepPhase += speed * dt * (Mathf.PI * 2f / stride);
+            StepsPerSecond = state == MoveState.Grounded ? 2f * speed / Mathf.Max(stride, 0.1f) : 0f;
             float s = Mathf.Sin(StepPhase);
             // each step: the body drops quickly onto the foot, then climbs slowly towards the next one
             float stepT = Mathf.Repeat(StepPhase / Mathf.PI, 1f);

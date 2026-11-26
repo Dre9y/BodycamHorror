@@ -58,6 +58,13 @@ namespace BodycamHorror.Weapons
         [Tooltip("Reload: share of the clip at which the slide closes.")]
         public float slideCloseAt = 0.756f;
 
+        [Header("Run clip timing")]
+        [Tooltip("Footfalls in one loop of the Run clip (the gun bobs once a step). Its speed is set so they land with the " +
+                 "camera's steps: the arms pump as fast as the player really runs, not at the clip's own sprint.")]
+        public float runClipSteps = 6f;
+        [Tooltip("Limits on how far the Run clip is slowed down or sped up.")]
+        public Vector2 runClipSpeedRange = new Vector2(0.4f, 1.3f);
+
         [Header("IK")]
         [Tooltip("How far the arms as a whole may move when a hand target is out of range (m).")]
         public float maxReachShift = 0.5f;
@@ -156,6 +163,7 @@ namespace BodycamHorror.Weapons
             weapon.Fired += OnFired;
             ready = true;
             OnEnable();
+            ViewModelLighting.Refresh(gameObject);   // or the freshly set-up hands may stay undrawn
         }
 
         Transform SourceBone(string boneName)
@@ -315,6 +323,28 @@ namespace BodycamHorror.Weapons
             }
         }
 
+        BodycamCameraRig cameraRig;
+
+        /// <summary>The Run loop at the speed of the player's real steps; every other clip at its own speed.</summary>
+        void KeepRunInStep()
+        {
+            if (!cameraRig && player) cameraRig = player.GetComponentInChildren<BodycamCameraRig>();
+            float speed = 1f;
+            if (cameraRig && animator.GetCurrentAnimatorStateInfo(0).IsName("Run"))
+            {
+                AnimatorClipInfo[] clip = animator.GetCurrentAnimatorClipInfo(0);
+                float length = clip.Length > 0 && clip[0].clip ? clip[0].clip.length : 0f;
+                if (length > 0f && runClipSteps > 0f)
+                {
+                    float natural = runClipSteps / length;   // the clip's own footfalls a second
+                    float steps = cameraRig.StepsPerSecond;
+                    speed = steps > 0.1f ? Mathf.Clamp(steps / natural, runClipSpeedRange.x, runClipSpeedRange.y) : runClipSpeedRange.x;
+                }
+            }
+            // eased while running; straight back to normal out of it, so reload and draw keep their timings
+            animator.speed = speed == 1f ? 1f : Mathf.MoveTowards(animator.speed, speed, Time.deltaTime * 4f);
+        }
+
         void UpdateClips()
         {
             bool reloading = shooting.IsReloading;
@@ -332,6 +362,7 @@ namespace BodycamHorror.Weapons
                 animator.CrossFadeInFixedTime(hiding ? "Hide" : "Idle", 0.08f, 0, 0f);
             }
 
+            KeepRunInStep();
             if (reloading || hiding || animator.GetCurrentAnimatorStateInfo(0).IsName("Take")) return;
             bool sprint = shooting.WantsLowered;
             if (sprint == running) return;

@@ -18,6 +18,16 @@ namespace BodycamHorror.Player
         public static void MarkViewModel(GameObject root)
         {
             foreach (var r in root.GetComponentsInChildren<Renderer>(true)) r.renderingLayerMask = ViewModelLayer;
+            Refresh(root);
+        }
+
+        /// <summary>Switches the drawn renderers under <paramref name="root"/> off and on again. Hands set up the moment
+        /// they came into being (a gun given from the debug menu) were left undrawn - in frame, enabled, firing - until
+        /// something did this (the pickup showcase does, so picked-up guns showed). Cheap; call after setting hands up.</summary>
+        public static void Refresh(GameObject root)
+        {
+            foreach (var r in root.GetComponentsInChildren<Renderer>())
+                if (r.enabled) { r.enabled = false; r.enabled = true; }
         }
 
         /// <summary>Sets which rendering layers a light affects.</summary>

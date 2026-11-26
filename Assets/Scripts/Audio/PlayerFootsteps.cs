@@ -15,8 +15,8 @@ namespace BodycamHorror.Audio
     public class PlayerFootsteps : MonoBehaviour
     {
         [Header("Loudness")]
-        [Range(0f, 1f)] public float walk = 0.32f;
-        [Range(0f, 1f)] public float sprint = 0.6f;
+        [Range(0f, 1f)] public float walk = 0.2f;
+        [Range(0f, 1f)] public float sprint = 0.38f;
         [Tooltip("Share of the walking loudness while crouched.")]
         [Range(0f, 1f)] public float crouch = 0.35f;
         [Tooltip("Random spread of loudness per step.")]
@@ -31,7 +31,15 @@ namespace BodycamHorror.Audio
         [Header("Landing")]
         [Tooltip("Slowest fall (m/s) that lands with both feet audibly.")]
         public float landingMinImpact = 3f;
-        [Range(0f, 1f)] public float landing = 0.75f;
+        [Range(0f, 1f)] public float landing = 0.5f;
+
+        [Header("Echo (the step coming back off the walls)")]
+        [Tooltip("Delay of the echo (ms).")]
+        public float echoDelay = 95f;
+        [Tooltip("How much of it comes back each time (0 = one echo only, higher = a longer tail).")]
+        [Range(0f, 1f)] public float echoDecay = 0.3f;
+        [Tooltip("Loudness of the echo against the step itself.")]
+        [Range(0f, 1f)] public float echoMix = 0.22f;
 
         BodycamPlayerController player;
         BodycamCameraRig rig;
@@ -61,8 +69,16 @@ namespace BodycamHorror.Audio
             player = GetComponent<BodycamPlayerController>();
             rig = GetComponentInChildren<BodycamCameraRig>(true);
             clips = Resources.LoadAll<AudioClip>("Audio/Footsteps");
-            source = gameObject.AddComponent<AudioSource>();
+            // on an object of its own, so the echo is on the steps only and not on the player's other sounds
+            var feet = new GameObject("Footsteps");
+            feet.transform.SetParent(transform, false);
+            source = feet.AddComponent<AudioSource>();
             source.playOnAwake = false;
+            var echo = feet.AddComponent<AudioEchoFilter>();
+            echo.delay = echoDelay;
+            echo.decayRatio = echoDecay;
+            echo.wetMix = echoMix;
+            echo.dryMix = 1f;
             source.spatialBlend = 0f;   // our own feet: right under us, through the body camera's microphone
             source.priority = 32;
             if (clips.Length == 0) Debug.LogWarning("PlayerFootsteps: no recordings in Resources/Audio/Footsteps.");

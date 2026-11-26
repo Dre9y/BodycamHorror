@@ -29,6 +29,10 @@ namespace BodycamHorror.Enemies
         [Tooltip("Head-banger: its knocks are heard only while the player is inside this world-space box " +
                  "(size 0 = everywhere). Shown as a cyan box.")]
         public Bounds bangHearZone;
+        [Tooltip("Recorded voice for the ones it spawns (growls, the cry when they spot you). Empty: their default (silent).")]
+        public AudioClip[] voiceClips;
+        [Tooltip("Off: they never stop to scream when they spot you; they just come.")]
+        public bool screams = true;
         public LayerMask groundMask = ~((1 << 2) | (1 << 8));   // not Ignore Raycast or Hitbox
 
         [Header("Look (empty = box placeholder)")]
@@ -82,6 +86,8 @@ namespace BodycamHorror.Enemies
                 inf.temper = i < roamers && !bangHeadOnWall ? Infected.Temper.Roamer : Infected.Temper.Idler;
                 inf.bangsHeadOnWall = bangHeadOnWall;
                 inf.bangHearZone = bangHearZone;
+                inf.voiceClips = voiceClips;
+                inf.screams = screams;
                 if (passive)
                 {
                     inf.aggroRange = 0f;

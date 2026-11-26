@@ -141,9 +141,7 @@ namespace BodycamHorror.UI
             Fill(new Rect(0f, 0f, Screen.width, Screen.height), Shade);
             if (page == Page.Settings)
             {
-                Vector2 size = SettingsScreen.Size(k);
-                if (SettingsScreen.Draw(new Rect((Screen.width - size.x) * 0.5f, (Screen.height - size.y) * 0.5f, size.x, size.y), k))
-                    page = Page.Main;
+                if (SettingsScreen.Draw()) page = Page.Main;
                 return;
             }
             float w = 660f * k, h = 420f * k;

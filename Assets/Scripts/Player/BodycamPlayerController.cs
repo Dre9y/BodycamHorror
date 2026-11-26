@@ -43,10 +43,12 @@ namespace BodycamHorror.Player
         [Header("Allowed moves")]
         [Tooltip("Crouch (Ctrl / C) and the slide it starts. Off: the player only ducks on its own under something low.")]
         public bool allowCrouch = false;
-        [Tooltip("Jump (Space). Off: Space only climbs over and onto things (vault, mantle).")]
+        [Tooltip("Jump (Space). Off: Space only climbs over and onto things (vault, mantle), if Allow Climb is on.")]
         public bool allowJump = false;
         [Tooltip("Back dive: jump while sprinting backward.")]
         public bool allowBackDive = false;
+        [Tooltip("Climb onto and over things (mantle, vault). Off: the player stays on the floor.")]
+        public bool allowClimb = false;
 
         [Header("Back dive and lying down (jump while sprinting backward)")]
         public float diveSpeed = 7.5f;
@@ -870,6 +872,7 @@ namespace BodycamHorror.Player
 
         bool TryStartVaultOrMantle(bool fromGround)
         {
+            if (!allowClimb) return false;
             Vector3 feet = transform.position;
             Vector3 fwd = transform.forward;
             // At speed the button is pressed earlier, so look further ahead.

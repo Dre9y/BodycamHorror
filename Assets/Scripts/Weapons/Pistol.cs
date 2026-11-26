@@ -38,6 +38,7 @@ namespace BodycamHorror.Weapons
         protected override void Awake()
         {
             base.Awake();
+            if (muzzle) modelMuzzle = muzzle.localPosition;   // before the hands move it into their gun space
             if (handsPrefab) SetUpHands();
             else if (slide) slideRest = slide.localPosition;
         }
@@ -70,6 +71,10 @@ namespace BodycamHorror.Weapons
         }
 
         public override Transform VisualRoot => hands ? hands.GunAnchor : transform;
+        /// <summary>The muzzle on the gun's own (static) model, in its space. With animated hands <see cref="Firearm.muzzle"/>
+        /// is moved to where the hands' gun has it, which is not where the static model has its barrel.</summary>
+        public Vector3 ModelMuzzleLocal => modelMuzzle ?? (muzzle ? muzzle.localPosition : Vector3.zero);   // not awake yet: still the model's
+        Vector3? modelMuzzle;
 
         void OnEnable()
         {

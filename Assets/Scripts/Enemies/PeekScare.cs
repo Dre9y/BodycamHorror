@@ -113,6 +113,27 @@ namespace BodycamHorror.Enemies
         [Tooltip("Fear given to the player (0-1). 0.65 and up rings the ears, 0.8 is a full panic heartbeat.")]
         [Range(0f, 1f)] public float stress = 0.85f;
 
+        [Header("The lamp over the pickup")]
+        [Tooltip("Switched off with a click the moment the pickup is taken (optional).")]
+        public Light pickupLamp;
+        [Tooltip("Its glowing bulb: goes dark with it.")]
+        public Renderer pickupLampGlow;
+        [Tooltip("The switch. Empty = a generated click.")]
+        public AudioClip switchClip;
+        [Range(0f, 1f)] public float switchVolume = 0.8f;
+
+        [Header("The lamp that bursts")]
+        [Tooltip("A lamp (its root) that bursts, very loud, on the sting: its lights die and its glowing parts go dark (optional).")]
+        public Transform burstLamp;
+        [Tooltip("Its hum (an ambient sound object): switched off for good with it.")]
+        public GameObject burstLampHum;
+        public AudioClip burstClip;
+        [Tooltip("Laid over the burst: glass dropping.")]
+        public AudioClip burstLayer;
+        [Range(0f, 1f)] public float burstVolume = 1f;
+        [Tooltip("Seconds after the sting before it bursts: the player has seen the thing (and it has ducked away) first.")]
+        public float burstDelay = 0.8f;
+
         enum Phase { Idle, Waiting, Watching, Reacting, Holding, Fleeing, Ducking, Done }
 
         Phase phase;
@@ -199,6 +220,80 @@ namespace BodycamHorror.Enemies
             phase = Phase.Waiting;
             timer = appearDelay;
             if (silenceWorld) Silence(taken ? taken.transform.position : transform.position);
+            SwitchOffPickupLamp();
+        }
+
+        float burstTimer = -1f;
+
+        static AudioClip generatedSwitch;
+
+        /// <summary>The lamp over the gun goes out with a click as it is taken.</summary>
+        void SwitchOffPickupLamp()
+        {
+            if (!pickupLamp) return;
+            foreach (var f in pickupLamp.GetComponents<LightFlicker>()) f.enabled = false;
+            pickupLamp.enabled = false;
+            if (pickupLampGlow) Darken(pickupLampGlow);
+            AudioClip clip = switchClip ? switchClip
+                : generatedSwitch ? generatedSwitch : (generatedSwitch = ProceduralAudio.Click(0.035f, 1400f, 0.9f));
+            PlayHere(clip, pickupLamp.transform.position, switchVolume, 1f, 15f);
+        }
+
+        /// <summary>The lamp bursts: a very loud crack of glass where it hangs (and flat in the ears), dark for good.</summary>
+        void BurstLamp()
+        {
+            if (!burstLamp) return;
+            foreach (var f in burstLamp.GetComponentsInChildren<LightFlicker>(true)) f.enabled = false;
+            foreach (var l in burstLamp.GetComponentsInChildren<Light>(true)) l.enabled = false;
+            foreach (var r in burstLamp.GetComponentsInChildren<Renderer>(true)) Darken(r);
+            foreach (var h in burstLamp.GetComponentsInChildren<LightHaze>(true))
+            {
+                foreach (var r in h.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+                h.enabled = false;
+            }
+            if (burstLampHum) burstLampHum.SetActive(false);   // dead for good, not brought back when the silence ends
+            Vector3 at = burstLamp.position;
+            var lit = burstLamp.GetComponentInChildren<Light>(true);
+            if (lit) at = lit.transform.position;
+            if (burstClip)
+            {
+                PlayHere(burstClip, at, burstVolume, 14f, 90f).pitch = Random.Range(0.92f, 1.05f);
+                sting.PlayOneShot(burstClip, burstVolume * 0.8f);
+            }
+            if (burstLayer) PlayHere(burstLayer, at, burstVolume, 8f, 70f).pitch = Random.Range(0.95f, 1.12f);
+            var rig = player ? player.GetComponentInChildren<BodycamCameraRig>() : null;
+            if (rig) rig.AddTrauma(0.25f);
+        }
+
+        static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
+
+        static void Darken(Renderer r)
+        {
+            if (!r || !r.sharedMaterial || !r.sharedMaterial.HasProperty(EmissionId)) return;
+            var block = new MaterialPropertyBlock();
+            r.GetPropertyBlock(block);
+            block.SetColor(EmissionId, Color.black);
+            r.SetPropertyBlock(block);
+        }
+
+        /// <summary>A one-off sound placed in the room, under this object so the silence leaves it alone.</summary>
+        AudioSource PlayHere(AudioClip clip, Vector3 at, float volume, float near, float far)
+        {
+            var go = new GameObject("Sound_" + clip.name);
+            go.transform.SetParent(transform, false);
+            go.transform.position = at;
+            var s = go.AddComponent<AudioSource>();
+            s.clip = clip;
+            s.volume = volume;
+            s.spatialBlend = 1f;
+            s.rolloffMode = AudioRolloffMode.Logarithmic;
+            s.minDistance = near;
+            s.maxDistance = far;
+            s.dopplerLevel = 0f;
+            s.priority = 0;
+            s.Play();
+            Destroy(go, clip.length + 0.2f);
+            return s;
         }
 
         void Update()
@@ -213,6 +308,12 @@ namespace BodycamHorror.Enemies
                     SilenceScan();
                 }
                 if (restoreTimer >= 0f && (restoreTimer -= dt) <= 0f) Unsilence();
+            }
+            // the scare is over (seen, ducked away): now the lamp bursts
+            if (burstTimer >= 0f && (burstTimer -= dt) <= 0f)
+            {
+                burstTimer = -1f;
+                BurstLamp();
             }
             // the pickup's showcase is up (the game is frozen behind it): what was to happen while the player looked
             // up from the gun happens now, out of sight, so it is already standing there in the open door when the
@@ -506,6 +607,7 @@ namespace BodycamHorror.Enemies
             }
             var stressed = player ? player.GetComponentInChildren<PlayerStress>() : null;
             if (stressed) stressed.Add(stress);
+            burstTimer = Mathf.Max(burstDelay, 0f);
         }
 
         void Flee()

@@ -78,13 +78,14 @@ namespace BodycamHorror.Audio
 
         readonly Dictionary<AudioClip, AudioClip> padded = new Dictionary<AudioClip, AudioClip>();
         readonly Dictionary<AudioClip, AudioClip> dryClips = new Dictionary<AudioClip, AudioClip>();
+        readonly Dictionary<AudioClip, AudioClip> ownTails = new Dictionary<AudioClip, AudioClip>();
         static readonly RaycastHit[] RayHits = new RaycastHit[12];
         readonly float[] distances = new float[Directions.Length];
         readonly List<float> sorted = new List<float>(Directions.Length);
         readonly List<float> far = new List<float>(Directions.Length);
         readonly float[] echoDistance = new float[EchoVoices];
 
-        AudioSource direct, snapSource, bodySource;
+        AudioSource direct, snapSource, bodySource, ownTailSource;
         AudioHighPassFilter snapFilter;
         AudioSource[] wet, echo;
         AudioReverbFilter[] wetReverb;
@@ -142,6 +143,7 @@ namespace BodycamHorror.Audio
             snapFilter.highpassResonanceQ = 1.2f;   // a slight lift right at the edge: ring, not hiss
             bodySource = Voice("Shot_Body");
             bodySource.gameObject.AddComponent<AudioLowPassFilter>().cutoffFrequency = 700f;
+            ownTailSource = Voice("Shot_OwnTail");
 
             wet = new AudioSource[WetVoices];
             wetReverb = new AudioReverbFilter[WetVoices];
@@ -273,20 +275,27 @@ namespace BodycamHorror.Audio
         }
 
         /// <summary>Fires a shot through the space the listener is in. <paramref name="power"/>: 1 = a pistol, more for
-        /// bigger guns: a harder snap and more room, and only a little more of the muffled body under it.</summary>
-        public static bool Play(AudioClip clip, float volume, float pitch, float power)
+        /// bigger guns: a harder snap and more room, and only a little more of the muffled body under it.
+        /// <paramref name="ownTail"/>: how much of the recording's own tail (its echo, faded out of the dry crack)
+        /// is played back on top, for a gun whose roll is part of its voice. The room is still built from the dry shot.</summary>
+        public static bool Play(AudioClip clip, float volume, float pitch, float power, float ownTail = 0f)
         {
             if (!Instance || !clip) return false;
-            Instance.Fire(clip, volume, pitch, power);
+            Instance.Fire(clip, volume, pitch, power, ownTail);
             return true;
         }
 
-        void Fire(AudioClip clip, float volume, float pitch, float power)
+        void Fire(AudioClip clip, float volume, float pitch, float power, float ownTail)
         {
             float e = Enclosure, size = Size;
             float size01 = Mathf.InverseLerp(1.5f, 25f, size);
             pitch *= shotPitch;
             Prepare(clip, out AudioClip dry, out AudioClip tailed);
+            if (ownTail > 0f && ownTails.TryGetValue(clip, out AudioClip tail) && tail)
+            {
+                ownTailSource.pitch = pitch;
+                ownTailSource.PlayOneShot(tail, Mathf.Clamp01(volume * ownTail));
+            }
 
             // the crack and the body: louder shut in, where there is nowhere for it to go
             direct.pitch = pitch;
@@ -356,11 +365,20 @@ namespace BodycamHorror.Audio
             int hold = (int)(DryHold * rate);
             float perSample = Mathf.Exp(-1f / (DryFade * rate));
             float gain = 1f;
+            var tailData = new float[data.Length];   // exactly what the fade takes away: dry + tail = the recording
             for (int i = hold; i < clip.samples; i++)
             {
                 gain *= perSample;
-                for (int c = 0; c < channels; c++) data[i * channels + c] *= gain;
+                for (int c = 0; c < channels; c++)
+                {
+                    int k = i * channels + c;
+                    tailData[k] = data[k] * (1f - gain);
+                    data[k] *= gain;
+                }
             }
+            var own = AudioClip.Create(clip.name + "_own", clip.samples, channels, rate, false);
+            own.SetData(tailData, 0);
+            ownTails[clip] = own;
             dry = AudioClip.Create(clip.name + "_dry", clip.samples, channels, rate, false);
             dry.SetData(data, 0);
             tailed = AudioClip.Create(clip.name + "_tail", clip.samples + Mathf.CeilToInt(TailSeconds * rate), channels, rate, false);

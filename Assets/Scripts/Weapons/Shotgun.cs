@@ -18,6 +18,28 @@ namespace BodycamHorror.Weapons
         [Tooltip("Back-and-forward stroke time (s).")]
         public float pumpTime = 0.34f;
 
+        [Header("Punch (on top of the Recoil / Effects numbers)")]
+        [Tooltip("Multiplier on the gun's own kick: how hard it snaps up and back into the shoulder.")]
+        public float recoilBoost = 1.55f;
+        [Tooltip("Multiplier on the camera kick and shake.")]
+        public float cameraBoost = 1.7f;
+        [Tooltip("Muzzle flash light: intensity / reach multipliers.")]
+        public float flashBoost = 2.6f;
+        public float flashRangeBoost = 1.8f;
+        [Tooltip("Size of the flame and how much longer it hangs.")]
+        public float flashSizeBoost = 1.9f;
+        public float flashDurationBoost = 1.6f;
+        [Tooltip("How loud the shot recording's own cannon-like echo is kept on top of the room (0 = room only, 1 = as recorded).")]
+        [Range(0f, 1f)] public float ownEchoTail = 0.9f;
+        [Tooltip("Multiplier on Pellet Spread: how much wider the shot pattern opens up.")]
+        public float spreadBoost = 1.3f;
+        [Tooltip("Hot sparks thrown out of the barrel with the shot (0 = none).")]
+        public int muzzleSparks = 16;
+        [Tooltip("Slow embers that drop out of the muzzle after the sparks.")]
+        public int muzzleEmbers = 5;
+        [Tooltip("Smoke puffs left hanging in front of the barrel.")]
+        public int muzzleSmoke = 4;
+
         [Header("Model (empty = boxy placeholder)")]
         [Tooltip("Imported shotgun model. Rebuild with Build Placeholder Model after changing.")]
         public GameObject modelPrefab;
@@ -42,7 +64,16 @@ namespace BodycamHorror.Weapons
         public bool IsPumping => pumpStart >= 0f && Time.time - pumpStart < pumpTime;
         public override Transform VisualRoot => hands ? hands.GunAnchor : transform;
 
+        public override float RecoilBoost => recoilBoost;
+        public override float CameraKickBoost => cameraBoost;
+        protected override float FlashBoost => flashBoost;
+        protected override float FlashSizeBoost => flashSizeBoost;
+        protected override float FlashDurationBoost => flashDurationBoost;
+        protected override float PelletSpreadBoost => spreadBoost;
+        protected override float OwnShotTail => ownEchoTail;
+
         float pumpStart = -10f;
+        ParticleSystem sparkFx, smokeFx;
         Vector3 pumpRest;
         bool pumpRestSet, pumpSoundPlayed, spentInChamber;
         ShotgunHands hands;
@@ -87,6 +118,112 @@ namespace BodycamHorror.Weapons
             base.Awake();
             if (pump && !pumpRestSet) { pumpRest = pump.localPosition; pumpRestSet = true; }
             if (handsPrefab) SetUpHands();
+            if (flashLight) flashLight.range *= flashRangeBoost;   // the blast lights the whole room for a blink
+            if (impactMaterial)
+            {
+                sparkFx = CreateMuzzleSystem("MuzzleSparks", true);
+                smokeFx = CreateMuzzleSystem("MuzzleSmoke", false);
+            }
+        }
+
+        /// <summary>World-space particles for the muzzle: they stay where they were thrown while the gun kicks away.
+        /// Sparks are stretched along their flight and shrink; smoke grows and drifts.</summary>
+        ParticleSystem CreateMuzzleSystem(string fxName, bool sparks)
+        {
+            var go = new GameObject(fxName);
+            go.layer = gameObject.layer;
+            go.transform.SetParent(transform, false);
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+            var main = ps.main;
+            main.loop = true;
+            main.playOnAwake = false;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = sparks ? 200 : 60;
+            main.startSpeed = 0f;
+            main.gravityModifier = sparks ? 0.6f : -0.04f;   // smoke rises a touch
+            var emission = ps.emission;
+            emission.rateOverTime = 0f;
+            var shape = ps.shape;
+            shape.enabled = false;
+
+            var col = ps.colorOverLifetime;
+            col.enabled = true;
+            var grad = new Gradient();
+            if (sparks)
+                grad.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(1f, 0.45f, 0.2f), 1f) },
+                             new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 0.6f), new GradientAlphaKey(0f, 1f) });
+            else
+                grad.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                             new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.1f), new GradientAlphaKey(0f, 1f) });
+            col.color = grad;
+
+            var size = ps.sizeOverLifetime;
+            size.enabled = true;
+            size.size = new ParticleSystem.MinMaxCurve(1f, sparks ? AnimationCurve.Linear(0f, 1f, 1f, 0.3f)
+                                                                  : AnimationCurve.EaseInOut(0f, 0.5f, 1f, 2.4f));
+            var drag = ps.limitVelocityOverLifetime;
+            drag.enabled = true;
+            drag.limit = sparks ? 30f : 0.6f;
+            drag.dampen = sparks ? 0.08f : 0.2f;
+
+            var r = go.GetComponent<ParticleSystemRenderer>();
+            r.sharedMaterial = impactMaterial;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            if (sparks)
+            {
+                r.renderMode = ParticleSystemRenderMode.Stretch;
+                r.velocityScale = 0.022f;
+                r.lengthScale = 1.5f;
+            }
+            else r.renderMode = ParticleSystemRenderMode.Billboard;
+
+            ps.Play();
+            return ps;
+        }
+
+        void EmitMuzzleFx()
+        {
+            if (!muzzle) return;
+            Vector3 pos = muzzle.position, fwd = muzzle.forward;
+            var p = new ParticleSystem.EmitParams();
+            if (sparkFx)
+            {
+                for (int i = 0; i < muzzleSparks; i++)
+                {
+                    p.position = pos + fwd * Random.Range(0f, 0.05f);
+                    p.velocity = (fwd + Random.insideUnitSphere * 0.38f).normalized * Random.Range(7f, 17f);
+                    p.startSize = Random.Range(0.006f, 0.014f);
+                    p.startLifetime = Random.Range(0.06f, 0.22f);
+                    p.startColor = new Color(4f, Random.Range(2f, 2.8f), 0.8f, 1f);
+                    sparkFx.Emit(p, 1);
+                }
+                for (int i = 0; i < muzzleEmbers; i++)
+                {
+                    p.position = pos + fwd * Random.Range(0.02f, 0.12f);
+                    p.velocity = (fwd * 0.6f + Random.insideUnitSphere * 0.6f).normalized * Random.Range(1.5f, 3.5f);
+                    p.startSize = Random.Range(0.008f, 0.014f);
+                    p.startLifetime = Random.Range(0.35f, 0.7f);
+                    p.startColor = new Color(3f, 1.3f, 0.35f, 1f);
+                    sparkFx.Emit(p, 1);
+                }
+            }
+            if (smokeFx)
+            {
+                for (int i = 0; i < muzzleSmoke; i++)
+                {
+                    p.position = pos + fwd * Random.Range(0.04f, 0.2f);
+                    p.velocity = fwd * Random.Range(0.6f, 1.8f) + Random.insideUnitSphere * 0.2f;
+                    p.startSize = Random.Range(0.08f, 0.16f);
+                    p.startLifetime = Random.Range(0.7f, 1.3f);
+                    p.rotation = Random.Range(0f, 360f);
+                    float g = Random.Range(0.5f, 0.62f);
+                    p.startColor = new Color(g, g, g * 0.97f, 0.22f);
+                    smokeFx.Emit(p, 1);
+                }
+            }
         }
 
         /// <summary>Swaps the static model for the animated rig; handling and timings come from its clips.
@@ -186,6 +323,7 @@ namespace BodycamHorror.Weapons
         protected override void OnShot()
         {
             spentInChamber = true;
+            EmitMuzzleFx();
             StartPump(pumpDelay);
         }
 

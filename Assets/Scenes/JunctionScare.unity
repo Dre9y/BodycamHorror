@@ -6872,20 +6872,17 @@ MonoBehaviour:
   impactFxScale: 0.35
   volume: 0.9
   shotClips:
-  - {fileID: 8300000, guid: d2a3877ffacef9e4eaad39b4430a0c47, type: 3}
+  - {fileID: 8300000, guid: 7940f157da5b9364db322181ccd96c0d, type: 3}
   dryClip: {fileID: 8300000, guid: fc6c14d597f52314a80bd3af9a294d00, type: 3}
   magOutClip: {fileID: 0}
   magInClip: {fileID: 8300000, guid: 5968d521fdc1e4641a547acfc8b68df2, type: 3}
-  rackClip: {fileID: 8300000, guid: b87ce90516c69f543b6b513e894ab345, type: 3}
+  rackClip: {fileID: 8300000, guid: ebcbba6326f4c6748959d615b62c97a7, type: 3}
   shellInClip: {fileID: 8300000, guid: 5968d521fdc1e4641a547acfc8b68df2, type: 3}
   shellInClips:
   - {fileID: 8300000, guid: 4df247781ec76f64a95b03ae7199976c, type: 3}
   - {fileID: 8300000, guid: 186d23eb54ab4d14bbd98685e4a34e6a, type: 3}
   rackClips:
-  - {fileID: 8300000, guid: b6cf78d68dba96448bddf10d6c8b65fb, type: 3}
-  - {fileID: 8300000, guid: e91e1d4c6696f1d46a88ab5be40d3b05, type: 3}
-  - {fileID: 8300000, guid: 0517823f98f71084ea8dda17dcd4be01, type: 3}
-  - {fileID: 8300000, guid: e36b8f7d551058a418fb333dd87d7d62, type: 3}
+  - {fileID: 8300000, guid: ebcbba6326f4c6748959d615b62c97a7, type: 3}
   cycleClip: {fileID: 0}
   cycleVolume: 0.85
   handlingVolume: 0.45

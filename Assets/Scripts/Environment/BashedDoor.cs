@@ -28,11 +28,9 @@ namespace BodycamHorror.Environment
         public Vector3 landOffset = new Vector3(0.3f, 0f, 2.1f);
         [Tooltip("Turned this far about the vertical as it lands (deg), so it does not lie square to the doorway.")]
         public float landYaw = 12f;
-        [Tooltip("It lands on its back, its front (the hall side, beaten out by the blows) up; off: face down.")]
-        public bool landFaceUp = true;
         [Tooltip("Time from torn off to on the floor (s).")]
         public float flightTime = 0.45f;
-        [Tooltip("How high the arc lifts it over the straight line (m).")]
+        [Tooltip("How high its bottom edge is lifted off the floor on the way (m).")]
         public float arcHeight = 0.3f;
         [Tooltip("The little jump it gives as it slaps down (m), and how long that takes (s).")]
         public float bounceHeight = 0.04f;
@@ -119,46 +117,58 @@ namespace BodycamHorror.Environment
         }
 
         /// <summary>
-        /// Off its hinges along a set arc: out of the frame, up a little and over, tipping forward onto its face, and
-        /// flat on the floor at <see cref="landOffset"/> with a slap and a small bounce.
+        /// Off its hinges and down: it tips straight forward over its bottom front edge (no twist), the edge kicked out
+        /// along the floor as it goes, so it leaves the frame at once and never dips into the floor; it lands flat on its
+        /// face with its middle at <see cref="landOffset"/>, with a slap and a small bounce.
         /// </summary>
         IEnumerator Fly()
         {
-            Vector3 fromPos = leaf.position;
-            Quaternion fromRot = leaf.rotation;
-            // top ahead, face up (or down)
-            Quaternion lie = landFaceUp ? Quaternion.LookRotation(Vector3.up, Vector3.forward) : Quaternion.Euler(90f, 0f, 0f);
-            Quaternion toRot = transform.rotation * Quaternion.Euler(0f, landYaw, 0f) * lie;
-            Vector3 toPos = transform.TransformPoint(landOffset);
-            // lying flat its thinnest side is up: the centre sits half that over the floor (the collider's slab, when it
-            // has one: splinters standing off a modelled leaf's face go into the floor under it, out of sight)
-            float half = 0.05f;
-            var mesh = leaf.GetComponent<MeshFilter>();
+            // the leaf's slab in the door's own space (x across, y up, z out into the room): the collider's box, or the mesh's
+            Bounds slabBox;
             var slab = leaf.GetComponent<BoxCollider>();
-            if (slab)
+            var mesh = leaf.GetComponent<MeshFilter>();
+            if (slab) slabBox = new Bounds(slab.center, slab.size);
+            else if (mesh && mesh.sharedMesh) slabBox = mesh.sharedMesh.bounds;
+            else slabBox = new Bounds(Vector3.zero, new Vector3(1f, 2f, 0.1f));
+            Vector3 min = Vector3.positiveInfinity, max = Vector3.negativeInfinity;
+            for (int i = 0; i < 8; i++)
             {
-                Vector3 size = Vector3.Scale(slab.size, leaf.lossyScale);
-                half = Mathf.Min(size.x, Mathf.Min(size.y, size.z)) * 0.5f;
+                Vector3 c = slabBox.center + Vector3.Scale(slabBox.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                Vector3 d = transform.InverseTransformPoint(leaf.TransformPoint(c));
+                min = Vector3.Min(min, d);
+                max = Vector3.Max(max, d);
             }
-            else if (mesh && mesh.sharedMesh)
-            {
-                Vector3 size = Vector3.Scale(mesh.sharedMesh.bounds.size, leaf.lossyScale);
-                half = Mathf.Min(size.x, Mathf.Min(size.y, size.z)) * 0.5f;
-            }
+
+            // it turns about its bottom front edge (under its middle): the leaf held in that edge's frame
+            Quaternion upright = transform.rotation;
+            Vector3 fromPivot = transform.TransformPoint(new Vector3((min.x + max.x) * 0.5f, min.y, max.z));
+            Vector3 heldPos = Quaternion.Inverse(upright) * (leaf.position - fromPivot);
+            Quaternion heldRot = Quaternion.Inverse(upright) * leaf.rotation;
+
+            // flat on its face, turned landYaw: the edge goes where that puts the leaf's middle on landOffset
+            Quaternion Pose(float tip, float yaw) => Quaternion.AngleAxis(yaw, Vector3.up) * upright * Quaternion.Euler(tip, 0f, 0f);
+            Vector3 middle = new Vector3((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f, (min.z + max.z) * 0.5f);
+            Vector3 middleHeld = Quaternion.Inverse(upright) * (transform.TransformPoint(middle) - fromPivot);
+            Vector3 toPivot = transform.TransformPoint(landOffset) - Pose(90f, landYaw) * middleHeld;
             float floor = transform.position.y;
-            if (Physics.Raycast(toPos + Vector3.up * 1.5f, Vector3.down, out RaycastHit hit, 4f, ~0, QueryTriggerInteraction.Ignore)) floor = hit.point.y;
-            toPos.y = floor + half + 0.002f;
+            Vector3 probe = transform.TransformPoint(landOffset);
+            if (Physics.Raycast(probe + Vector3.up * 1.5f, Vector3.down, out RaycastHit hit, 4f, ~0, QueryTriggerInteraction.Ignore)) floor = hit.point.y;
+            toPivot.y = floor + 0.002f;
 
             float time = Mathf.Max(0.05f, flightTime);
             for (float t = 0f; t < time; t += Time.deltaTime)
             {
                 float k = t / time;
-                float fall = k * k;   // slow off the hinges, quicker as it comes down
-                Vector3 p = Vector3.Lerp(fromPos, toPos, Mathf.Lerp(k, fall, 0.4f));
-                p.y += arcHeight * 4f * k * (1f - k);
-                leaf.SetPositionAndRotation(p, Quaternion.Slerp(fromRot, toRot, fall));
+                float tip = 90f * Mathf.Lerp(k, k * k, 0.7f);    // a shove off the hinges, then gravity has it
+                float slide = 1f - (1f - k) * (1f - k);          // the bottom kicked out fast, slowing as it comes down
+                Vector3 pivot = Vector3.Lerp(fromPivot, toPivot, slide);
+                pivot.y += arcHeight * 4f * k * (1f - k) * (1f - k);   // the bottom off the floor a little early on
+                Quaternion pose = Pose(tip, landYaw * slide);
+                leaf.SetPositionAndRotation(pivot + pose * heldPos, pose * heldRot);
                 yield return null;
             }
+            Quaternion toRot = Pose(90f, landYaw) * heldRot;
+            Vector3 toPos = toPivot + Pose(90f, landYaw) * heldPos;
             leaf.SetPositionAndRotation(toPos, toRot);
 
             AudioClip slap = landClip ? landClip : blowClip;

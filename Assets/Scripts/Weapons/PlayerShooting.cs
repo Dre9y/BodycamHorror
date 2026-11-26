@@ -735,12 +735,14 @@ namespace BodycamHorror.Weapons
 
             float k = Mathf.Lerp(1f, aimRecoilScale, aimW) * Mathf.Lerp(oneHandRecoilScale, 1f, twoHandW)
                       * UI.DebugMenu.RecoilScale;
+            float gunK = k * w.RecoilBoost;
             recoilRotVel += new Vector3(-w.kickPitch * Random.Range(0.85f, 1.15f),
                                         Random.Range(-w.kickYaw, w.kickYaw),
-                                        Random.Range(-w.kickRoll, w.kickRoll)) * k;
-            recoilPosVel += new Vector3(Random.Range(-0.05f, 0.05f), w.kickUp, -w.kickBack) * k;
+                                        Random.Range(-w.kickRoll, w.kickRoll)) * gunK;
+            recoilPosVel += new Vector3(Random.Range(-0.05f, 0.05f), w.kickUp, -w.kickBack) * gunK;
             if (rig)
             {
+                k *= w.CameraKickBoost;
                 rig.AddTrauma(w.cameraTrauma * k);
                 rig.AddTremor(w.cameraTremor * k);
                 rig.AddKick(new Vector3(0f, 0f, -w.cameraKickBack * k),

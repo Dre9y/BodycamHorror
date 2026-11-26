@@ -56,10 +56,30 @@ PrefabInstance:
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: d2f29414956246a4b85ef73f566ef093, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 9050953596083783733}
     - targetCorrespondingSourceObject: {fileID: -7678730090600824191, guid: d2f29414956246a4b85ef73f566ef093, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3875908527487562474}
   m_SourcePrefab: {fileID: 100100000, guid: d2f29414956246a4b85ef73f566ef093, type: 3}
+--- !u!1 &7715023859489780204 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: d2f29414956246a4b85ef73f566ef093, type: 3}
+  m_PrefabInstance: {fileID: 7480527921786916029}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &9050953596083783733
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7715023859489780204}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8fb9a79bc5e39ec4b98613ad4a6a10af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Environment.SeeThroughGaps
 --- !u!1 &8268476048507833916 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -7678730090600824191, guid: d2f29414956246a4b85ef73f566ef093, type: 3}

@@ -50,7 +50,20 @@ namespace BodycamHorror.EditorTools
             ("Pump_Unit", false, true), ("Butcher_Table", false, true), ("Meat_Hooks", false, false), ("Blood_Pools", true, false),
             ("Severed_Head", false, false), ("Transformer", false, true), ("Cable_Tray_2m", false, false), ("Cable_Drop", false, false),
             ("Breaker_Panel", false, true), ("Beacon_Lamp", false, false),
+            // the emergency power crank and its fuse (Blender/tools/emergency_power.py); EmergencyPowerBuilder puts them together
+            ("EmergencyCrank", false, false), ("EmergencyCrank_Handle", false, false), ("Fuse", false, false), ("FuseHolder", false, false),
         };
+
+        /// <summary>Materials and prefabs for just these props (names from <see cref="Props"/>).</summary>
+        public static void SetUpProps(params string[] names)
+        {
+            Directory.CreateDirectory(MaterialDir);
+            Directory.CreateDirectory(PrefabDir);
+            AssetDatabase.Refresh();
+            foreach (var (name, split, collide) in Props)
+                if (System.Array.IndexOf(names, name) >= 0) MakeProp(name, split, collide);
+            AssetDatabase.SaveAssets();
+        }
 
         /// <summary>Only the working rooms' props (rerunning the whole kit takes a while).</summary>
         [MenuItem("BodycamHorror/Basement/Set Up Room Props")]
@@ -367,6 +380,8 @@ namespace BodycamHorror.EditorTools
                 if (collide) Box(r.gameObject, r.GetComponent<MeshFilter>().sharedMesh);
             }
             if (name == "Lamp_Caged") AddBulbLight(inst);
+            // its box is far bigger than the model between the fins: sight goes by the real shape (the light monster)
+            if (collide && name == "Transformer") inst.AddComponent<BodycamHorror.Environment.SeeThroughGaps>();
             PrefabUtility.SaveAsPrefabAsset(inst, $"{PrefabDir}/{name}.prefab");
             Object.DestroyImmediate(inst);
         }

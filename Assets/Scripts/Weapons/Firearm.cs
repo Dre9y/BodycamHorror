@@ -179,6 +179,20 @@ namespace BodycamHorror.Weapons
         /// <summary>Raised after every live shot (true if any pellet hit something).</summary>
         public event Action<bool> Fired;
 
+        /// <summary>Extra multiplier on the gun's own kick (PlayerShooting reads it on every shot).</summary>
+        public virtual float RecoilBoost => 1f;
+        /// <summary>Extra multiplier on the camera's kick and shake.</summary>
+        public virtual float CameraKickBoost => 1f;
+        /// <summary>Muzzle flash: light intensity, size of the flame quads and how long it lasts.</summary>
+        protected virtual float FlashBoost => 1f;
+        protected virtual float FlashSizeBoost => 1f;
+        protected virtual float FlashDurationBoost => 1f;
+        /// <summary>How much of the shot recording's own echo is kept (GunshotAcoustics fades it out of the crack
+        /// and builds the room itself). 0 = the room only.</summary>
+        protected virtual float OwnShotTail => 0f;
+        /// <summary>Multiplier on the pellet cone.</summary>
+        protected virtual float PelletSpreadBoost => 1f;
+
         protected float nextFireTime;
         float flashTimer;
         AudioSource audioSource;
@@ -206,9 +220,10 @@ namespace BodycamHorror.Weapons
         {
             if (flashTimer <= 0f) return;
             flashTimer -= Time.deltaTime;
-            float f = Mathf.Clamp01(flashTimer / flashDuration);
-            if (flashLight) flashLight.intensity = flashIntensity * f * f;
-            if (flashMesh && flashTimer < flashDuration * 0.4f) flashMesh.gameObject.SetActive(false);
+            float duration = flashDuration * FlashDurationBoost;
+            float f = Mathf.Clamp01(flashTimer / duration);
+            if (flashLight) flashLight.intensity = flashIntensity * FlashBoost * f * f;
+            if (flashMesh && flashTimer < duration * 0.4f) flashMesh.gameObject.SetActive(false);
         }
 
         // ------------------------------------------------------------------ firing
@@ -236,7 +251,7 @@ namespace BodycamHorror.Weapons
             {
                 for (int i = 0; i < pelletsPerShot; i++)
                 {
-                    Vector3 dir = pelletsPerShot > 1 ? Cone(aim, pelletSpread) : aim;
+                    Vector3 dir = pelletsPerShot > 1 ? Cone(aim, pelletSpread * PelletSpreadBoost) : aim;
                     if (Physics.Raycast(origin, dir, out RaycastHit hit, range, hitMask, QueryTriggerInteraction.Ignore))
                     {
                         ApplyHit(hit, dir, source, 1);
@@ -245,13 +260,14 @@ namespace BodycamHorror.Weapons
                 }
             }
 
-            flashTimer = flashDuration;
-            if (flashLight) flashLight.intensity = flashIntensity;
+            flashTimer = flashDuration * FlashDurationBoost;
+            if (flashLight) flashLight.intensity = flashIntensity * FlashBoost;
             if (flashMesh)
             {
                 flashMesh.gameObject.SetActive(true);
                 flashMesh.localRotation = Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
-                flashMesh.localScale = Vector3.one * Random.Range(0.8f, 1.25f);
+                float s = Random.Range(0.8f, 1.25f) * FlashSizeBoost;
+                flashMesh.localScale = new Vector3(s, s, s * Random.Range(1f, 1.35f));   // the flame reaches forward more than out
             }
             Play(Sfx.Shot, Random.Range(0.94f, 1.06f));
             OnShot();
@@ -327,7 +343,7 @@ namespace BodycamHorror.Weapons
             if (!clip && (!clips.TryGetValue(sfx, out clip) || !clip)) clips[sfx] = clip = CreateClip(sfx);
             if (!clip) return;
             // a shot goes out through the space it is fired in; everything else is the gun in the hands
-            if (sfx == Sfx.Shot && BodycamHorror.Audio.GunshotAcoustics.Play(clip, volume, pitch, pelletsPerShot > 1 ? 1.35f : 1f)) return;
+            if (sfx == Sfx.Shot && BodycamHorror.Audio.GunshotAcoustics.Play(clip, volume, pitch, pelletsPerShot > 1 ? 1.35f : 1f, OwnShotTail)) return;
             audioSource.pitch = pitch;
             float level = sfx == Sfx.Cycle ? cycleVolume
                 : sfx == Sfx.MagOut || sfx == Sfx.MagIn || sfx == Sfx.ShellIn || sfx == Sfx.Rack ? volume * handlingVolume

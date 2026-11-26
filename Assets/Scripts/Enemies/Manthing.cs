@@ -679,6 +679,18 @@ namespace BodycamHorror.Enemies
         /// <summary>Shows it where it stands and starts the hunt (for scripted events: <see cref="appearOnCall"/>).</summary>
         public void AppearNow() => Appear();
 
+        /// <summary>
+        /// For scripted events: it snaps at once (shown first if it was not), screams, the flashlight dies and it comes at
+        /// the player; shot <see cref="hitsToSpare"/> times by the time it gets to them it breaks off (<see cref="BeginEnrage"/>).
+        /// </summary>
+        public void EnrageNow()
+        {
+            if (phase == Phase.Killing || phase == Phase.Dead || mode == Mode.Enraged || mode == Mode.Rampage) return;
+            if (phase == Phase.Waiting) Appear();
+            if (mode == Mode.Hush) EndSilence();
+            BeginEnrage();
+        }
+
         void Appear()
         {
             if (phase != Phase.Waiting) return;
@@ -771,8 +783,11 @@ namespace BodycamHorror.Enemies
                 foreach (var b in list) { var t = animator.GetBoneTransform(b); if (t) r.Add(t); }
                 return r.ToArray();
             }
-            samplePoints = Bones(HumanBodyBones.Head, HumanBodyBones.Chest, HumanBodyBones.Hips, HumanBodyBones.LeftHand, HumanBodyBones.RightHand,
-                                 HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot);
+            // (dense enough that a slice of it through a gap — a transformer's fins, a grille — still has a point in it)
+            samplePoints = Bones(HumanBodyBones.Head, HumanBodyBones.Chest, HumanBodyBones.Spine, HumanBodyBones.Hips,
+                                 HumanBodyBones.LeftHand, HumanBodyBones.RightHand, HumanBodyBones.LeftLowerArm, HumanBodyBones.RightLowerArm,
+                                 HumanBodyBones.LeftUpperLeg, HumanBodyBones.RightUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.RightLowerLeg,
+                                 HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot);
             feet = Bones(HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot, HumanBodyBones.LeftToes, HumanBodyBones.RightToes);
             hands = Bones(HumanBodyBones.LeftHand, HumanBodyBones.RightHand);
             legBones = Bones(HumanBodyBones.LeftUpperLeg, HumanBodyBones.LeftLowerLeg, HumanBodyBones.LeftFoot, HumanBodyBones.LeftToes,
@@ -1415,7 +1430,8 @@ namespace BodycamHorror.Enemies
                     // out of the light before it is over: it snaps and comes, as it would at anyone out there
                     if (!inZone) { EndSilence(); showdownDone = true; BeginEnrage(); break; }
                     HoldAndWatch(dt);   // not a breath, not a step: only the head comes round to them
-                    lookedFor = InEyes() ? lookedFor + dt : Mathf.Max(0f, lookedFor - dt);
+                    // anywhere in the picture counts, not only the middle: caught at the edge of the eye, it is seen
+                    lookedFor = InFrame() ? lookedFor + dt : Mathf.Max(0f, lookedFor - dt);
                     if (lookedFor >= showdownLook) Showdown();
                     break;
                 }
@@ -1602,7 +1618,7 @@ namespace BodycamHorror.Enemies
                     Vector3 c = q + Vector3.up * h * bodySize * 0.6f;
                     Vector3 v = cam ? cam.WorldToViewportPoint(c) : new Vector3(0.5f, 0.5f, 1f);
                     bool inFrame = v.z > 0.05f && v.x > -0.1f && v.x < 1.1f && v.y > -0.1f && v.y < 1.1f;
-                    if (inFrame && !Physics.Linecast(eye, c, sightMask, QueryTriggerInteraction.Ignore)) { seenThere = true; break; }
+                    if (inFrame && !SeeThroughGaps.Blocked(eye, c, sightMask)) { seenThere = true; break; }
                 }
                 if (seenThere) continue;
                 float score = walk + Random.value * 4f;
@@ -2311,7 +2327,7 @@ namespace BodycamHorror.Enemies
                 Vector3 v = cam.WorldToViewportPoint(t.position);
                 if (v.z <= 0.05f) continue;
                 if (centre ? new Vector2(v.x - 0.5f, v.y - 0.5f).magnitude > stareCone : v.x < -0.02f || v.x > 1.02f || v.y < -0.02f || v.y > 1.02f) continue;
-                if (Physics.Linecast(eye, t.position, sightMask, QueryTriggerInteraction.Ignore)) continue;
+                if (SeeThroughGaps.Blocked(eye, t.position, sightMask)) continue;
                 if (LightAt(t.position, torchLights, torchThreshold) >= torchThreshold) return true;
             }
             return false;
@@ -2923,7 +2939,7 @@ namespace BodycamHorror.Enemies
                 Vector3 p = t.position;
                 Vector3 v = cam.WorldToViewportPoint(p);
                 if (v.z <= 0.05f || v.x < -0.02f || v.x > 1.02f || v.y < -0.02f || v.y > 1.02f) continue;
-                if (Physics.Linecast(eye, p, sightMask, QueryTriggerInteraction.Ignore)) continue;
+                if (SeeThroughGaps.Blocked(eye, p, sightMask)) continue;
                 if (LightAt(p) >= litThreshold) return true;
             }
             return false;
@@ -2946,7 +2962,7 @@ namespace BodycamHorror.Enemies
                 Vector3 p = t.position + offset;
                 Vector3 v = cam.WorldToViewportPoint(p);
                 if (v.z <= 0.05f || v.x < -0.05f || v.x > 1.05f || v.y < -0.05f || v.y > 1.05f) continue;
-                if (Physics.Linecast(eye, p, sightMask, QueryTriggerInteraction.Ignore)) continue;
+                if (SeeThroughGaps.Blocked(eye, p, sightMask)) continue;
                 if (LightAt(p) >= litThreshold * 0.5f) return true;
             }
             return false;
@@ -2964,7 +2980,7 @@ namespace BodycamHorror.Enemies
             {
                 Vector3 v = cam.WorldToViewportPoint(t.position);
                 if (v.z <= 0.05f || v.x < -0.05f || v.x > 1.05f || v.y < -0.05f || v.y > 1.05f) continue;
-                if (Physics.Linecast(eye, t.position, sightMask, QueryTriggerInteraction.Ignore)) continue;
+                if (SeeThroughGaps.Blocked(eye, t.position, sightMask)) continue;
                 onScreen = true;
                 break;
             }
@@ -3010,7 +3026,7 @@ namespace BodycamHorror.Enemies
                     k *= Mathf.InverseLerp(outer, inner, angle);
                 }
                 if (k < litThreshold * 0.25f) continue;
-                if (l.shadows != LightShadows.None && Physics.Linecast(l.transform.position, p, sightMask, QueryTriggerInteraction.Ignore)) continue;
+                if (l.shadows != LightShadows.None && SeeThroughGaps.Blocked(l.transform.position, p, sightMask)) continue;
                 sum += k;
                 if (sum >= litThreshold) break;
             }
@@ -3048,6 +3064,21 @@ namespace BodycamHorror.Enemies
             return InEyes();
         }
 
+        /// <summary>Some part of it inside the picture (edges included) with nothing in the way, lit or not.</summary>
+        bool InFrame()
+        {
+            if (!cam || samplePoints == null) return false;
+            Vector3 eye = cam.transform.position;
+            foreach (Transform t in samplePoints)
+            {
+                Vector3 v = cam.WorldToViewportPoint(t.position);
+                if (v.z <= 0.05f || v.x < 0f || v.x > 1f || v.y < 0f || v.y > 1f) continue;
+                if (SeeThroughGaps.Blocked(eye, t.position, sightMask)) continue;
+                return true;
+            }
+            return false;
+        }
+
         /// <summary>Some part of it near the middle of the screen with nothing in the way, lit or not.</summary>
         bool InEyes()
         {
@@ -3057,7 +3088,7 @@ namespace BodycamHorror.Enemies
             {
                 Vector3 v = cam.WorldToViewportPoint(t.position);
                 if (v.z <= 0.05f || new Vector2(v.x - 0.5f, v.y - 0.5f).magnitude > lookFearCone) continue;
-                if (Physics.Linecast(eye, t.position, sightMask, QueryTriggerInteraction.Ignore)) continue;
+                if (SeeThroughGaps.Blocked(eye, t.position, sightMask)) continue;
                 return true;
             }
             return false;

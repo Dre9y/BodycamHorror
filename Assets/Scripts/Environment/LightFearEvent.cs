@@ -12,8 +12,8 @@ namespace BodycamHorror.Environment
     /// The player walks round the shaft to the far end of the hall: behind them the way in slams shut and locks. Something
     /// beats twice on the side door (<see cref="bashedDoor"/>) while a low hum swells up: on the second blow it flies off into
     /// the hall, the monster is standing in the doorway, and every lamp in the level stutters and bursts, one after another,
-    /// very loud. With the last one every sound of the place is gone (the flashlight cuts out for a moment with them).
-    /// From then on it hunts. The emergency power crank in the switch room turns only with the fuse (key id
+    /// very loud. With the last one every sound of the place is gone, the flashlight dies, and it comes for the player at
+    /// once, screaming (<see cref="attackAfterBlackout"/>): shot enough on the way it breaks off, and from then on it hunts. The emergency power crank in the switch room turns only with the fuse (key id
     /// <see cref="fuseKey"/>) on the key ring; turning it all the way lights the red emergency lamps and opens the exit gate.
     /// </summary>
     public class LightFearEvent : MonoBehaviour
@@ -32,7 +32,10 @@ namespace BodycamHorror.Environment
         public float bashDelay = 1.6f;
         [Tooltip("From the door flying off to the lights dying (s): long enough to see what is in the doorway.")]
         public float blackoutDelay = 0.7f;
-        [Tooltip("After the lights die the flashlight is dead too, until the player switches it on or fires this many shots.")]
+        [Tooltip("The lights dead, the monster goes for the player at once: screaming, in the dark (the flashlight dead), and " +
+                 "only shooting it enough times (Manthing's hitsToSpare) on the way drives it off. Off: it just hunts.")]
+        public bool attackAfterBlackout = true;
+        [Tooltip("Not attacking at once: after the lights die the flashlight is dead too, until the player switches it on or fires this many shots.")]
         public int torchShotsToWake = 2;
         public AudioClip slam;
         [Range(0f, 1f)] public float slamVolume = 1f;
@@ -232,6 +235,10 @@ namespace BodycamHorror.Environment
 
             yield return new WaitForSeconds(blackoutDelay);
             yield return Blackout(hum, swell);
+
+            var torch = player.GetComponentInChildren<BodycamFlashlight>(true);
+            if (attackAfterBlackout && manthing) manthing.EnrageNow();   // its rage keeps the light dead until it is driven off
+            else if (torch) StartCoroutine(TorchDead(torch));
         }
 
         /// <summary>A sound in the head (not placed in the room), started silent.</summary>
@@ -307,11 +314,7 @@ namespace BodycamHorror.Environment
             KillAmbience();
 
             var torch = player.GetComponentInChildren<BodycamFlashlight>(true);
-            if (torch)
-            {
-                torch.SetOn(false, false);
-                StartCoroutine(TorchDead(torch));
-            }
+            if (torch) torch.SetOn(false, false);
         }
 
         /// <summary>

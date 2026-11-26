@@ -1636,14 +1636,10 @@ namespace BodycamHorror.EditorTools
             var fuse = new GameObject("Fuse");
             fuse.transform.SetParent(g, false);
             fuse.transform.position = new Vector3(2.1f, BenchTop, 4.75f);   // on the workbench's top
-            var body = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            var body = EmergencyPowerBuilder.Fuse(fuse.transform);   // lying on its side, the stamp up
             body.name = "Body";
-            Object.DestroyImmediate(body.GetComponent<Collider>());
-            body.transform.SetParent(fuse.transform, false);
-            body.transform.localPosition = new Vector3(0f, 0.025f, 0f);
-            body.transform.localRotation = Quaternion.Euler(0f, 30f, 90f);
-            body.transform.localScale = new Vector3(0.045f, 0.05f, 0.045f);
-            body.GetComponent<MeshRenderer>().sharedMaterial = LevelSceneBuilder.enamel;
+            body.transform.localPosition = new Vector3(0f, 0.021f, 0f);
+            body.transform.localRotation = Quaternion.Euler(0f, 30f, 0f);
             var glowGo = new GameObject("Glow");
             glowGo.transform.SetParent(fuse.transform, false);
             glowGo.transform.localPosition = new Vector3(0f, 0.25f, 0f);
@@ -1660,31 +1656,23 @@ namespace BodycamHorror.EditorTools
             pickup.glow = glow;
             EditorUtility.SetDirty(pickup);
 
-            // 3: the emergency power crank on the switch room's south wall, by the switchgear (dead until the fuse is in)
-            Vector2 wallDir = (V(26.52f, 7.8f) - V(33.6f, 7.2f)).normalized, inward = -Left(wallDir);
-            Vector2 onWall = V(30f, 7.2f + (33.6f - 30f) / 7.08f * 0.6f) + inward * (T / 2);
-            var crankPipe = ValveBuilder.Place(W(onWall, 1.25f), W(inward), g);
-            crankPipe.name = "Crank_EmergencyPower";
-            Valve crank = crankPipe.GetComponentInChildren<Valve>();
+            // 3: the emergency power crank in the switch room's north-west corner, on the west wall between the corner
+            // pier and the shelf (dead until the fuse is in); its tube runs up to the ceiling
+            Valve crank = EmergencyPowerBuilder.PlaceCrank(W(V(26.375f, 15.1f), 1.1f), Vector3.right, g);
+            crank.name = "Crank_EmergencyPower";
             crank.turnTime = 10f;
             EditorUtility.SetDirty(crank);
 
-            // the fuse box on the switchgear: the player puts the fuse in by hand (LightFearEvent), and it shows in there
+            // the fuse box on the switchgear: an empty fuse holder on its door; the player puts the fuse in by hand
+            // (LightFearEvent), and then it shows in there
             UseSpot fuseSlot = null;
             GameObject fuseIn = null;
             if (fuseBoxProp)
             {
+                var holderAt = new Vector3(0.11f, 0.2f, 0.167f);   // on the door's raised panel, clear of its stencil and lock
+                EmergencyPowerBuilder.FuseHolder(fuseBoxProp.transform, holderAt, out fuseIn);
                 fuseSlot = fuseBoxProp.AddComponent<UseSpot>();
-                fuseSlot.promptOffset = new Vector3(0f, 0.33f, 0.22f);   // the box's open front (the prop faces +z)
-                fuseIn = new GameObject("FuseIn");
-                fuseIn.transform.SetParent(fuseBoxProp.transform, false);
-                fuseIn.transform.localPosition = new Vector3(0f, 0.33f, 0.1f);
-                var inBody = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                inBody.name = "Body";
-                Object.DestroyImmediate(inBody.GetComponent<Collider>());
-                inBody.transform.SetParent(fuseIn.transform, false);
-                inBody.transform.localScale = new Vector3(0.045f, 0.05f, 0.045f);
-                inBody.GetComponent<MeshRenderer>().sharedMaterial = LevelSceneBuilder.enamel;
+                fuseSlot.promptOffset = holderAt + new Vector3(0f, 0f, 0.09f);
                 EditorUtility.SetDirty(fuseSlot);
             }
             else Debug.LogWarning("No fuse box prop: the fuse goes in at the crank");

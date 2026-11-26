@@ -17935,6 +17935,8 @@ MonoBehaviour:
   pickupLampGlow: {fileID: 549984683}
   switchClip: {fileID: 0}
   switchVolume: 0.8
+  alsoOff:
+  - {fileID: 773716549}
   burstLamp: {fileID: 1874675555}
   burstLampHum: {fileID: 879813929}
   burstClip: {fileID: 8300000, guid: 82724d98ae5dcef428f60a687cfa3bd5, type: 3}

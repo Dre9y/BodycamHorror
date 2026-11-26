@@ -135,6 +135,8 @@ namespace BodycamHorror.Enemies
         [Tooltip("The switch. Empty = a generated click.")]
         public AudioClip switchClip;
         [Range(0f, 1f)] public float switchVolume = 0.8f;
+        [Tooltip("Other lamps (their roots) that go out with it, e.g. the one behind the player.")]
+        public Transform[] alsoOff;
 
         [Header("The lamp that bursts")]
         [Tooltip("A lamp (its root) that bursts, very loud, on the sting: its lights die and its glowing parts go dark (optional).")]
@@ -244,6 +246,7 @@ namespace BodycamHorror.Enemies
         /// <summary>The lamp over the gun goes out with a click as it is taken.</summary>
         void SwitchOffPickupLamp()
         {
+            if (alsoOff != null) foreach (Transform lamp in alsoOff) if (lamp) PutOut(lamp);
             if (!pickupLamp) return;
             foreach (var f in pickupLamp.GetComponents<LightFlicker>()) f.enabled = false;
             pickupLamp.enabled = false;
@@ -258,14 +261,7 @@ namespace BodycamHorror.Enemies
         {
             GlowOff();   // goes dark with the lamp
             if (!burstLamp) return;
-            foreach (var f in burstLamp.GetComponentsInChildren<LightFlicker>(true)) f.enabled = false;
-            foreach (var l in burstLamp.GetComponentsInChildren<Light>(true)) l.enabled = false;
-            foreach (var r in burstLamp.GetComponentsInChildren<Renderer>(true)) Darken(r);
-            foreach (var h in burstLamp.GetComponentsInChildren<LightHaze>(true))
-            {
-                foreach (var r in h.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
-                h.enabled = false;
-            }
+            PutOut(burstLamp);
             if (burstLampHum) burstLampHum.SetActive(false);   // dead for good, not brought back when the silence ends
             Vector3 at = burstLamp.position;
             var lit = burstLamp.GetComponentInChildren<Light>(true);
@@ -278,6 +274,19 @@ namespace BodycamHorror.Enemies
             if (burstLayer) PlayHere(burstLayer, at, burstVolume, 8f, 70f).pitch = Random.Range(0.95f, 1.12f);
             var rig = player ? player.GetComponentInChildren<BodycamCameraRig>() : null;
             if (rig) rig.AddTrauma(0.25f);
+        }
+
+        /// <summary>A lamp goes dark: its lights off, its glowing parts unlit, its haze gone.</summary>
+        static void PutOut(Transform lamp)
+        {
+            foreach (var f in lamp.GetComponentsInChildren<LightFlicker>(true)) f.enabled = false;
+            foreach (var l in lamp.GetComponentsInChildren<Light>(true)) l.enabled = false;
+            foreach (var r in lamp.GetComponentsInChildren<Renderer>(true)) Darken(r);
+            foreach (var h in lamp.GetComponentsInChildren<LightHaze>(true))
+            {
+                foreach (var r in h.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+                h.enabled = false;
+            }
         }
 
         static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");

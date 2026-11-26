@@ -17923,6 +17923,14 @@ MonoBehaviour:
   restoreAfterSting: 3
   flickerLight: {fileID: 1833654942}
   stress: 0.85
+  glow: 1
+  glowColor: {r: 0.45, g: 0.64, b: 1, a: 1}
+  glowIntensity: 0.5
+  glowRange: 1.6
+  glowOffset: {x: 0, y: 1.9, z: 0.45}
+  glowAimHeight: 1.35
+  glowAngle: 80
+  glowFadeIn: 0.6
   pickupLamp: {fileID: 549984687}
   pickupLampGlow: {fileID: 549984683}
   switchClip: {fileID: 0}

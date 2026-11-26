@@ -113,6 +113,20 @@ namespace BodycamHorror.Enemies
         [Tooltip("Fear given to the player (0-1). 0.65 and up rings the ears, 0.8 is a full panic heartbeat.")]
         [Range(0f, 1f)] public float stress = 0.85f;
 
+        [Header("Cold glow")]
+        [Tooltip("A faint cold light on the monster's front from the moment it appears until the lamp bursts (or it is gone).")]
+        public bool glow = true;
+        public Color glowColor = new Color(0.45f, 0.64f, 1f);
+        public float glowIntensity = 0.5f;
+        public float glowRange = 1.6f;
+        [Tooltip("Where the glow sits, relative to the monster (z = in front of it). It shines back onto the monster.")]
+        public Vector3 glowOffset = new Vector3(0f, 1.9f, 0.45f);
+        [Tooltip("Height on the monster it is aimed at (m).")]
+        public float glowAimHeight = 1.35f;
+        public float glowAngle = 80f;
+        [Tooltip("Seconds it takes to come up (real time: it fades in behind the pickup's showcase too).")]
+        public float glowFadeIn = 0.6f;
+
         [Header("The lamp over the pickup")]
         [Tooltip("Switched off with a click the moment the pickup is taken (optional).")]
         public Light pickupLamp;
@@ -242,6 +256,7 @@ namespace BodycamHorror.Enemies
         /// <summary>The lamp bursts: a very loud crack of glass where it hangs (and flat in the ears), dark for good.</summary>
         void BurstLamp()
         {
+            GlowOff();   // goes dark with the lamp
             if (!burstLamp) return;
             foreach (var f in burstLamp.GetComponentsInChildren<LightFlicker>(true)) f.enabled = false;
             foreach (var l in burstLamp.GetComponentsInChildren<Light>(true)) l.enabled = false;
@@ -309,6 +324,7 @@ namespace BodycamHorror.Enemies
                 }
                 if (restoreTimer >= 0f && (restoreTimer -= dt) <= 0f) Unsilence();
             }
+            GlowUpdate();
             // the scare is over (seen, ducked away): now the lamp bursts
             if (burstTimer >= 0f && (burstTimer -= dt) <= 0f)
             {
@@ -369,11 +385,48 @@ namespace BodycamHorror.Enemies
             peekTimer = -peekDelay;
             if (!monster) Spawn();
             Show(true);
+            GlowOn();
             if (door && !door.IsOpen)
             {
                 if (unseen) door.OpenNow(monster.transform.position);   // opened behind the showcase: already open
                 else door.Open(monster.transform.position);              // the creak is the cue to look up
             }
+        }
+
+        Light glowLight;
+        float glowLevel;
+
+        /// <summary>The faint cold light on its front starts to come up.</summary>
+        void GlowOn()
+        {
+            if (!glow || !monster || glowLight) return;
+            var go = new GameObject("ColdGlow");
+            go.transform.SetParent(monster.transform, false);
+            go.transform.localPosition = glowOffset;
+            // a spot turned back onto it: the light falls on the monster only, never through the wall behind the glow
+            Vector3 chest = new Vector3(0f, glowAimHeight, 0f) - glowOffset;
+            if (chest.sqrMagnitude > 0.0001f) go.transform.localRotation = Quaternion.LookRotation(chest);
+            glowLight = go.AddComponent<Light>();
+            glowLight.type = LightType.Spot;
+            glowLight.spotAngle = glowAngle;
+            glowLight.innerSpotAngle = glowAngle * 0.4f;
+            glowLight.color = glowColor;
+            glowLight.range = glowRange;
+            glowLight.shadows = LightShadows.None;
+            glowLight.intensity = 0f;
+            glowLevel = 0f;
+        }
+
+        void GlowUpdate()
+        {
+            if (!glowLight || !glowLight.enabled || glowLevel >= 1f) return;
+            glowLevel = glowFadeIn > 0f ? Mathf.Min(1f, glowLevel + Time.unscaledDeltaTime / glowFadeIn) : 1f;
+            glowLight.intensity = glowIntensity * glowLevel * glowLevel;
+        }
+
+        void GlowOff()
+        {
+            if (glowLight) glowLight.enabled = false;
         }
 
         bool shown = true;
@@ -670,6 +723,7 @@ namespace BodycamHorror.Enemies
         void Vanish(float soundTail)
         {
             phase = Phase.Done;
+            GlowOff();
             if (flickerLight) flickerLight.intensity = lightIntensity;
             if (graph.IsValid()) graph.Destroy();
             if (!monster) return;

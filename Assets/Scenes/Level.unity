@@ -17884,8 +17884,8 @@ MonoBehaviour:
   modelMaterial: {fileID: 2100000, guid: 1cbd13510575ee042a87203192cbb405, type: 2}
   modelScale: 0.7
   idleClip: {fileID: 1827226128182048838, guid: 9ffb9a6a781daab47a9152e522e10f6d, type: 3}
-  idleSpeed: 0.5
-  idleTime: -1
+  idleSpeed: 0
+  idleTime: 1
   runClip: {fileID: 1827226128182048838, guid: 1f28287956bb0b34a9525cde9f42efb4, type: 3}
   runAnimationSpeed: 1.4
   stinger: {fileID: 0}
@@ -45427,7 +45427,7 @@ Transform:
   m_GameObject: {fileID: 601612162}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 7.375, y: 2.66, z: 6.8}
+  m_LocalPosition: {x: 6.3, y: 2.66, z: 6.05}
   m_LocalScale: {x: 0.14999962, y: 0.03999996, z: 1.2000003}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -70745,7 +70745,7 @@ Transform:
   m_GameObject: {fileID: 879813929}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7.37, y: 2.6000001, z: 6.8}
+  m_LocalPosition: {x: 6.295, y: 2.6000001, z: 6.05}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -86397,7 +86397,7 @@ Transform:
   m_GameObject: {fileID: 1077745409}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: 0.7071068}
-  m_LocalPosition: {x: 7.37, y: 2.6000001, z: 6.8}
+  m_LocalPosition: {x: 6.295, y: 2.6000001, z: 6.05}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

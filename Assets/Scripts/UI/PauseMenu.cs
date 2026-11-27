@@ -104,6 +104,9 @@ namespace BodycamHorror.UI
             {
                 if (!a.isActiveAndEnabled || a.updateMode == AnimatorUpdateMode.UnscaledTime) continue;
                 a.keepAnimatorStateOnDisable = true;   // carry on mid-clip afterwards, not from the start
+                // and leave what it animates as it is: by default a stopped Animator writes back the defaults of every
+                // property its clips touch, and the gun the hands' clips show (pistol, shotgun) went out of the hands
+                a.writeDefaultValuesOnDisable = false;
                 a.enabled = false;
                 frozen.Add(a);
             }

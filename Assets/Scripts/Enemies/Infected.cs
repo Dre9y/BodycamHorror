@@ -168,6 +168,8 @@ namespace BodycamHorror.Enemies
         public AudioClip[] voiceClips;
         [Tooltip("Off: it never stops to scream (the Scream clip) when it spots you or is woken; it just comes.")]
         public bool screams = true;
+        [Tooltip("No voice at all: no growls, cries, grunts, idle or attack sounds, no moans. Body sounds (thuds) stay.")]
+        public bool silent;
 
         [Tooltip("Nothing hurts it and nothing wakes it: hits are ignored outright (apparitions, see PickupScare).")]
         public bool invulnerable;
@@ -293,7 +295,7 @@ namespace BodycamHorror.Enemies
             var moan = gameObject.AddComponent<Audio.MonsterMoan>();   // rare, never on top of another monster's
             moan.clip = zombieMoan ? zombieMoan : (zombieMoan = Resources.Load<AudioClip>(ZombieMoanClip));   // null: the shared creature moan
             moan.mayStart = () => !recordedVoice || !recordedVoice.isPlaying;   // not over its idle or attack sound
-            moan.canMoan =() => !invulnerable && state != State.Dead && state != State.Scream && !BangingWall;   // the head-banger is silent at the wall
+            moan.canMoan =() => !silent && !invulnerable &&state != State.Dead && state != State.Scream && !BangingWall;   // the head-banger is silent at the wall
 
             health = maxHealth;
             runSpeed = Random.Range(runSpeedRange.x, runSpeedRange.y);
@@ -398,6 +400,7 @@ namespace BodycamHorror.Enemies
 
         void PlayRecorded(AudioClip clip, float volume, float pitch)
         {
+            if (silent) return;
             recordedVoice.Stop();
             recordedVoice.clip = clip;
             recordedVoice.volume = volume;
@@ -1248,6 +1251,7 @@ namespace BodycamHorror.Enemies
 
         void Say(string kind, float volume, float pitch)
         {
+            if (silent && kind != "thud") return;
             if (kind != "thud" && voiceClips != null && voiceClips.Length > 0)
             {
                 if (kind == "grunt" && attackClip) return;   // the blow has its own recorded roar (PlayRecorded)

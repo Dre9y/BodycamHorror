@@ -33,6 +33,8 @@ namespace BodycamHorror.Enemies
         public AudioClip[] voiceClips;
         [Tooltip("Off: they never stop to scream when they spot you; they just come.")]
         public bool screams = true;
+        [Tooltip("The ones it spawns have no voice at all (Infected.silent): no growls, cries or moans.")]
+        public bool silent;
         public LayerMask groundMask = ~((1 << 2) | (1 << 8));   // not Ignore Raycast or Hitbox
 
         [Header("Look (empty = box placeholder)")]
@@ -88,6 +90,7 @@ namespace BodycamHorror.Enemies
                 inf.bangHearZone = bangHearZone;
                 inf.voiceClips = voiceClips;
                 inf.screams = screams;
+                inf.silent = silent;
                 if (passive)
                 {
                     inf.aggroRange = 0f;

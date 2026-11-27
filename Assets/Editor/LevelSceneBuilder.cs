@@ -210,6 +210,47 @@ namespace BodycamHorror.EditorTools
             Debug.Log("Level: shell, corridors and annex rebuilt in " + ScenePath);
         }
 
+        /// <summary>
+        /// Brings the leg's blackout scare into the open Level scene without rebuilding anything else: the lamp over
+        /// the link's turn, the bottles moved up near the head-banger (their own wake-up off) and Scare_Blackout.
+        /// Safe to run again. Menu: BodycamHorror > Level: Update Leg Blackout Scare.
+        /// </summary>
+        [MenuItem("BodycamHorror/Level: Update Leg Blackout Scare")]
+        public static void UpdateLegBlackoutScare()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                Debug.LogError("Level: leave Play Mode first, the change has to be saved into the scene.");
+                return;
+            }
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            if (scene.path != ScenePath) scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            Transform annex = GameObject.Find("Level/Annex")?.transform;
+            if (!annex) { Debug.LogError("Level: no Level/Annex in " + ScenePath); return; }
+            LoadMaterials();
+            float legMidZ = (NorthLegZ0 + NorthZ1) * 0.5f;
+
+            foreach (string n in new[] { "Lamp_LegEntry", "Scare_Blackout" })
+            {
+                Transform old = annex.Find(n);
+                if (old) Object.DestroyImmediate(old.gameObject);
+            }
+            HangingLamp(LightingTestSceneBuilder.BuildLampPrefab(), annex, "Lamp_LegEntry",
+                        new Vector3(ZigX0 + 0.7f, Height, (LinkZ0 + LinkZ1) * 0.5f), 0.5f, false);
+
+            NoiseTrap trap = annex.GetComponentInChildren<NoiseTrap>(true);
+            if (!trap) { Debug.LogError("Level: no NoiseTrap under Level/Annex"); return; }
+            trap.transform.position = new Vector3(NorthLegX1 - 7f, 0f, legMidZ);
+            trap.wakeRadius = 0f;
+            EditorUtility.SetDirty(trap);
+            EditorUtility.SetDirty(trap.transform);
+            BlackoutScareAt(annex, trap, annex.GetComponentInChildren<InfectedSpawner>(true), legMidZ);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log("Level: leg blackout scare updated in " + ScenePath + ". Rerun Lighting > Set Up Baked GI and rebake: its lamps must be Realtime.");
+        }
+
         // ------------------------------------------------------------------ materials
 
         internal static void LoadMaterials()
@@ -938,11 +979,47 @@ namespace BodycamHorror.EditorTools
             // at the leg's start, on its top wall just past the turn: a bulkhead lamp barely alive, so the first steps
             // in are not pitch black and the far bulb still reads as the only real light
             WallLamp(annex, "WallLamp_LegStart", new Vector3(LegX0 + 1.0f, 1.85f, NorthZ1), 180f, 0.25f, false);
+            // over the link's far end, where it turns up: seen as the flat's door opens, it shows which way to go
+            HangingLamp(lampPrefab, annex, "Lamp_LegEntry", new Vector3(ZigX0 + 0.7f, Height, (LinkZ0 + LinkZ1) * 0.5f), 0.5f, false);
 
-            // a little past halfway down the leg: empty bottles by the top wall, the trap across the whole width.
-            // Walking through knocks them over; the crash turns the head-banger round (it ignores the gunshot at the lock)
-            const float trapX = LegX0 + 6f;   // as far into the leg as where it was tried out
-            BottleTrap(annex, new Vector3(trapX, 0f, legMidZ));
+            // most of the way down the leg, ~7 m short of the head-banger: empty bottles by the top wall, the trap across
+            // the whole width. Walking through knocks them over and sets off the blackout scare: the lamps click off,
+            // the head-banger is gone from the end wall, and it comes running from behind (BlackoutScare)
+            const float trapX = NorthLegX1 - 7f;
+            NoiseTrap trap = BottleTrap(annex, new Vector3(trapX, 0f, legMidZ));
+            trap.wakeRadius = 0f;   // the scare decides what the zombie does, the crash itself wakes no one
+            EditorUtility.SetDirty(trap);
+            BlackoutScareAt(annex, trap, bangerPrefab ? annex.GetComponentInChildren<InfectedSpawner>() : null, legMidZ);
+        }
+
+        /// <summary>
+        /// The leg's blackout: when the bottles go over, every lamp from the flat's door to the dead end clicks off; in
+        /// the dark the head-banger is moved to the leg's start, behind the player, and runs at them; the lamps click on.
+        /// </summary>
+        static void BlackoutScareAt(Transform annex, NoiseTrap trap, InfectedSpawner banger, float legMidZ)
+        {
+            var go = new GameObject("Scare_Blackout");
+            go.transform.SetParent(annex, false);
+            go.transform.position = trap.transform.position;
+            var scare = go.AddComponent<BlackoutScare>();
+            scare.trap = trap;
+            scare.banger = banger;
+            // the leg's start, just round the corner from the stretch up: a straight run down the leg to the player
+            scare.runFrom = new Vector3(ZigX0 + 0.7f, 0.02f, legMidZ);
+            scare.lamps = new[] { "Lamp_LegEntry", "WallLamp_LegStart", "Lamp_HeadBanger" }
+                .Select(n => annex.Find(n)).Where(t => t).ToArray();
+            var steps = new System.Collections.Generic.List<AudioClip>();
+            foreach (string guid in AssetDatabase.FindAssets("t:AudioClip", new[] { "Assets/Resources/Audio/Footsteps" }))
+                steps.Add(AssetDatabase.LoadAssetAtPath<AudioClip>(AssetDatabase.GUIDToAssetPath(guid)));
+            scare.steps = steps.ToArray();
+            scare.runLoop = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Concrete Barefoot Running Loop.wav");   // bare feet (the loud stretch of the recording), used over the steps
+            scare.stepPitch = 1f;
+            EditorUtility.SetDirty(scare);
+            if (banger)
+            {
+                banger.silent = true;   // no growling for now: only its feet are heard
+                EditorUtility.SetDirty(banger);
+            }
         }
 
         /// <summary>
@@ -1052,7 +1129,7 @@ namespace BodycamHorror.EditorTools
 
         /// <summary>A few empty bottles at the top wall that the player knocks over (<see cref="NoiseTrap"/>).
         /// The trap's box spans the corridor; the bottles are its children.</summary>
-        static void BottleTrap(Transform parent, Vector3 at)
+        static NoiseTrap BottleTrap(Transform parent, Vector3 at)
         {
             var go = new GameObject("NoiseTrap_Bottles");
             go.transform.SetParent(parent, false);
@@ -1076,6 +1153,7 @@ namespace BodycamHorror.EditorTools
             };
             trap.things = bottles.ToArray();
             EditorUtility.SetDirty(trap);
+            return trap;
         }
 
         /// <summary>An empty bottle: body and neck, a capsule collider, a light rigidbody (held still by the trap).</summary>

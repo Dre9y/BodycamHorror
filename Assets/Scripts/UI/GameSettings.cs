@@ -22,22 +22,32 @@ namespace BodycamHorror.UI
         const string InvertYKey = "settings.invertY";
         const string UpscalerKey = "settings.upscaler";
         const string RenderScaleKey = "settings.renderScale";
+        const string LanguageKey = "settings.language";
+
+        /// <summary>The menus' language (<see cref="Loc"/>). English by default.</summary>
+        public static Loc.Language Language
+        {
+            get => language ??= (Loc.Language)UnityEngine.Mathf.Clamp(PlayerPrefs.GetInt(LanguageKey, (int)Loc.Language.English), 0, Loc.Names.Length - 1);   // read every frame: cached
+            set { language = value; PlayerPrefs.SetInt(LanguageKey, (int)value); PlayerPrefs.Save(); }
+        }
+        static Loc.Language? language;
 
         // ------------------------------------------------------------------ graphics: render scale and upscaling
 
         /// <summary>Upscalers offered. STP: Unity's temporal one (also smooths edges at 100%); FSR 1.0: AMD's spatial
         /// one (sharp, works only below 100%); off: the picture is drawn at the chosen scale and simply stretched.</summary>
-        public static readonly (string name, UpscalingFilterSelection filter)[] Upscalers =
+        public static readonly (string ru, string en, UpscalingFilterSelection filter)[] Upscalers =
         {
-            ("Выкл", UpscalingFilterSelection.Auto),
-            ("STP", UpscalingFilterSelection.STP),
-            ("FSR 1.0", UpscalingFilterSelection.FSR),
+            ("Выкл", "Off", UpscalingFilterSelection.Auto),
+            ("STP", "STP", UpscalingFilterSelection.STP),
+            ("FSR 1.0", "FSR 1.0", UpscalingFilterSelection.FSR),
         };
 
         /// <summary>Render scales offered (the usual FSR steps: performance, balanced, quality, ultra quality, native).</summary>
-        public static readonly (float scale, string name)[] RenderScales =
+        public static readonly (float scale, string ru, string en)[] RenderScales =
         {
-            (0.5f, "Производительность"), (0.59f, "Баланс"), (0.67f, "Качество"), (0.77f, "Ультра"), (1f, "Родное"),
+            (0.5f, "Производительность", "Performance"), (0.59f, "Баланс", "Balanced"), (0.67f, "Качество", "Quality"),
+            (0.77f, "Ультра", "Ultra"), (1f, "Родное", "Native"),
         };
 
         /// <summary>Index into <see cref="Upscalers"/>. Off by default: the picture as it was made.</summary>
@@ -97,11 +107,11 @@ namespace BodycamHorror.UI
         // ------------------------------------------------------------------ graphics: the screen
 
         /// <summary>The ways the game can fill the screen, in the order the settings list them.</summary>
-        public static readonly (string name, FullScreenMode mode)[] DisplayModes =
+        public static readonly (string ru, string en, FullScreenMode mode)[] DisplayModes =
         {
-            ("Полный экран", FullScreenMode.ExclusiveFullScreen),
-            ("Полноэкранное окно", FullScreenMode.FullScreenWindow),
-            ("В окне", FullScreenMode.Windowed),
+            ("Полный экран", "Fullscreen", FullScreenMode.ExclusiveFullScreen),
+            ("Полноэкранное окно", "Borderless window", FullScreenMode.FullScreenWindow),
+            ("В окне", "Windowed", FullScreenMode.Windowed),
         };
 
         static readonly Vector2Int[] CommonResolutions =
@@ -202,13 +212,13 @@ namespace BodycamHorror.UI
         static bool? invertY;
 
         /// <summary>Flashlight colours offered on the settings page, in the order they cycle.</summary>
-        public static readonly (string name, Color color)[] FlashlightColors =
+        public static readonly (string ru, string en, Color color)[] FlashlightColors =
         {
-            ("Холодный синий", new Color(0.70f, 0.83f, 1f)),
-            ("Белый", new Color(0.95f, 0.97f, 1f)),
-            ("Тёплый", new Color(1f, 0.94f, 0.82f)),
-            ("Жёлтый", new Color(1f, 0.84f, 0.58f)),
-            ("Зеленоватый", new Color(0.8f, 1f, 0.86f)),
+            ("Холодный синий", "Cold blue", new Color(0.70f, 0.83f, 1f)),
+            ("Белый", "White", new Color(0.95f, 0.97f, 1f)),
+            ("Тёплый", "Warm", new Color(1f, 0.94f, 0.82f)),
+            ("Жёлтый", "Yellow", new Color(1f, 0.84f, 0.58f)),
+            ("Зеленоватый", "Greenish", new Color(0.8f, 1f, 0.86f)),
         };
 
         /// <summary>Which of <see cref="FlashlightColors"/> the flashlight shines.</summary>

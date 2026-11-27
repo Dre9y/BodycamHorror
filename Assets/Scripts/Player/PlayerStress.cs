@@ -67,6 +67,10 @@ namespace BodycamHorror.Player
         /// </summary>
         public static bool Hushed;
 
+        // domain reload is off: a hush left on when Play Mode stopped mid-scare must not carry into the next run
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() => Hushed = false;
+
         /// <summary>0..1.</summary>
         public float Value => Hushed ? 0f : current;
         /// <summary>0..1, eased so low stress shows almost nothing and high stress shows a lot.</summary>

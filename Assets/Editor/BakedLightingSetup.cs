@@ -114,7 +114,12 @@ namespace BodycamHorror.EditorTools
             return false;
         }
 
-        /// <summary>Lights any script holds directly, and GameObjects an event script holds (it toggles them as a group).</summary>
+        /// <summary>
+        /// Lights any script holds directly, and lamps a script holds from outside (a Transform or GameObject that
+        /// is not part of the script's own object): scares and events switch those off as a whole
+        /// (PeekScare.alsoOff / burstLamp, LightFearEvent.emergencyLights). A script pointing into its own
+        /// hierarchy (SwingingLamp, LightHaze) does not count.
+        /// </summary>
         static HashSet<Light> LightsReferencedByScripts(out List<Transform> switchedGroups)
         {
             var set = new HashSet<Light>();
@@ -122,14 +127,17 @@ namespace BodycamHorror.EditorTools
             foreach (var mb in Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include))
             {
                 if (!mb) continue;
-                bool isEvent = mb.GetType().Name.Contains("Event");
                 var so = new SerializedObject(mb);
                 var it = so.GetIterator();
                 while (it.NextVisible(true))
                 {
                     if (it.propertyType != SerializedPropertyType.ObjectReference) continue;
-                    if (it.objectReferenceValue is Light l) set.Add(l);
-                    else if (isEvent && it.objectReferenceValue is GameObject go && go.scene.IsValid()) switchedGroups.Add(go.transform);
+                    var value = it.objectReferenceValue;
+                    if (value is Light l) { set.Add(l); continue; }
+                    Transform t = value is GameObject go ? go.transform : value as Transform;
+                    if (!t || !t.gameObject.scene.IsValid()) continue;
+                    if (t.IsChildOf(mb.transform) || mb.transform.IsChildOf(t)) continue;   // its own parts
+                    if (t.GetComponentInChildren<Light>(true)) switchedGroups.Add(t);
                 }
             }
             return set;
@@ -153,6 +161,12 @@ namespace BodycamHorror.EditorTools
 
                 if (MustStayRealtime(l, referenced, switchedGroups))
                 {
+                    if (l.lightmapBakeType != LightmapBakeType.Realtime)   // an earlier run may have baked it
+                    {
+                        Undo.RecordObject(l, "Baked lighting");
+                        l.lightmapBakeType = LightmapBakeType.Realtime;
+                        EditorUtility.SetDirty(l);
+                    }
                     realtime++;
                     continue;
                 }

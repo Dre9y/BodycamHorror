@@ -252,6 +252,8 @@ namespace BodycamHorror.Environment
                 if (l.shadows == LightShadows.None) continue;
                 if (l.type != LightType.Spot && l.type != LightType.Point) continue;
                 if (l.GetComponent<BounceLight>() || l.GetComponent<NoBounce>()) continue;
+                // Mixed/Baked lamps already have their bounce baked into the probe volume.
+                if (l.bakingOutput.isBaked && l.bakingOutput.lightmapBakeType != LightmapBakeType.Realtime) continue;
                 var b = l.gameObject.AddComponent<BounceLight>();
                 if (l.GetComponentInParent<Player.BodycamFlashlight>()) b.MakeHandheld();
             }

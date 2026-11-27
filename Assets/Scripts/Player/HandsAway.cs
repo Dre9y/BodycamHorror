@@ -26,6 +26,11 @@ namespace BodycamHorror.Player
         static HandsAway instance;
         static float requestedUntil = -1f;
 
+        // Domain reload is off in this project: statics outlive Play Mode while Time.time starts again from 0,
+        // so a request from the last session would hold the hands down for as long as that session ran.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics() { instance = null; requestedUntil = -1f; }
+
         BodycamPlayerController player;
         float weight;
         bool applied;

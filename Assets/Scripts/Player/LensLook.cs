@@ -36,7 +36,7 @@ namespace BodycamHorror.Player
 
         [Header("Focus: sharp up to a distance, soft beyond it")]
         [Tooltip("Sharp up to this far (m); further away goes out of focus. The Tab debug menu overrides it (DebugMenu.FocusDistance).")]
-        public float sharpDistance = 15f;
+        public float sharpDistance = 5f;
         [Tooltip("Over how far past the sharp distance the blur comes in fully, as a share of that distance.")]
         [Range(0.1f, 3f)] public float blurFalloff = 0.8f;
         [Tooltip("Not used any more (was the URP depth of field's radius); see farBlur.")]
@@ -49,7 +49,7 @@ namespace BodycamHorror.Player
         [Header("Wide-angle glass (the body camera's fisheye)")]
         [Tooltip("Fisheye: the picture bent towards an equidistant lens, corners kept in place (Lens Vignette pass). " +
                  "0 = flat, 1 = full fisheye. The Tab debug menu overrides it (DebugMenu.Fisheye).")]
-        [Range(0f, 1f)] public float fisheye = 0.5f;
+        [Range(0f, 1f)] public float fisheye = 0.9f;
         [Tooltip("Not used any more (was URP's lens distortion); replaced by the fisheye.")]
         [HideInInspector] public float barrel = 0.42f;
         [HideInInspector] public float barrelScale = 1.04f;

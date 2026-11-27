@@ -42,14 +42,14 @@ namespace BodycamHorror.UI
             new Row { section = Section.Weapons, name = "Тряска оружия от страха", key = "debug.fearTremorScale", min = 0f, max = 3f, step = 0.05f, reset = 1.65f, format = "0.00", unitPrefix = "x" },
             new Row { section = Section.Flashlight, name = "Фонарь: внутренний круг", key = "debug.flashlightSize", min = 0f, max = 3f, step = 0.05f, reset = 0.8f, floor = 0.2f, format = "0.00", unitPrefix = "x" },
             new Row { section = Section.Flashlight, name = "Фонарь: внешний круг", key = "debug.flashlightOuterSize", min = 0f, max = 3f, step = 0.05f, reset = 0.3f, floor = 0.1f, format = "0.00", unitPrefix = "x" },
-            new Row { section = Section.Camera, name = "Дальность резкости", key = "debug.focusDistance", min = 2f, max = 60f, step = 0.5f, reset = 9f, format = "0.0", unitSuffix = " м" },
-            new Row { section = Section.Camera, name = "Рыбий глаз", key = "debug.fisheye", min = 0f, max = 1f, step = 0.05f, reset = 0.5f, format = "0.00" },
+            new Row { section = Section.Camera, name = "Дальность резкости", key = "debug.focusDistance", min = 2f, max = 60f, step = 0.5f, reset = 5f, format = "0.0", unitSuffix = " м" },
+            new Row { section = Section.Camera, name = "Рыбий глаз", key = "debug.fisheye", min = 0f, max = 1f, step = 0.05f, reset = 0.9f, format = "0.00" },
             new Row { section = Section.Movement, name = "Скорость ходьбы", key = "debug.walkSpeed", min = 0.5f, max = 8f, step = 0.1f, reset = 2.7f, floor = 0.5f, format = "0.0", unitSuffix = " м/с" },
             new Row { section = Section.Movement, name = "Скорость бега", key = "debug.sprintSpeed", min = 1f, max = 15f, step = 0.1f, reset = 3.9f, floor = 1f, format = "0.0", unitSuffix = " м/с" },
             new Row { section = Section.Vignette, name = "Непрозрачность", key = "debug.vignetteOpacity", min = 0f, max = 1f, step = 0.05f, reset = 1f, format = "0.00" },
-            new Row { section = Section.Vignette, name = "Толщина", key = "debug.vignetteThickness", min = 0.2f, max = 1.5f, step = 0.05f, reset = 0.55f, format = "0.00", unitPrefix = "x" },
-            new Row { section = Section.Vignette, name = "Скругление", key = "debug.vignetteRoundness", min = 0f, max = 1f, step = 0.05f, reset = 0.9f, format = "0.00" },
-            new Row { section = Section.Vignette, name = "Мягкость края", key = "debug.vignetteSoftness", min = 0.2f, max = 3f, step = 0.05f, reset = 1f, format = "0.00", unitPrefix = "x" },
+            new Row { section = Section.Vignette, name = "Толщина", key = "debug.vignetteThickness", min = 0.2f, max = 1.5f, step = 0.05f, reset = 0.6f, format = "0.00", unitPrefix = "x" },
+            new Row { section = Section.Vignette, name = "Скругление", key = "debug.vignetteRoundness", min = 0f, max = 1f, step = 0.05f, reset = 0.4f, format = "0.00" },
+            new Row { section = Section.Vignette, name = "Мягкость края", key = "debug.vignetteSoftness", min = 0.2f, max = 3f, step = 0.05f, reset = 2.25f, format = "0.00", unitPrefix = "x" },
         };
 
         static DebugMenu()

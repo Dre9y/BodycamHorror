@@ -31,14 +31,14 @@ namespace BodycamHorror.EditorTools
         /// the room light, so physically correct bounce alone left rooms darker than designed.
         /// Raise for brighter rooms, lower for a darker game.
         /// </summary>
-        const float IndirectBoost = 1.5f;
+        const float IndirectBoost = 1.0f;   // 1.5 read too bright for a horror game (user, 2026-11-27)
 
         /// <summary>
         /// The textures are much darker than real rooms (floors ~0.11 linear albedo, walls 0.09-0.23, furniture 0.03;
         /// real plaster is 0.3-0.6), so light barely bounces. The bake treats surfaces this much lighter; the textures
         /// on screen are unchanged.
         /// </summary>
-        const float AlbedoBoost = 2.5f;
+        const float AlbedoBoost = 2.0f;
 
         [MenuItem("BodycamHorror/Lighting/Set Up Baked GI In Open Scene")]
         public static void SetUpOpenScene()

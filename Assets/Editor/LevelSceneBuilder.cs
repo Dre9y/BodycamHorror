@@ -789,6 +789,30 @@ namespace BodycamHorror.EditorTools
             HangingLamp(lampPrefab, lights, "Lamp_LowCorner", new Vector3((PassX0 + PassX1) * 0.5f, Height, (LowZ0 + LowZ1) * 0.5f), 0.25f, true);
             // the passage: a single dim bulkhead lamp on its right wall halfway, the corridor's end lamp beyond it
             WallLamp(lights, "WallLamp_Passage", new Vector3(PassX1, 1.85f, 0.2f), -90f, 1.43f, true);
+            OuterDoorLamp(lights);
+        }
+
+        /// <summary>
+        /// A weak bulkhead lamp on the corridor's far wall facing the outer door (the way into the pistol room), its
+        /// beam narrowed onto the doorway: the door reads from down the corridor while the corridor past it stays
+        /// dark for the zombie's escape (a full lamp over the doorway was taken out for that reason).
+        /// </summary>
+        static void OuterDoorLamp(Transform lights)
+        {
+            float doorMidZ = OuterDoorZ + DoorBuilder.OpeningWidth * 0.5f;
+            WallLamp(lights, "WallLamp_OuterDoor", new Vector3(CorridorX1, 2.05f, doorMidZ), -90f, 1.6f, false);
+            Transform lamp = lights.Find("WallLamp_OuterDoor");
+            if (!lamp) return;
+            Light spot = lamp.Find("Light").GetComponent<Light>();
+            Vector3 doorway = new Vector3(RoomW + Wall * 0.5f, 1.0f, doorMidZ);
+            spot.transform.rotation = Quaternion.LookRotation(doorway - spot.transform.position);
+            spot.spotAngle = 75f;
+            spot.innerSpotAngle = 35f;
+            spot.range = 5f;
+            spot.color = new Color(1f, 0.82f, 0.62f);   // an old warm bulb: tells it apart from the corridor's cold lamps
+            spot.shadows = LightShadows.Soft;
+            Transform wash = lamp.Find("WallWash");
+            if (wash) Object.DestroyImmediate(wash.gameObject);   // no spill up the corridor walls
         }
 
         // ------------------------------------------------------------------ the annex

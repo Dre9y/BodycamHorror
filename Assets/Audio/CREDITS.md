@@ -28,3 +28,9 @@ All recordings are from freesound.org under Creative Commons 0 (public domain), 
 | ChainRoom/lamp_break_drop.mp3 | "lamp-break-drop_zkr68dnd", added by the project owner |
 | ChainRoom/door_slam_boom.wav, chainroom_riser.wav | Synthesised in the editor (no recording) |
 | Music/menu_psycho_crime_loop.wav | Main menu loop, as downloaded: "14104 psycho crime ambience loop.wav" by Robinhood76 - https://freesound.org/s/875476/ (licence not checked: confirm before release, it may not be CC0) |
+| Lift/lift_ride_ukrainian.mp3 | "Old elevator ride" by GreatCorn - https://freesound.org/s/530307/ |
+| Lift/lift_ride_soviet.mp3 | "Old Soviet Blockhouse Elevator" by tonijsstrods - https://freesound.org/s/841263/ |
+| Lift/lift_door_close.mp3 | "Old Elevator Door Closing.wav" by ryanharding95 - https://freesound.org/s/272435/ |
+| Lift/door_bang_reverb.mp3 | "REVERB Banging-Slamming Metal Cupboard" by wolfdoctor - https://freesound.org/s/555108/ |
+| Lift/door_bang_metal.mp3 | "Metal_Door_Banging.wav" by mickyman5000 - https://freesound.org/s/340491/ |
+| Lift/door_rattle.mp3 | "Security Screen Door Sounds" by MaltSTi - https://freesound.org/s/556348/ |

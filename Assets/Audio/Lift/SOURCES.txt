@@ -1,0 +1,10 @@
+Lift sounds for the final cutscene (Assets/Scenes/ElevatorFinale.unity). All CC0 (public domain) from Freesound:
+free for any use, no credit required. The files are Freesound's high-quality MP3 previews, as downloaded;
+the cutscene plays parts of them (cues in Assets/Editor/ElevatorFinaleBuilder.cs).
+
+lift_ride_ukrainian   "Old elevator ride" by GreatCorn                         https://freesound.org/s/530307/
+lift_ride_soviet      "Old Soviet Blockhouse Elevator" by tonijsstrods         https://freesound.org/s/841263/
+lift_door_close       "Old Elevator Door Closing.wav" by ryanharding95          https://freesound.org/s/272435/
+door_bang_reverb      "REVERB Banging-Slamming Metal Cupboard" by wolfdoctor   https://freesound.org/s/555108/
+door_bang_metal       "Metal_Door_Banging.wav" by mickyman5000                 https://freesound.org/s/340491/
+door_rattle           "Security Screen Door Sounds" by MaltSTi                 https://freesound.org/s/556348/

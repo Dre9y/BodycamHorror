@@ -276,9 +276,47 @@ namespace BodycamHorror.UI
             // with V-Sync on the monitor sets the pace and targetFrameRate is ignored
             int cap = FpsCap;
             Application.targetFrameRate = vsync || cap <= 0 ? -1 : cap;
+#if UNITY_EDITOR
+            SetGameViewVSync(vsync);
+#endif
             AudioListener.volume = MasterVolume;
             ApplyScreen();
             ApplyRendering();
         }
+
+#if UNITY_EDITOR
+        // In the editor QualitySettings.vSyncCount is ignored unless the Game view's own "VSync" toggle is on, so the
+        // setting drives that toggle during play mode; the toggle is put back on leaving play mode.
+        static System.Reflection.PropertyInfo gameViewVSync;
+        static bool? gameViewVSyncBefore;
+
+        static void SetGameViewVSync(bool on)
+        {
+            if (!Application.isPlaying) return;
+            const System.Reflection.BindingFlags Flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+            var type = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.GameView");
+            gameViewVSync ??= type?.GetProperty("vSyncEnabled", Flags);
+            if (gameViewVSync == null) return;
+            foreach (var view in Resources.FindObjectsOfTypeAll(type))
+            {
+                if (gameViewVSyncBefore == null)
+                {
+                    gameViewVSyncBefore = (bool)gameViewVSync.GetValue(view);
+                    UnityEditor.EditorApplication.playModeStateChanged -= PutBackGameViewVSync;
+                    UnityEditor.EditorApplication.playModeStateChanged += PutBackGameViewVSync;
+                }
+                gameViewVSync.SetValue(view, on);
+            }
+        }
+
+        static void PutBackGameViewVSync(UnityEditor.PlayModeStateChange change)
+        {
+            if (change != UnityEditor.PlayModeStateChange.EnteredEditMode || gameViewVSyncBefore == null) return;
+            var type = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.GameView");
+            if (gameViewVSync != null && type != null)
+                foreach (var view in Resources.FindObjectsOfTypeAll(type)) gameViewVSync.SetValue(view, gameViewVSyncBefore.Value);
+            gameViewVSyncBefore = null;
+        }
+#endif
     }
 }

@@ -26,7 +26,7 @@ Shader "BodycamHorror/Lens Vignette"
             float _LensOn;
             float4 _LensFrame;  // xy: inset from the screen edge, z: corner radius, w: feather
             float4 _LensShade;  // xy: inset from the screen edge, z: feather, w: strength
-            float4 _LensBlur;   // x: blur radius at the very corner (share of screen height), y: where it starts (0 centre .. 1 corner)
+            float4 _LensBlur;   // x: blur radius at the very corner (share of screen height), y: where it starts (0 centre .. 1 corner), z: roundness of the frame (corner radius as a share of its half height), w: how dark the frame gets (0 none .. 1 full)
             float4 _LensFisheye; // x: fisheye strength (0 off .. 1 full equidistant), y: tan of the camera's half vertical FOV
             float4 _DeathCam;    // the feed breaking up (DeathCam): x: glitch 0..1, y: blackout 0..1, z: stepped time (a new pattern per step), w: static 0..1
 
@@ -156,9 +156,14 @@ Shader "BodycamHorror/Lens Vignette"
                     color = sum / 9.0;
                 }
 
-                float frame = Edge(RoundedBox(p, screen - _LensFrame.xy, _LensFrame.z), _LensFrame.w);
-                float shade = Edge(RoundedBox(p, screen - _LensShade.xy, _LensFrame.z * 2.0), _LensShade.z) * _LensShade.w;
-                float dark = 1.0 - (1.0 - frame) * (1.0 - shade);
+                // rounded to an oval: the corner radius grows with the frame's height (roundness), never below the set one
+                float2 frameHalf = screen - _LensFrame.xy;
+                float2 shadeHalf = screen - _LensShade.xy;
+                float frameRadius = max(_LensFrame.z, _LensBlur.z * min(frameHalf.x, frameHalf.y));
+                float shadeRadius = max(_LensFrame.z * 2.0, _LensBlur.z * min(shadeHalf.x, shadeHalf.y));
+                float frame = Edge(RoundedBox(p, frameHalf, frameRadius), _LensFrame.w);
+                float shade = Edge(RoundedBox(p, shadeHalf, shadeRadius), _LensShade.z) * _LensShade.w;
+                float dark = (1.0 - (1.0 - frame) * (1.0 - shade)) * _LensBlur.w;
 
                 // the long dark gradient bands without a little noise
                 dark += (InterleavedGradientNoise(input.positionCS.xy, 0.0) - 0.5) / 128.0;

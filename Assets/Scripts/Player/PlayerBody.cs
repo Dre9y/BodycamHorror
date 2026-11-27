@@ -37,7 +37,6 @@ namespace BodycamHorror.Player
         public float lyingHipHeight = 0.12f;
         [Tooltip("Bones folded to nothing: the head (the camera is there) and the shoulders with the arms (the first-person arms are there).")]
         public HumanBodyBones[] hiddenBones = { HumanBodyBones.Head, HumanBodyBones.LeftShoulder, HumanBodyBones.RightShoulder };
-        public bool castShadows = true;
         [Tooltip("Hidden/BodycamHorror/ViewModelStencil: marks the hands so the body is drawn under them. Referenced here so builds include it.")]
         public Shader stencilShader;
 
@@ -112,7 +111,7 @@ namespace BodycamHorror.Player
             foreach (var r in inst.GetComponentsInChildren<Renderer>(true))
             {
                 if (material) { var mats = r.sharedMaterials; for (int i = 0; i < mats.Length; i++) mats[i] = material; r.sharedMaterials = mats; }
-                r.shadowCastingMode = castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
+                r.shadowCastingMode = ShadowCastingMode.Off;   // no player shadow: with the head and arms folded away it showed a headless stump
                 r.renderingLayerMask = ViewModelLighting.WorldLayer;   // a thing in the world: the flashlight lights the legs
                 if (r is SkinnedMeshRenderer smr) smr.updateWhenOffscreen = true;
             }

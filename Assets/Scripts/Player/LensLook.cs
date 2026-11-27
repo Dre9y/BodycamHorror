@@ -18,6 +18,7 @@ namespace BodycamHorror.Player
         [Tooltip("Where the picture goes fully black, in from the screen edge.")]
         public Vector2 frameInset = new Vector2(0.02f, 0.02f);
         public float frameRadius = 0.22f;
+        // Roundness, thickness, edge softness and opacity of the frame are set in the Tab debug menu (Виньетка).
         [Tooltip("Width of the fall-off into the black edge.")]
         public float frameFeather = 0.2f;
 
@@ -148,11 +149,19 @@ namespace BodycamHorror.Player
             fringe.intensity.Override(fringing);
             smear.active = motionBlur > 0f;
             smear.intensity.Override(motionBlur);
-            Shader.SetGlobalVector(BlurId, new Vector4(edgeBlur, edgeBlurStart, 0f, 0f));
+            // the frame's look comes from the Tab debug menu (Виньетка), like the fisheye; its defaults are the tuned values
+            float round = BodycamHorror.UI.DebugMenu.VignetteRoundness;
+            float thick = BodycamHorror.UI.DebugMenu.VignetteThickness;
+            float soft = BodycamHorror.UI.DebugMenu.VignetteSoftness;
+            float opacity = BodycamHorror.UI.DebugMenu.VignetteOpacity;
+            opacity = Mathf.Lerp(opacity, 1f, Mathf.Clamp01(eyelids));   // shut eyes are black whatever the frame
+            // z: roundness of the frame, w: how dark it is
+            Shader.SetGlobalVector(BlurId, new Vector4(edgeBlur, edgeBlurStart, round, opacity));
 
-            Vector2 frame = frameInset + aimFrameInset * aim;
-            Vector2 shade = shadeInset + aimShadeInset * aim;
-            float feather = frameFeather;
+            Vector2 frame = (frameInset + aimFrameInset * aim) * thick;
+            Vector2 shade = (shadeInset + aimShadeInset * aim) * thick;
+            float feather = frameFeather * thick * soft;
+            float shadeFeatherNow = shadeFeather * thick * soft;
             float shadeK = Mathf.Clamp01(shadeStrength + aimShadeStrength * aim);
             if (eyelids > 0f)
             {
@@ -160,12 +169,12 @@ namespace BodycamHorror.Player
                 float lid = Mathf.Clamp01(eyelids);
                 frame.y = Mathf.Lerp(frame.y, 1f, lid);   // 1 = the box has no height left: all black
                 frame.x = Mathf.Lerp(frame.x, 0.25f, lid);
-                feather = Mathf.Lerp(frameFeather, 0.55f, Mathf.Sqrt(lid));
+                feather = Mathf.Lerp(feather, 0.55f, Mathf.Sqrt(lid));
                 shade.y = Mathf.Lerp(shade.y, 0.9f, lid);
                 shadeK = Mathf.Lerp(shadeK, 0.9f, lid);
             }
             Shader.SetGlobalVector(FrameId, new Vector4(frame.x, frame.y, frameRadius, feather));
-            Shader.SetGlobalVector(ShadeId, new Vector4(shade.x, shade.y, shadeFeather, shadeK));
+            Shader.SetGlobalVector(ShadeId, new Vector4(shade.x, shade.y, shadeFeatherNow, shadeK));
         }
     }
 }

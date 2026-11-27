@@ -25,8 +25,8 @@ namespace BodycamHorror.UI
             public float min, max, step, reset, floor, value;
         }
 
-        enum Section { Weapons, Flashlight, Camera, Movement, Level }
-        static readonly string[] SectionNames = { "Оружие", "Фонарик", "Камера", "Движение", "Уровень" };
+        enum Section { Weapons, Flashlight, Camera, Vignette, Movement, Level }
+        static readonly string[] SectionNames = { "Оружие", "Фонарик", "Камера", "Виньетка", "Движение", "Уровень" };
 
         /// <summary>Places to jump to (Level section): the scene object to find, and a feet point and facing in its own space.</summary>
         static readonly (string label, string anchor, Vector3 local, float yaw)[] Teleports =
@@ -46,6 +46,10 @@ namespace BodycamHorror.UI
             new Row { section = Section.Camera, name = "Рыбий глаз", key = "debug.fisheye", min = 0f, max = 1f, step = 0.05f, reset = 0.5f, format = "0.00" },
             new Row { section = Section.Movement, name = "Скорость ходьбы", key = "debug.walkSpeed", min = 0.5f, max = 8f, step = 0.1f, reset = 2.7f, floor = 0.5f, format = "0.0", unitSuffix = " м/с" },
             new Row { section = Section.Movement, name = "Скорость бега", key = "debug.sprintSpeed", min = 1f, max = 15f, step = 0.1f, reset = 3.9f, floor = 1f, format = "0.0", unitSuffix = " м/с" },
+            new Row { section = Section.Vignette, name = "Непрозрачность", key = "debug.vignetteOpacity", min = 0f, max = 1f, step = 0.05f, reset = 1f, format = "0.00" },
+            new Row { section = Section.Vignette, name = "Толщина", key = "debug.vignetteThickness", min = 0.2f, max = 1.5f, step = 0.05f, reset = 0.55f, format = "0.00", unitPrefix = "x" },
+            new Row { section = Section.Vignette, name = "Скругление", key = "debug.vignetteRoundness", min = 0f, max = 1f, step = 0.05f, reset = 0.9f, format = "0.00" },
+            new Row { section = Section.Vignette, name = "Мягкость края", key = "debug.vignetteSoftness", min = 0.2f, max = 3f, step = 0.05f, reset = 1f, format = "0.00", unitPrefix = "x" },
         };
 
         static DebugMenu()
@@ -72,6 +76,14 @@ namespace BodycamHorror.UI
         public static float Fisheye => Rows[5].value;
         /// <summary>Multiplier on the size of the flashlight's outer circle (the wide spill); 1 = as tuned.</summary>
         public static float FlashlightOuterSize => Rows[3].value;
+        /// <summary>How dark the lens frame gets (LensLook): 0 = no frame at all, 1 = as tuned.</summary>
+        public static float VignetteOpacity => Rows[8].value;
+        /// <summary>Multiplier on how far the lens frame reaches in from the screen edge (LensLook).</summary>
+        public static float VignetteThickness => Rows[9].value;
+        /// <summary>How round the lens frame is (LensLook): 0 = square-ish, 1 = an oval to the screen's shape.</summary>
+        public static float VignetteRoundness => Rows[10].value;
+        /// <summary>Multiplier on how soft the lens frame's edge is (LensLook).</summary>
+        public static float VignetteSoftness => Rows[11].value;
 
         bool open;
         // a button's action, run in the next Update: from OnGUI (late in the frame, around rendering) a gun drawn

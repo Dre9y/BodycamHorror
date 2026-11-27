@@ -38,11 +38,25 @@ namespace BodycamHorror.EditorTools
             }
             ApartmentPropsSetup.Make("WindowFrame", ApartmentPropsSetup.Hull.Box);
             foreach (string n in NoColliders) Strip(n, n != "LampCord" && n != "PipeCollar" && n != "PipeClamp");
-            // the paper and plaster are baked near white: under the bare bulbs they glared
-            var debris = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialDir}/Debris_Mat.mat");
-            if (debris) { debris.SetColor("_BaseColor", new Color(0.72f, 0.7f, 0.66f)); EditorUtility.SetDirty(debris); }
+            Tint();
             AssetDatabase.SaveAssets();
             Debug.Log("Level polish props set up in " + PrefabDir);
+        }
+
+        /// <summary>Years of dust and smoke over what was baked clean: the paper and plaster (near white, they glared
+        /// under the bare bulbs) and the window's white paint.</summary>
+        [MenuItem("BodycamHorror/Tint Level Polish Props")]
+        public static void Tint()
+        {
+            foreach (var (mat, c) in new[] { ("Debris_Mat", new Color(0.55f, 0.52f, 0.45f)), ("WindowFrame_Mat", new Color(0.72f, 0.68f, 0.56f)), ("Newspaper_Mat", new Color(0.68f, 0.62f, 0.5f)), ("SoftGoods_Mat", new Color(0.66f, 0.6f, 0.5f)) })
+            {
+                var m = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialDir}/{mat}.mat");
+                if (!m) continue;
+                m.SetColor("_BaseColor", c);
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", Mathf.Min(m.GetFloat("_Smoothness"), 0.3f));
+                EditorUtility.SetDirty(m);
+            }
+            AssetDatabase.SaveAssets();
         }
 
         static void Strip(string name, bool shadows)

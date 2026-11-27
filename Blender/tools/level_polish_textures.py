@@ -95,11 +95,15 @@ def _leaf(img, hgt, yy, xx, cx, cy, L, ang, col, W, H):
     blend(img, m * 0.85, col); hgt += m * 0.3
     vein = (u > 0) * (u < L) * sstep(1.6, 0.4, np.abs(v)); blend(img, vein * 0.35, np.asarray(col) * 0.6)
 
-def _age_wall(img, hgt, H, W, seed, yellow=0.25, stains=0.35):
-    """Yellowing, foxing, water runs and a strip seam every half tile."""
+def _age_wall(img, hgt, H, W, seed, yellow=0.25, stains=0.35, fade=0.35):
+    """Fading, yellowing, foxing, grimy blotches, water runs and a strip seam every half tile."""
     yy, xx = grid(H, W)
     f = tfbm(H, W, 3, seed, 5); f2 = tfbm(H, W, 10, seed + 5, 4)
-    img *= (0.86 + 0.24 * f)[..., None]
+    lum = img @ np.array((0.3, 0.55, 0.15))   # decades of light: the print washes out towards a dull brown-grey
+    img[:] = img * (1 - fade) + (lum[..., None] * np.array((1.0, 0.94, 0.82))) * fade
+    img *= (0.82 + 0.26 * f)[..., None]
+    blot = sstep(0.55, 0.85, tfbm(H, W, 2, seed + 17, 5))
+    blend(img, blot * 0.3, (0.3, 0.26, 0.19))
     blend(img, sstep(0.45, 0.75, f) * yellow, (0.55, 0.45, 0.28))
     fox = sstep(0.68, 0.74, tfbm(H, W, 24, seed + 9, 3)) * sstep(0.4, 0.6, f)
     blend(img, fox * 0.45, (0.42, 0.3, 0.16))
@@ -133,8 +137,8 @@ def wallpaper_floral(S=1024, seed=3):
                 a = rng.uniform(0, 6.28); r = rng.uniform(55, 75)
                 d = np.hypot(wrapd(xx, cx + math.cos(a) * r, W), wrapd(yy, cy + math.sin(a) * r, H))
                 blend(img, sstep(4, 2.5, d) * 0.8, leaf)
-    _age_wall(img, hgt, H, W, seed + 40)
-    smooth = 0.18 + 0.08 * tfbm(H, W, 8, seed + 3, 3)
+    _age_wall(img, hgt, H, W, seed + 40, fade=0.3)
+    smooth = 0.1 + 0.06 * tfbm(H, W, 8, seed + 3, 3)
     save_set("Wallpaper_Floral", img, None, hgt, 2.0, smooth)
 
 def wallpaper_stripe(S=1024, seed=11):
@@ -150,8 +154,8 @@ def wallpaper_stripe(S=1024, seed=11):
     blend(img, sstep(1.0, 0.94, dm) * sstep(0.62, 0.7, dm) * 0.8, (0.36, 0.42, 0.3))
     blend(img, sstep(0.35, 0.28, dm) * 0.8, (0.66, 0.6, 0.4))
     hgt += sstep(1.0, 0.94, dm) * 0.3
-    _age_wall(img, hgt, H, W, seed + 40, yellow=0.35, stains=0.45)
-    smooth = 0.22 + 0.1 * tfbm(H, W, 8, seed + 3, 3)
+    _age_wall(img, hgt, H, W, seed + 40, yellow=0.35, stains=0.5, fade=0.5)
+    smooth = 0.12 + 0.06 * tfbm(H, W, 8, seed + 3, 3)
     save_set("Wallpaper_Stripe", img, None, hgt, 2.0, smooth)
 
 # ------------------------------------------------------------------ parquet
@@ -188,10 +192,23 @@ def parquet(S=2048, seed=5):
     blend(img, dirt * 0.5, (0.08, 0.06, 0.04))
     scratches = sstep(0.92, 0.97, np.abs(np.sin(tfbm(H, W, 20, seed + 9, 3) * 90)))
     blend(img, scratches * 0.25, (0.55, 0.45, 0.32))
+    # years of dust: a grey film, thicker away from the walking lines, with grit
+    dust = np.clip(sstep(0.35, 0.7, tfbm(H, W, 3, seed + 10, 5)) * (1 - worn * 0.7), 0, 1)
+    blend(img, dust * 0.45, (0.3, 0.28, 0.25))
+    grit = sstep(0.8, 0.86, tfbm(H, W, 90, seed + 11, 2)) * dust
+    blend(img, grit * 0.7, (0.1, 0.09, 0.08))
     hgt = -jm * 1.0 + 0.15 * rings + 0.25 * g2
     lift = (rng.random(200)[pid % 200] > 0.93)   # some planks stand proud
     hgt += lift * sstep(0, pl * 0.5, np.minimum(off, pl - off)) * 0.5
-    smooth = 0.55 - worn * 0.35 - dirt * 0.25 - jm * 0.3 + 0.05 * tone2
+    # a few planks gone: the screed under them, black with old bitumen glue
+    gone = (rng.random(400)[(pid * 7 + 3) % 400] > 0.991) * sstep(0.8, 1.6, gap)
+    screed = np.zeros((H, W, 3)); screed[:] = (0.3, 0.29, 0.27)
+    screed *= (0.75 + 0.4 * tfbm(H, W, 30, seed + 12, 3))[..., None]
+    blend(screed, sstep(0.45, 0.6, tfbm(H, W, 16, seed + 13, 4)) * 0.55, (0.06, 0.05, 0.04))
+    img[:] = img * (1 - gone[..., None]) + screed * gone[..., None]
+    hgt = hgt * (1 - gone) - gone * 1.5
+    smooth = 0.3 - worn * 0.18 - dirt * 0.12 - dust * 0.15 - jm * 0.15 + 0.04 * tone2
+    smooth = smooth * (1 - gone) + gone * 0.05
     save_set("Parquet", img, None, hgt, 3.0, smooth)
 
 # ------------------------------------------------------------------ overlays (not tiled)
@@ -234,21 +251,29 @@ def blood_drag(Wd=2048, Hd=512, seed=31):
     """A smear dragged along +U: dense at the start (U=0), thinning and breaking into streaks towards U=1."""
     H, W = Hd, Wd; yy, xx = grid(H, W)
     u = xx / W; v = yy / H
-    wob = (tfbm(H, W, 1, seed, 3, aspect=1) - 0.5) * 0.25
-    width = 0.36 * (1 - 0.55 * u) + 0.05
-    d = np.abs(v - 0.5 - wob) / width
-    streak = tfbm(H, W, 18, seed + 1, 4, aspect=0.05)   # lines along U
-    edge = 1 - (tfbm(H, W, 6, seed + 2, 5) - 0.5) * 0.6
-    cov = sstep(edge, edge - 0.15, d)
-    cov *= np.clip(0.3 + streak * 1.4 - u * 0.9, 0, 1) ** 0.8
-    cov *= sstep(1.0, 0.85, u) * sstep(0.1, 0.2, u)
-    blob = _blob(H, W, seed + 4, 3, 0.35, cx=0.17, cy=0.5, rx=0.08, ry=0.36)
-    cov = np.maximum(cov, sstep(1.0, 0.9, blob))
-    thick = cov * (0.25 + 0.6 * (1 - u)) * (0.6 + 0.4 * streak)
-    base = _blood_cols(thick * 1.2, 0.35 + 0.4 * u)
-    hgt = thick * 2.5
-    smooth = 0.2 + 0.6 * sstep(0.15, 0.6, thick)
-    save_set("Blood_Drag", base, sstep(0.05, 0.3, cov), hgt, 2.0, smooth, wrap=False)
+    wob = (tfbm(H, W, 1, seed, 3, aspect=1) - 0.5) * 0.22
+    # cloth drags it in two or three bands (the shoulders, the hips) that wander and merge, combed into fine lines
+    cov = np.zeros((H, W))
+    for k, (off, wd) in enumerate(((-0.16, 0.14), (0.05, 0.18), (0.22, 0.09))):
+        w2 = (tfbm(H, W, 1, seed + 20 + k, 3) - 0.5) * 0.12
+        width = wd * (1 - 0.45 * u) + 0.02
+        d = np.abs(v - 0.5 - wob - off - w2) / width
+        edge = 1 - (tfbm(H, W, 7, seed + 2 + k, 5) - 0.5) * 0.7
+        cov = np.maximum(cov, sstep(edge, edge - 0.25, d))
+    streak = tfbm(H, W, 26, seed + 1, 4, aspect=0.04)   # lines along U
+    fine = tfbm(H, W, 70, seed + 5, 2, aspect=0.03)
+    breaks = sstep(0.25, 0.5, tfbm(H, W, 3, seed + 6, 4, aspect=0.4) - u * 0.25)   # where it lifted off the floor
+    cov *= np.clip(0.15 + streak * 1.3 + (fine - 0.5) * 0.6 - u * 0.7, 0, 1) * (0.35 + 0.65 * breaks)
+    cov *= sstep(1.0, 0.82, u) * sstep(0.08, 0.2, u)
+    blob = _blob(H, W, seed + 4, 4, 0.45, cx=0.15, cy=0.5, rx=0.07, ry=0.32)   # where it started
+    cov = np.maximum(cov, sstep(1.0, 0.9, blob) * np.clip(0.55 + 0.6 * streak + (fine - 0.5) * 0.4, 0, 0.95))
+    thick = cov * (0.2 + 0.55 * (1 - u)) * (0.5 + 0.5 * streak)
+    dry = np.clip(0.45 + 0.4 * u + (1 - sstep(0.1, 0.4, thick)) * 0.3, 0, 1)
+    base = _blood_cols(thick * 1.1, dry)
+    base *= (0.75 + 0.4 * fine)[..., None]
+    hgt = thick * 2.5 + fine * cov * 0.4
+    smooth = 0.12 + 0.55 * sstep(0.2, 0.6, thick)
+    save_set("Blood_Drag", base, sstep(0.04, 0.35, cov) * 0.95, hgt, 2.0, smooth, wrap=False)
 
 def blood_drops(S=1024, seed=41):
     """Round drops fallen from a height: a disc, a crown of tiny satellites, here and there a tail."""
@@ -375,9 +400,196 @@ def mould(S=1024, seed=101):
     blend(base, sstep(0.4, 0.0, cov) * 0.6, (0.28, 0.27, 0.2))
     save_set("Wall_Mould", base, cov * 0.9, cov, 1.0, 0.1 + 0 * f, wrap=False)
 
+# ------------------------------------------------------------------ grime layers (abandoned years)
+# These wrap along U (laid along a wall in metres: GRIME_M is the U repeat) and are clamped along V.
+GRIME_M = {"Grime_Low": 2.0, "Grime_High": 2.0, "Floor_Edge": 2.0}
+
+def grime_low(W=2048, H=1024, seed=111):
+    """The bottom metre of a wall (V up, v=0 at the floor): grime thickest at the floor, mop splashes, scuffs from
+    boots and furniture, a greasy rub band at chair-back height."""
+    yy, xx = grid(H, W); up = 1 - yy / H   # 0 at the floor, 1 a metre up
+    f = tfbm(H, W, 4, seed, 6); f2 = tfbm(H, W, 16, seed + 1, 4)
+    base = np.zeros((H, W, 3)); base[:] = (0.16, 0.13, 0.1)
+    base *= (0.7 + 0.5 * f2)[..., None]
+    a = sstep(0.42, 0.0, up + (f - 0.5) * 0.35) * 0.85               # the dark band along the floor
+    a = np.maximum(a, sstep(0.75, 0.9, tfbm(H, W, 40, seed + 2, 3)) * sstep(0.3, 0.02, up) * 0.8)   # splashes
+    rng = np.random.default_rng(seed)
+    for i in range(46):   # scuffs: short dark horizontal marks low on the wall
+        cx, cy = rng.uniform(0, W), H * (1 - rng.uniform(0.03, 0.45)); L = rng.uniform(15, 90); T = rng.uniform(1.5, 5)
+        d = np.hypot(wrapd(xx, cx, W) / L, (yy - cy) / T)
+        a = np.maximum(a, sstep(1.0, 0.4, d) * rng.uniform(0.3, 0.8))
+    band = sstep(0.05, 0.0, np.abs(up - 0.8 - (f - 0.5) * 0.06)) * sstep(0.35, 0.65, tfbm(H, W, 5, seed + 3, 4, aspect=0.2))
+    a = np.maximum(a, band * 0.35)
+    runs = sstep(0.6, 0.85, tfbm(H, W, 2, seed + 4, 3, aspect=10.0)) * sstep(0.9, 0.2, up) * 0.35
+    a = np.maximum(a, runs)
+    save_set("Grime_Low", base, np.clip(a, 0, 1), a + f2 * 0.2, 1.0, 0.08 + 0.1 * a, wrap=True)
+
+def grime_high(W=2048, H=1024, seed=121):
+    """The top metre of a wall (v=1 at the ceiling): soot and dust darkening into the corner, dribbles of brown water
+    running down from the ceiling."""
+    yy, xx = grid(H, W); down = yy / H   # 0 at the ceiling
+    f = tfbm(H, W, 4, seed, 6); f2 = tfbm(H, W, 20, seed + 1, 4)
+    base = np.zeros((H, W, 3)); base[:] = (0.17, 0.15, 0.12)
+    a = sstep(0.55, 0.0, down + (f - 0.5) * 0.4) * 0.75
+    rng = np.random.default_rng(seed)
+    rusty = np.zeros((H, W))
+    for i in range(16):   # water dribbles
+        x0 = rng.uniform(0, W); L = rng.uniform(0.25, 0.95) * H; w0 = rng.uniform(2, 9)
+        wig = (tnoise(H, W, 14, 1, seed + 40 + i) - 0.5) * 10
+        t = np.clip(yy / L, 0, 1)
+        d = np.abs(wrapd(xx, x0, W) - wig) / (w0 * (1.2 - 0.7 * t) + 0.5)
+        m = (yy < L) * sstep(1.0, 0.3, d) * (1 - t * 0.6)
+        rusty = np.maximum(rusty, m * rng.uniform(0.35, 0.7))
+    blend(base, rusty, (0.33, 0.22, 0.1))
+    a = np.maximum(a, rusty)
+    a *= (0.75 + 0.4 * f2)
+    save_set("Grime_High", base, np.clip(a, 0, 1), a * 0.5 + f2 * 0.2, 1.0, 0.06 + 0.0 * a, wrap=True)
+
+def floor_edge(W=2048, H=512, seed=131):
+    """Dust and grit banked along the skirting (v=0 at the wall, v=1 40 cm out into the room)."""
+    yy, xx = grid(H, W); out = 1 - yy / H
+    f = tfbm(H, W, 5, seed, 6); f2 = tfbm(H, W, 60, seed + 1, 3)
+    base = np.zeros((H, W, 3)); base[:] = (0.29, 0.27, 0.24)
+    base *= (0.8 + 0.35 * f)[..., None]
+    grit = sstep(0.7, 0.8, f2)
+    blend(base, grit * 0.8, (0.08, 0.07, 0.06))
+    a = sstep(0.65, 0.0, out + (f - 0.5) * 0.5) * 0.9
+    a = np.maximum(a, grit * sstep(0.8, 0.1, out) * 0.9)
+    save_set("Floor_Edge", base, np.clip(a, 0, 1), a * 0.8 + grit * 0.5, 1.5, 0.05 + 0 * a, wrap=True)
+
+def floor_dirt(S=1024, seed=141):
+    """A patch of dried mud and dust with grit and a scuffed boot smear through it."""
+    H = W = S; yy, xx = grid(H, W)
+    b = _blob(H, W, seed, 3, 0.7, rx=0.36, ry=0.32)
+    f = tfbm(H, W, 12, seed + 1, 5); g = tfbm(H, W, 80, seed + 2, 2)
+    base = np.zeros((H, W, 3)); base[:] = (0.22, 0.19, 0.15)
+    base *= (0.75 + 0.5 * f)[..., None]
+    a = sstep(1.0, 0.5, b) * (0.35 + 0.5 * f)
+    grit = sstep(0.72, 0.8, g) * sstep(1.2, 0.6, b)
+    blend(base, grit, (0.07, 0.06, 0.05)); a = np.maximum(a, grit * 0.9)
+    save_set("Floor_Dirt", base, np.clip(a, 0, 0.9) * sstep(1.0, 0.85, np.hypot(xx / W - 0.5, yy / H - 0.5) * 2),
+             a + grit * 0.6, 1.5, 0.05 + 0 * a, wrap=False)
+
+def _boot(xx, yy, cx, cy, ang, L, right, seed):
+    """A boot print: sole and heel with a lug tread, toe towards ang."""
+    ca, sa = math.cos(ang), math.sin(ang)
+    u = (xx - cx) * ca + (yy - cy) * sa; v = -(xx - cx) * sa + (yy - cy) * ca
+    v = v if right else -v
+    t = np.clip((u + 0.05 * L) / (0.5 * L), 0, 1)            # 0 at the waist, 1 at the toe
+    half = 0.11 * L + 0.07 * L * np.sin(np.pi * np.clip(t * 0.85 + 0.1, 0, 1))   # wide at the ball, round at the toe
+    sole = np.maximum(np.abs(v - 0.015 * L * t) / half, (u - 0.2 * L) / (0.25 * L) + np.abs(v / (0.18 * L)) ** 2 * 0.3)
+    sole = np.where(u < -0.05 * L, 9.0, sole)
+    heel = np.maximum(np.abs(v) / (0.12 * L), np.abs(u + 0.32 * L) / (0.13 * L))
+    shape = np.minimum(sole, heel)
+    lugs = sstep(0.2, 0.45, np.abs(np.sin(u / L * 34 + np.abs(v) / L * 6)))   # chevron bars across the sole
+    groove = sstep(0.03, 0.0, np.abs(v) / L - 0.0)                            # the split down the middle
+    tread = lugs * (1 - groove)
+    return sstep(1.0, 0.88, shape) * (0.45 + 0.55 * tread)
+
+def blood_steps(W=2048, H=512, seed=151):
+    """Boot prints walked out of a pool along +U, left-right, each fainter: 4 m of trail (u in metres = u * 4)."""
+    yy, xx = grid(H, W); rng = np.random.default_rng(seed)
+    cov = np.zeros((H, W)); n = 9
+    L = 0.3 / 4.0 * W   # a 30 cm boot
+    for i in range(n):
+        cx = (0.06 + i * 0.105) * W + rng.uniform(-8, 8); right = i % 2 == 0
+        cy = H * (0.5 + (0.17 if right else -0.17)) + rng.uniform(-10, 10)
+        fade = max(0.0, 1 - i / (n - 0.5)) ** 0.8
+        p = _boot(xx, yy, cx, cy, rng.uniform(-0.12, 0.12), L, right, seed + i)
+        mott = tfbm(H, W, 30, seed + 10 + i, 3)
+        cov = np.maximum(cov, p * np.clip(fade * 1.2 - (1 - mott) * (1 - fade) * 1.4, 0, 1))
+    thick = cov * 0.5
+    base = _blood_cols(thick, 0.65)
+    save_set("Blood_Steps", base, np.clip(cov, 0, 1) * 0.92, thick * 2, 1.5, 0.15 + 0.3 * cov, wrap=False)
+
+def cobweb(S=1024, seed=161):
+    """A dusty cobweb hung across a corner: spokes from a hub near the top, sagging catch-threads, dust clots."""
+    H = W = S; yy, xx = grid(H, W); rng = np.random.default_rng(seed)
+    hx, hy = 0.5 * W, 0.18 * H
+    dx, dy = xx - hx, yy - hy
+    r = np.hypot(dx, dy) + 1e-3; th = np.arctan2(dy, dx)
+    a = np.zeros((H, W))
+    spokes = np.sort(rng.uniform(-math.pi, math.pi, 17))
+    for s in spokes:   # radial threads
+        dth = np.angle(np.exp(1j * (th - s)))
+        a = np.maximum(a, sstep(1.6, 0.4, np.abs(dth) * r) * rng.uniform(0.5, 0.9))
+    # the catch thread runs straight from spoke to spoke (a polygon, not a circle), sagging a little in each span
+    ext = np.concatenate([spokes, [spokes[0] + 2 * math.pi]])
+    thw = np.where(th < spokes[0], th + 2 * math.pi, th)
+    idx = np.clip(np.searchsorted(ext, thw) - 1, 0, len(spokes) - 1)
+    lo = ext[idx]; hi = ext[idx + 1]; mid = (lo + hi) / 2; hw = (hi - lo) / 2
+    across = (thw - mid) / np.maximum(hw, 1e-3)
+    poly = r * np.cos(thw - mid) / np.cos(hw)                  # = the ring radius on the chord
+    poly = poly + (1 - across ** 2) * r * 0.06 * (0.5 + 0.5 * np.sin(th))   # sag, more on the lower side
+    for k in range(1, 20):
+        rad = k * 0.026 * W * (1 + rng.uniform(-0.08, 0.08))
+        keep = tnoise(H, W, 6, 6, seed + k) > 0.35
+        a = np.maximum(a, sstep(1.4, 0.3, np.abs(poly - rad)) * rng.uniform(0.25, 0.6) * keep)
+    edge = np.clip(np.minimum.reduce([xx / W, (W - xx) / W, yy / H, (H - yy) / H]) * 8, 0, 1)
+    reach = sstep(0.62 * W, 0.3 * W, r) * edge
+    dust = sstep(0.62, 0.75, tfbm(H, W, 8, seed + 2, 4)) * sstep(0.4 * W, 0.05 * W, r)
+    a = np.clip(a * reach + dust * 0.45 * edge, 0, 1)
+    base = np.zeros((H, W, 3)); base[:] = (0.55, 0.53, 0.5)
+    blend(base, dust, (0.3, 0.28, 0.25))
+    save_set("Cobweb", base, a * 0.85, a, 0.5, 0.05 + 0 * a, wrap=False)
+
+def wall_peeled(W=512, H=1024, seed=171):
+    """Where a strip of paper came away (V up): bare grey plaster with brown glue tidemarks, the top edge torn."""
+    yy, xx = grid(H, W); up = 1 - yy / H
+    f = tfbm(H, W, 6, seed, 6, aspect=0.5)
+    top = 0.92 + (tfbm(H, W, 3, seed + 1, 5) - 0.5) * 0.15
+    side = np.minimum(xx, W - xx) / W
+    cov = sstep(top, top - 0.01, up) * sstep(0.0, 0.015, side) * sstep(0.0, 0.03, up)
+    base = np.zeros((H, W, 3)); base[:] = (0.52, 0.5, 0.46)
+    base *= (0.8 + 0.35 * f)[..., None]
+    glue = sstep(0.5, 0.7, tfbm(H, W, 5, seed + 2, 5))
+    blend(base, glue * 0.6, (0.4, 0.33, 0.22))
+    blend(base, sstep(0.02, 0.0, np.abs(glue - 0.5)) * 0.5, (0.28, 0.2, 0.12))
+    scraps = sstep(0.68, 0.74, tfbm(H, W, 14, seed + 3, 4))   # bits of the paper's backing left stuck
+    blend(base, scraps, (0.78, 0.75, 0.66))
+    rim = sstep(top - 0.03, top - 0.005, up) * cov
+    blend(base, rim, (0.8, 0.76, 0.66))
+    save_set("Wall_Peeled", base, cov, f * 0.6 + scraps * 0.8 + rim, 2.0, 0.06 + 0 * f, wrap=False)
+
+def wall_smudge(S=512, seed=181):
+    """Greasy grey-brown smudges and finger marks round a door handle or a switch."""
+    H = W = S; yy, xx = grid(H, W); rng = np.random.default_rng(seed)
+    b = _blob(H, W, seed, 3, 0.6, rx=0.3, ry=0.36)
+    f = tfbm(H, W, 10, seed + 1, 4)
+    a = sstep(1.0, 0.3, b) * (0.25 + 0.4 * f)
+    for i in range(10):
+        cx, cy = rng.uniform(0.25, 0.75) * W, rng.uniform(0.2, 0.8) * H; ang = rng.uniform(-0.5, 0.5) + math.pi / 2
+        L = rng.uniform(25, 60); T = rng.uniform(7, 11)
+        u = (xx - cx) * math.cos(ang) + (yy - cy) * math.sin(ang); v = -(xx - cx) * math.sin(ang) + (yy - cy) * math.cos(ang)
+        a = np.maximum(a, sstep(1.0, 0.5, np.hypot(u / L, v / T)) * rng.uniform(0.25, 0.5))
+    base = np.zeros((H, W, 3)); base[:] = (0.15, 0.13, 0.1)
+    save_set("Wall_Smudge", base, np.clip(a, 0, 1), a, 1.0, 0.1 + 0.3 * a, wrap=False)
+
+def ceiling_soot(S=512, seed=191):
+    """The dark halo a bare bulb leaves on the ceiling over years."""
+    H = W = S
+    b = _blob(H, W, seed, 3, 0.25, rx=0.42, ry=0.42)
+    f = tfbm(H, W, 8, seed + 1, 4)
+    a = sstep(1.0, 0.1, b) ** 1.5 * (0.6 + 0.4 * f) * 0.8
+    base = np.zeros((H, W, 3)); base[:] = (0.1, 0.09, 0.08)
+    save_set("Ceiling_Soot", base, a, a, 0.5, 0.05 + 0 * a, wrap=False)
+
+def dust_mote(S=64):
+    yy, xx = grid(S, S); r = np.hypot(xx - S / 2 + 0.5, yy - S / 2 + 0.5) / (S / 2)
+    a = np.clip(1 - r, 0, 1) ** 2
+    base = np.ones((S, S, 3))
+    save("Dust_Mote", base, a)
+
+def make_grime():
+    import time; t = time.time(); out = []
+    for fn in (grime_low, grime_high, floor_edge, floor_dirt, blood_steps, cobweb, wall_peeled, wall_smudge, ceiling_soot, dust_mote):
+        t0 = time.time(); fn(); out.append(f"{fn.__name__} {time.time() - t0:.1f}s")
+    return ", ".join(out) + f" | total {time.time() - t:.1f}s"
+
 def make_all():
     import time; t = time.time(); out = []
     for fn in (wallpaper_floral, wallpaper_stripe, parquet, blood_pool, blood_drag, blood_drops, blood_splatter, blood_hand,
-               wall_torn, ceiling_stain, ceiling_hole, mould):
+               wall_torn, ceiling_stain, ceiling_hole, mould, grime_low, grime_high, floor_edge, floor_dirt, blood_steps,
+               cobweb, wall_peeled, wall_smudge, ceiling_soot, dust_mote):
         t0 = time.time(); fn(); out.append(f"{fn.__name__} {time.time() - t0:.1f}s")
     return ", ".join(out) + f" | total {time.time() - t:.1f}s"

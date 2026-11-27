@@ -695,12 +695,14 @@ namespace BodycamHorror.EditorTools
                 UnityEngine.Object.DestroyImmediate(pickup.glow.gameObject);
                 pickup.glow = null;
             }
-            // up at the desk and looking down at it: the player's eyes are on the desk, not the doorway
-            pickup.reach = 1.4f;
+            // right up against the desk and looking down at it: the player's eyes are on the desk, not the doorway.
+            // Pressed to the desk's front the eye is ~1.04 m from the gun, ~51 deg down; a step back is out of reach
+            pickup.reach = 1.15f;
             pickup.lookAngle = 7f;
-            // a little easier from the room side, standing at the desk facing the window (not from the ends of the desk)
+            pickup.minLookDown = 38f;
+            // a little easier to aim from the room side, standing at the desk facing the window (no extra reach)
             pickup.easySide = Vector3.left;
-            pickup.easySideReach = 0.5f;
+            pickup.easySideReach = 0f;
             pickup.easySideLookAngle = 14f;
             EditorUtility.SetDirty(pickup);
             return pickup;
@@ -719,10 +721,14 @@ namespace BodycamHorror.EditorTools
             deskLight.name = "Light";
             deskLight.type = LightType.Spot;
             deskLight.color = new Color(1f, 0.72f, 0.42f);
-            deskLight.intensity = 2.4f;   // the goal of the room: it has to pull the eye, through the door and the window
+            // the goal of the room: a soft warm pool that pulls the eye through the door and the window. The bulb is
+            // only 0.3 m over the gun, so anything stronger burns the gun and the paper white; a wide inner cone
+            // leaves no hot spot in the middle
+            deskLight.intensity = 0.3f;
             deskLight.range = 3.8f;
-            deskLight.spotAngle = 95f;
-            deskLight.innerSpotAngle = 50f;
+            deskLight.spotAngle = 125f;
+            deskLight.innerSpotAngle = 75f;
+            deskLight.shapeRadius = 0.06f;   // a frosted bulb: soft shadow edges
             deskLight.shadows = LightShadows.Soft;
             deskLight.shadowNearPlane = 0.05f;
             ViewModelLighting.AlsoLightViewModel(deskLight);
@@ -767,9 +773,18 @@ namespace BodycamHorror.EditorTools
             // the start room: one weak bulb between where the player lies and the door: seen over the head on
             // waking, and once up it is what lights the door (a lamp right over the head only fogs the view)
             HangingLamp(lampPrefab, lights, "Lamp_StartRoom", new Vector3(Room1X1 - 1.0f, Height, (LowZ0 + LowZ1) * 0.5f), 0.55f, true);
+            // behind the outer door it is a flat, not the stairwell: old warm bulbs, a little weaker than the
+            // corridor's cold lamps (the long cold tube over the right part stays cold: it bursts in the scare)
+            foreach (string warm in new[] { "Lamp_SmallDoor", "Lamp_SmallRoom", "Lamp_Corner" })
+                WarmUp(lights.Find(warm), 0.8f);
             PassageLights(lights, lampPrefab);
-            // the locked door at the corridor's end: a steady lamp just in front of it, its light turned onto the
-            // padlock, so from the turn into the big room the lock reads at once
+            LockedDoorLamp(lampPrefab, lights);
+        }
+
+        /// <summary>The locked door at the corridor's end: a steady lamp just in front of it, its light turned onto the
+        /// padlock, so from the turn into the big room the lock reads at once.</summary>
+        internal static void LockedDoorLamp(GameObject lampPrefab, Transform lights)
+        {
             float lockX = LockedDoorX + DoorBuilder.OpeningWidth * 0.5f;
             HangingLamp(lampPrefab, lights, "Lamp_LockedDoor", new Vector3(lockX, Height, CorridorZ1 - 0.9f), 0.7f, false);
             Transform lockLamp = lights.Find("Lamp_LockedDoor");
@@ -797,7 +812,7 @@ namespace BodycamHorror.EditorTools
         /// beam narrowed onto the doorway: the door reads from down the corridor while the corridor past it stays
         /// dark for the zombie's escape (a full lamp over the doorway was taken out for that reason).
         /// </summary>
-        static void OuterDoorLamp(Transform lights)
+        internal static void OuterDoorLamp(Transform lights)
         {
             float doorMidZ = OuterDoorZ + DoorBuilder.OpeningWidth * 0.5f;
             WallLamp(lights, "WallLamp_OuterDoor", new Vector3(CorridorX1, 2.05f, doorMidZ), -90f, 1.6f, false);
@@ -809,10 +824,60 @@ namespace BodycamHorror.EditorTools
             spot.spotAngle = 75f;
             spot.innerSpotAngle = 35f;
             spot.range = 5f;
-            spot.color = new Color(1f, 0.82f, 0.62f);   // an old warm bulb: tells it apart from the corridor's cold lamps
             spot.shadows = LightShadows.Soft;
             Transform wash = lamp.Find("WallWash");
             if (wash) Object.DestroyImmediate(wash.gameObject);   // no spill up the corridor walls
+            WarmUp(lamp, 1f);   // an old warm bulb: tells it apart from the corridor's cold lamps
+        }
+
+        /// <summary>The colour of the old incandescent bulbs in the flat (the outer door's lamp, the rooms behind it).</summary>
+        internal static readonly Color WarmBulb = new Color(1f, 0.82f, 0.62f);
+
+        /// <summary>
+        /// Turns a cold lamp into a dim warm one: every light in it takes <see cref="WarmBulb"/> at
+        /// <paramref name="dim"/> of its brightness, and its glowing parts (bulb, glass) glow the same colour, so the
+        /// fixture and the light it throws match. Safe to run on a lamp that is already warm.
+        /// </summary>
+        internal static void WarmUp(Transform lamp, float dim)
+        {
+            if (!lamp) return;
+            foreach (Light l in lamp.GetComponentsInChildren<Light>(true))
+            {
+                if (l.color == WarmBulb) continue;
+                l.color = WarmBulb;
+                l.intensity *= dim;
+                EditorUtility.SetDirty(l);
+            }
+            foreach (Renderer r in lamp.GetComponentsInChildren<Renderer>(true))
+            {
+                Material m = r.sharedMaterial;
+                if (!m || m.name.EndsWith("_Warm") || !m.IsKeywordEnabled("_EMISSION")) continue;
+                r.sharedMaterial = WarmVariant(m);
+                EditorUtility.SetDirty(r);
+            }
+        }
+
+        /// <summary>
+        /// What a warm bulb or lamp glass glows. Deeper and weaker than <see cref="WarmBulb"/> on purpose: a strong glow
+        /// is pushed to white by ACES and the game look's desaturation, so this is what reads on screen as the same
+        /// colour as the light the lamp throws on the wall.
+        /// </summary>
+        static readonly Color WarmGlow = new Color(1f, 0.42f, 0.13f) * 1.4f;
+
+        /// <summary>A copy of a glowing material (shared by every lamp of its kind) that glows <see cref="WarmGlow"/>.</summary>
+        static Material WarmVariant(Material source)
+        {
+            string path = $"{LightingTestSceneBuilder.MaterialDir}/{source.name}_Warm.mat";
+            var warm = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (!warm)
+            {
+                warm = new Material(source) { name = source.name + "_Warm" };
+                AssetDatabase.CreateAsset(warm, path);
+            }
+            warm.SetColor("_EmissionColor", WarmGlow);
+            if (warm.HasProperty("_BaseColor")) warm.SetColor("_BaseColor", WarmBulb);
+            EditorUtility.SetDirty(warm);
+            return warm;
         }
 
         // ------------------------------------------------------------------ the annex

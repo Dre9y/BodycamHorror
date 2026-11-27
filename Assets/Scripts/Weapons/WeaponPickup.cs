@@ -31,6 +31,9 @@ namespace BodycamHorror.Weapons
         public float reach;
         [Tooltip("How directly they must look at it (deg). 0 = PlayerInteractor's pickup look angle.")]
         public float lookAngle;
+        [Tooltip("The view must point at least this many degrees below the horizon to take it (0 = any): the player " +
+                 "has to stand over it and look down at it.")]
+        [Range(0f, 89f)] public float minLookDown;
         [Tooltip("A side it is easier to take it from (world direction from it towards the player, flattened). Zero: none.")]
         public Vector3 easySide;
         [Tooltip("From that side: this much more reach (m)...")]
@@ -81,6 +84,10 @@ namespace BodycamHorror.Weapons
             maxReach += easySideReach * k;
             if (easySideLookAngle > 0f) maxAngle = Mathf.Lerp(maxAngle, Mathf.Max(maxAngle, easySideLookAngle), k);
         }
+
+        /// <summary>The view along <paramref name="forward"/> is tilted down far enough to take it.</summary>
+        public bool LookingDown(Vector3 forward) =>
+            minLookDown <= 0f || forward.normalized.y <= -Mathf.Sin(minLookDown * Mathf.Deg2Rad);
 
         void Awake()
         {

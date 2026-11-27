@@ -62,11 +62,13 @@ namespace BodycamHorror.EditorTools
             Materials();
             root = new GameObject(RootName).transform;
 
+            ThinWindowWall();
             Paper();
             Props();
             Pipes();
             Grime();
             Blood();
+            Atmosphere();
 
             EditorSceneManager.MarkSceneDirty(scene);
             Debug.Log("Level polished (before the lock): " + string.Join("; ", log));
@@ -84,23 +86,32 @@ namespace BodycamHorror.EditorTools
             foreach (var n in new[] { "Blood_Pool", "Blood_Drag", "Blood_Drops", "Blood_Splatter", "Blood_Hand", "Wall_Torn",
                                       "Ceiling_Stain", "Ceiling_Hole", "Wall_Mould" })
                 mats[n] = Mat(n, true);
-            mats["Trim"] = Plain("Trim_Paint", new Color(0.2f, 0.12f, 0.07f), 0.35f, "Parquet");
-            mats["Cornice"] = Plain("Cornice_Plaster", new Color(0.62f, 0.6f, 0.55f), 0.1f, null);
+            foreach (var n in new[] { "Grime_Low", "Grime_High", "Floor_Edge" }) mats[n] = Mat(n, true, repeatU: true);
+            foreach (var n in new[] { "Floor_Dirt", "Blood_Steps", "Cobweb", "Wall_Peeled", "Ceiling_Soot" }) mats[n] = Mat(n, true);
+            mats["Cobweb"].SetFloat("_Cull", 0f);   // seen from both sides
+            mats["Trim"] = Plain("Trim_Paint", new Color(0.17f, 0.11f, 0.07f), 0.2f, "Parquet");
+            mats["Cornice"] = Plain("Cornice_Plaster", new Color(0.5f, 0.48f, 0.43f), 0.05f, null);
+            mats["Paper_Back"] = Plain("Paper_Back", new Color(0.6f, 0.57f, 0.5f), 0.05f, null);
+            mats["Window_Liner"] = Plain("Window_Liner", new Color(0.56f, 0.54f, 0.47f), 0.18f, null);
+            mats["Dust"] = DustMaterial();
             AssetDatabase.SaveAssets();
         }
 
-        static Texture2D Tex(string file, bool srgb, bool normal, bool clamp)
+        /// <summary>clamp: an overlay, clamped both ways, or (repeatU) only along V, for the bands laid along walls.</summary>
+        static Texture2D Tex(string file, bool srgb, bool normal, bool clamp, bool repeatU = false)
         {
             string path = TexDir + file + ".png";
             var imp = (TextureImporter)AssetImporter.GetAtPath(path);
             if (!imp) { Debug.LogWarning("Missing " + path); return null; }
+            var wu = clamp && !repeatU ? TextureWrapMode.Clamp : TextureWrapMode.Repeat;
+            var wv = clamp ? TextureWrapMode.Clamp : TextureWrapMode.Repeat;
             bool dirty = imp.sRGBTexture != srgb || (imp.textureType == TextureImporterType.NormalMap) != normal ||
-                         (imp.wrapMode == TextureWrapMode.Clamp) != clamp || imp.alphaIsTransparency != (clamp && srgb);
+                         imp.wrapModeU != wu || imp.wrapModeV != wv || imp.alphaIsTransparency != (clamp && srgb);
             if (dirty)
             {
                 imp.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
                 imp.sRGBTexture = srgb;
-                imp.wrapMode = clamp ? TextureWrapMode.Clamp : TextureWrapMode.Repeat;
+                imp.wrapModeU = wu; imp.wrapModeV = wv;
                 imp.alphaIsTransparency = clamp && srgb;
                 imp.mipmapEnabled = true;
                 imp.anisoLevel = 4;
@@ -110,17 +121,17 @@ namespace BodycamHorror.EditorTools
             return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         }
 
-        static Material Mat(string name, bool overlay)
+        static Material Mat(string name, bool overlay, bool repeatU = false)
         {
             string path = MatDir + name + ".mat";
             var m = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (!m) { m = new Material(Shader.Find("Universal Render Pipeline/Lit")); AssetDatabase.CreateAsset(m, path); }
-            var baseMap = Tex(name + "_BaseColor", true, false, overlay);
+            var baseMap = Tex(name + "_BaseColor", true, false, overlay, repeatU);
             m.SetTexture("_BaseMap", baseMap); m.SetTexture("_MainTex", baseMap);
             m.SetColor("_BaseColor", Color.white);
-            m.SetTexture("_BumpMap", Tex(name + "_Normal", false, true, overlay)); m.EnableKeyword("_NORMALMAP");
+            m.SetTexture("_BumpMap", Tex(name + "_Normal", false, true, overlay, repeatU)); m.EnableKeyword("_NORMALMAP");
             m.SetFloat("_BumpScale", 1f);
-            m.SetTexture("_MetallicGlossMap", Tex(name + "_MetallicSmoothness", false, false, overlay));
+            m.SetTexture("_MetallicGlossMap", Tex(name + "_MetallicSmoothness", false, false, overlay, repeatU));
             m.EnableKeyword("_METALLICSPECGLOSSMAP");
             m.SetFloat("_Smoothness", 1f);
             m.SetFloat("_SmoothnessTextureChannel", 0f);
@@ -150,6 +161,25 @@ namespace BodycamHorror.EditorTools
             m.SetShaderPassEnabled("DepthOnly", false);
         }
 
+        /// <summary>Lit, alpha-blended specks for the dust hanging in the lamps' light (dark where no light falls).</summary>
+        static Material DustMaterial()
+        {
+            string path = MatDir + "Dust_Mote.mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (!m) { m = new Material(Shader.Find("Universal Render Pipeline/Particles/Lit")); AssetDatabase.CreateAsset(m, path); }
+            var tex = Tex("Dust_Mote", true, false, true);
+            m.SetTexture("_BaseMap", tex);
+            m.SetColor("_BaseColor", new Color(0.9f, 0.88f, 0.8f, 0.55f));
+            m.SetFloat("_Surface", 1f); m.SetFloat("_Blend", 0f);
+            m.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha); m.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            m.SetFloat("_ZWrite", 0f);
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.renderQueue = (int)RenderQueue.Transparent;
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
         static Material Plain(string name, Color c, float smooth, string normalFrom)
         {
             string path = MatDir + name + ".mat";
@@ -177,11 +207,23 @@ namespace BodycamHorror.EditorTools
                 if (!mf || !mf.sharedMesh) continue;
                 walls.Add((w, new Bounds(w.TransformPoint(mf.sharedMesh.bounds.center), Vector3.Scale(mf.sharedMesh.bounds.size, w.lossyScale))));
             }
-            int skins = 0, strips = 0;
+            int skins = 0, strips = 0, bands = 0;
             var staticFlags = GameObjectUtility.GetStaticEditorFlags(shell.GetChild(0).gameObject);
-            foreach (var (area, paper) in Rooms)
+            // the flat's rooms (papered), then the block's common parts (painted): grime and dust in all of them
+            var areas = Rooms.Select(r => (r.area, r.paper, floorY: 0.002f, tag: r.paper == "Wallpaper_Floral" ? "Rooms" : "StartRoom")).ToList();
+            foreach (var fl in CommonFloors)
             {
+                var ft = Find("Level/Shell/" + fl); var fr = ft ? ft.GetComponent<Renderer>() : null;
+                if (!fr) { log.Add("missing floor " + fl); continue; }
+                var fb = fr.bounds;
+                areas.Add((Rect.MinMaxRect(fb.min.x, fb.min.z, fb.max.x, fb.max.z), null, fb.max.y, fl));
+            }
+            commonAreas.Clear();
+            foreach (var (area, paper, floorY, tag) in areas)
+            {
+                if (paper == null) commonAreas.Add((area, floorY));
                 var paperMesh = new MeshBuilder(); var skirting = new MeshBuilder(); var cornice = new MeshBuilder();
+                var low = new MeshBuilder(); var high = new MeshBuilder(); var edge = new MeshBuilder();
                 foreach (var (t, b) in walls)
                 {
                     foreach (var n in new[] { Vector3.right, Vector3.left, Vector3.forward, Vector3.back })
@@ -189,28 +231,57 @@ namespace BodycamHorror.EditorTools
                         Vector3 c = b.center + Vector3.Scale(n, b.extents);
                         Vector3 probe = c + n * 0.15f;
                         if (!area.Contains(new Vector2(probe.x, probe.z))) continue;
+                        if (paper == null && Rooms.Any(r => r.area.Contains(new Vector2(probe.x, probe.z)))) continue;
                         Vector3 along = Vector3.Cross(Vector3.up, n);   // so the face is seen from the room
                         float half = Mathf.Abs(Vector3.Dot(b.extents, new Vector3(Mathf.Abs(along.x), 0f, Mathf.Abs(along.z))));
                         Vector3 a0 = c - along * half; float len = half * 2f;
                         float y0 = b.min.y, y1 = b.max.y;
                         if (y1 <= 0.01f || y0 >= CeilingY - 0.01f) continue;
                         y0 = Mathf.Max(y0, 0f); y1 = Mathf.Min(y1, CeilingY);
-                        paperMesh.Quad(a0 + n * 0.003f, along, n, len, y0, y1, PaperTile);
-                        skins++;
-                        if (y0 < 0.05f && len > 0.05f) { skirting.Strip(a0 + n * 0.003f, along, n, len, 0f, Skirting); strips++; }
-                        if (y1 > CeilingY - 0.05f && len > 0.05f) { cornice.Strip(a0 + n * 0.003f, along, n, len, CeilingY, Cornice); strips++; }
+                        if (len < 0.05f) continue;
+                        float lift = paper != null ? 0.006f : 0.003f;   // over the paper, or over the paint
+                        if (paper != null)
+                        {
+                            paperMesh.Quad(a0 + n * 0.003f, along, n, len, y0, y1, PaperTile);
+                            skins++;
+                            if (y0 < 0.05f) { skirting.Strip(a0 + n * 0.003f, along, n, len, 0f, Skirting); strips++; }
+                            if (y1 > CeilingY - 0.05f) { cornice.Strip(a0 + n * 0.003f, along, n, len, CeilingY, Cornice); strips++; }
+                        }
+                        if (y0 < 0.05f)
+                        {
+                            float top = Mathf.Min(y1, 1f);
+                            low.Band(a0 + n * lift, along, n, len, 0f, top, GrimeTile, 0f, top);
+                            edge.FloorStrip(a0, along, n, len, 0.4f, floorY + 0.0025f, GrimeTile);
+                            bands++;
+                        }
+                        if (y1 > CeilingY - 0.05f)
+                        {
+                            float bottom = Mathf.Max(y0, y1 - 1f);
+                            high.Band(a0 + n * lift, along, n, len, bottom, y1, GrimeTile, 1f - (y1 - bottom), 1f);
+                            bands++;
+                        }
                     }
                 }
-                string tag = paper == "Wallpaper_Floral" ? "Rooms" : "StartRoom";
-                MakeMesh($"Paper_{tag}", paperMesh, mats[paper], staticFlags, true);
-                MakeMesh($"Skirting_{tag}", skirting, mats["Trim"], staticFlags, true);
-                MakeMesh($"Cornice_{tag}", cornice, mats["Cornice"], staticFlags, false);
-                var floor = new MeshBuilder();
-                floor.Floor(area, 0.002f, ParquetTile);
-                MakeMesh($"Parquet_{tag}", floor, mats["Parquet"], staticFlags, false);
+                if (paper != null)
+                {
+                    MakeMesh($"Paper_{tag}", paperMesh, mats[paper], staticFlags, true);
+                    MakeMesh($"Skirting_{tag}", skirting, mats["Trim"], staticFlags, true);
+                    MakeMesh($"Cornice_{tag}", cornice, mats["Cornice"], staticFlags, false);
+                    var floor = new MeshBuilder();
+                    floor.Floor(area, 0.002f, ParquetTile);
+                    MakeMesh($"Parquet_{tag}", floor, mats["Parquet"], staticFlags, false);
+                }
+                MakeMesh($"GrimeLow_{tag}", low, mats["Grime_Low"], staticFlags, false);
+                MakeMesh($"GrimeHigh_{tag}", high, mats["Grime_High"], staticFlags, false);
+                MakeMesh($"FloorEdge_{tag}", edge, mats["Floor_Edge"], staticFlags, false);
             }
-            log.Add($"{skins} wall faces papered, {strips} skirting/cornice runs");
+            log.Add($"{skins} wall faces papered, {strips} skirting/cornice runs, {bands} grime bands");
         }
+
+        // the block's common parts (painted, not papered) that get the grime too
+        static readonly string[] CommonFloors = { "Floor_Low", "Floor_Passage", "Floor_Corridor" };
+        static readonly List<(Rect area, float floorY)> commonAreas = new List<(Rect, float)>();
+        const float GrimeTile = 2f;   // the grime bands' repeat along a wall (level_polish_textures.GRIME_M)
 
         // skirting: (out from the wall, up); cornice: (out, down from the ceiling)
         static readonly Vector2[] Skirting = { new Vector2(0f, 0f), new Vector2(0.02f, 0f), new Vector2(0.02f, 0.058f), new Vector2(0.013f, 0.072f), new Vector2(0f, 0.075f) };
@@ -251,6 +322,43 @@ namespace BodycamHorror.EditorTools
                 Vector3 b0 = a0 + along * len;
                 Face(new Vector3(a0.x, y0, a0.z), new Vector3(b0.x, y0, b0.z), new Vector3(b0.x, y1, b0.z), new Vector3(a0.x, y1, a0.z), nrm,
                      new Vector2(u0, y0 / tile), new Vector2(u1, y0 / tile), new Vector2(u1, y1 / tile), new Vector2(u0, y1 / tile));
+            }
+
+            /// <summary>A band of a wall face, y0..y1, U in tiles of tileU along the wall, V from v0 to v1.</summary>
+            public void Band(Vector3 a0, Vector3 along, Vector3 nrm, float len, float y0, float y1, float tileU, float v0, float v1)
+            {
+                float u0 = Vector3.Dot(a0, along) / tileU, u1 = u0 + len / tileU;
+                Vector3 b0 = a0 + along * len;
+                Face(new Vector3(a0.x, y0, a0.z), new Vector3(b0.x, y0, b0.z), new Vector3(b0.x, y1, b0.z), new Vector3(a0.x, y1, a0.z), nrm,
+                     new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1));
+            }
+
+            /// <summary>A strip of floor along a wall, `width` out into the room (V 0 at the wall, 1 out).</summary>
+            public void FloorStrip(Vector3 a0, Vector3 along, Vector3 nrm, float len, float width, float y, float tileU)
+            {
+                float u0 = Vector3.Dot(a0, along) / tileU, u1 = u0 + len / tileU;
+                Vector3 A = new Vector3(a0.x, y, a0.z), B = A + along * len, C = B + nrm * width, D = A + nrm * width;
+                if (Vector3.Dot(Vector3.Cross(B - A, D - A), Vector3.up) > 0f)
+                    Face(A, B, C, D, Vector3.up, new Vector2(u0, 0f), new Vector2(u1, 0f), new Vector2(u1, 1f), new Vector2(u0, 1f));
+                else
+                    Face(A, D, C, B, Vector3.up, new Vector2(u0, 0f), new Vector2(u0, 1f), new Vector2(u1, 1f), new Vector2(u1, 0f));
+            }
+
+            /// <summary>An axis-aligned box, every face outwards, UV in metres.</summary>
+            public void Box(Vector3 lo, Vector3 hi)
+            {
+                Vector3 c = (lo + hi) * 0.5f, e = (hi - lo) * 0.5f;
+                foreach (var nrm in new[] { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back })
+                {
+                    Vector3 t1 = Mathf.Abs(nrm.y) > 0.5f ? Vector3.right : Vector3.up;
+                    Vector3 t2 = Vector3.Cross(nrm, t1);
+                    Vector3 fc = c + Vector3.Scale(nrm, e);
+                    Vector3 a1 = Vector3.Scale(t1, e), a2 = Vector3.Scale(t2, e);
+                    Vector3 A = fc - a1 - a2, B = fc + a1 - a2, C = fc + a1 + a2, D = fc - a1 + a2;
+                    Vector2 U(Vector3 q) => new Vector2(Vector3.Dot(q, t1), Vector3.Dot(q, t2));
+                    if (Vector3.Dot(Vector3.Cross(B - A, D - A), nrm) > 0f) Face(A, B, C, D, nrm, U(A), U(B), U(C), U(D));
+                    else Face(A, D, C, B, nrm, U(A), U(D), U(C), U(B));
+                }
             }
 
             public void Floor(Rect r, float y, float tile)
@@ -362,11 +470,17 @@ namespace BodycamHorror.EditorTools
             Fit("Mattress_Single", M + "Mattress", -4f, false);
             Hide(M + "Mattress_Stain");
 
-            // --- the window between the rooms (the pane and its grime stay: the scare looks through them)
+            // --- the window between the rooms (by the pistol): no frame, no sashes, no sills - one sheet of glass filling
+            // the opening (the pane and its grime stay: the scare looks through them). The frame's colliders keep
+            // lining the opening; the sills', which stood out of it, go.
             const string W = "Level/Window/";
             foreach (var n in new[] { "Frame_Bottom", "Frame_Top", "Frame_Left", "Frame_Right", "Mullion", "Transom", "Sill_In", "Sill_Out" }) Hide(W + n);
-            var win = Put("WindowFrame", new Vector3(4.95f, 1.5f, 6.05f), 0f, colliderOwner: Find(W + "Frame_Bottom"));
-            if (win) win.transform.rotation = Quaternion.LookRotation(Vector3.left);   // its front (the inside sill) into the small room
+            foreach (var n in new[] { "Frame_Bottom", "Frame_Top", "Frame_Left", "Frame_Right", "Sill_In", "Sill_Out" })
+            {
+                var piece = Find(W + n);   // they stood out of the thinner wall: the wall and the glass do their job
+                if (piece) foreach (var c in piece.GetComponentsInChildren<Collider>(true)) c.enabled = false;
+            }
+            WindowLiner();
 
             // --- the ceiling roses and cords of the hanging lamps (shade and bulb stay)
             // (the cord hangs from the lamp's swinging pivot, so the new one goes on the pivot too)
@@ -399,7 +513,92 @@ namespace BodycamHorror.EditorTools
                 Put(pick, new Vector3(t.position.x, 0f, t.position.z), (float)rng.NextDouble() * 360f, colliderOwner: t);
                 junk++;
             }
-            log.Add($"{group.childCount - before} props placed ({junk} rubbish)");
+            // --- more of what an abandoned flat collects: old newspapers, flattened boxes, paper, bits of plaster
+            int extra = 0;
+            foreach (var (area, _) in Rooms)
+            {
+                extra += Scatter("Newspaper", area, 5, 0.3f);
+                extra += Scatter("Box_Crushed", area, 2, 0.35f);
+                extra += Scatter("Paper_Sheet", area, 10, 0.2f);
+                extra += Scatter("Plaster_B", area, 6, 0.15f);
+            }
+            foreach (var (area, _) in commonAreas)
+            {
+                extra += Scatter("Newspaper", area, 2, 0.3f);
+                extra += Scatter("Paper_Sheet", area, 5, 0.2f);
+                extra += Scatter("Plaster_A", area, 5, 0.15f);
+                extra += Scatter("Can", area, 1, 0.15f);
+            }
+            log.Add($"{group.childCount - before} props placed ({junk} rubbish swapped, {extra} more scattered)");
+        }
+
+        // ================================================================ the window's wall: thinner, the opening lined
+
+        // the wall between the small and the big room, with the window in it (x 4.8..5.1 as built)
+        const float WinWallX = 4.95f, WinWallThick = 0.15f;
+        static readonly Rect WinOpening = Rect.MinMaxRect(5.2f, 0.9f, 6.9f, 2.1f);   // (z, y)
+
+        /// <summary>Takes the window's wall down to WinWallThick about its middle, and trims the end of the wall that
+        /// runs into it so no stub stands out on the big room's side. Sets sizes outright, so rerunning is harmless.</summary>
+        static void ThinWindowWall()
+        {
+            float x1 = WinWallX + WinWallThick * 0.5f;
+            int n = 0;
+            foreach (Transform t in Find("Level/Shell"))
+            {
+                var mf = t.GetComponent<MeshFilter>();
+                if (!mf || !mf.sharedMesh) continue;
+                float size = mf.sharedMesh.bounds.size.x, mid = t.localPosition.x, half = size * t.localScale.x * 0.5f;
+                var s = t.localScale; var p = t.localPosition;
+                if (t.name.StartsWith("Wall_SmallRight_"))
+                {
+                    s.x = WinWallThick / size; p.x = WinWallX;
+                }
+                else if (t.name.StartsWith("Wall_SmallBottom_") &&
+                         (Mathf.Abs(mid + half - (WinWallX + 0.15f)) < 0.01f || Mathf.Abs(mid + half - x1) < 0.01f))   // as built, or trimmed
+                {
+                    float min = mid - half;   // the far end stays put
+                    s.x = (x1 - min) / size; p.x = (min + x1) * 0.5f;
+                }
+                else continue;
+                t.localScale = s; t.localPosition = p; n++;
+            }
+            // what stood against the old faces follows the new ones (only while it is still at the old face)
+            float x0 = WinWallX - WinWallThick * 0.5f;
+            foreach (var (path, oldFace, newFace, side) in new[] { ("Level/BigRoom/Wardrobe", WinWallX + 0.15f, x1, -1f), ("Level/SmallRoom/Desk", WinWallX - 0.15f, x0, 1f) })
+            {
+                var t = Find(path);
+                if (!t) continue;
+                var b = WorldBounds(t.gameObject);
+                float edge = side < 0f ? b.min.x : b.max.x;
+                if (Mathf.Abs(edge - oldFace) < 0.04f) t.position += Vector3.right * (newFace - oldFace);
+            }
+            Physics.SyncTransforms();
+            log.Add($"window wall thinned to {WinWallThick * 100f:0} cm ({n} pieces)");
+        }
+
+        /// <summary>Boards lining the opening right through the wall (so its inside never shows) and a narrow casing
+        /// round it on both faces, in old off-white paint. The glass's edges hide in them.</summary>
+        static void WindowLiner()
+        {
+            const float board = 0.025f, casing = 0.07f, proud = 0.018f, over = 0.006f;
+            float x0 = WinWallX - WinWallThick * 0.5f, x1 = WinWallX + WinWallThick * 0.5f;
+            float z0 = WinOpening.xMin, z1 = WinOpening.xMax, y0 = WinOpening.yMin, y1 = WinOpening.yMax;
+            var mb = new MeshBuilder();
+            float lx = x0 - over, hx = x1 + over;
+            mb.Box(new Vector3(lx, y0, z0), new Vector3(hx, y1, z0 + board));            // the jambs
+            mb.Box(new Vector3(lx, y0, z1 - board), new Vector3(hx, y1, z1));
+            mb.Box(new Vector3(lx, y1 - board, z0), new Vector3(hx, y1, z1));            // the head
+            mb.Box(new Vector3(lx, y0, z0), new Vector3(hx, y0 + board, z1));            // the bottom
+            foreach (var (a, b) in new[] { (x0 - proud, x0), (x1, x1 + proud) })         // the casings, one each face
+            {
+                mb.Box(new Vector3(a, y0 - casing, z0 - casing), new Vector3(b, y1 + casing, z0));
+                mb.Box(new Vector3(a, y0 - casing, z1), new Vector3(b, y1 + casing, z1 + casing));
+                mb.Box(new Vector3(a, y1, z0), new Vector3(b, y1 + casing, z1));
+                mb.Box(new Vector3(a, y0 - casing, z0), new Vector3(b, y0, z1));
+            }
+            var staticFlags = GameObjectUtility.GetStaticEditorFlags(Find("Level/Shell").GetChild(0).gameObject);
+            MakeMesh("Window_Liner", mb, mats["Window_Liner"], staticFlags, true);
         }
 
         // ================================================================ pipes
@@ -503,7 +702,140 @@ namespace BodycamHorror.EditorTools
                 var f = from; f.y = w * 0.5f;
                 n += Surface("Wall_Mould", f, dir, w, w, 0f, 0.008f) ? 1 : 0;
             }
-            log.Add($"{n} stains, holes and torn patches");
+            // dried mud and dust on the floors
+            int dirt = 0;
+            foreach (var (area, floorY) in Rooms.Select(r => (r.area, 0.002f)).Concat(commonAreas))
+            {
+                int want = Mathf.Max(2, Mathf.RoundToInt(area.width * area.height / 5f));
+                for (int tries = 0, k = 0; k < want && tries < want * 6; tries++)
+                {
+                    var p = new Vector3(Mathf.Lerp(area.xMin + 0.4f, area.xMax - 0.4f, (float)rng.NextDouble()), 1.2f,
+                                        Mathf.Lerp(area.yMin + 0.4f, area.yMax - 0.4f, (float)rng.NextDouble()));
+                    if (!Physics.Raycast(p, Vector3.down, out var hit, 2f, ~0, QueryTriggerInteraction.Ignore) || !hit.collider.name.StartsWith("Floor")) continue;
+                    float s = 0.8f + (float)rng.NextDouble() * 1.0f;
+                    Floor("Floor_Dirt", hit.point, s, s * (0.7f + (float)rng.NextDouble() * 0.5f), (float)rng.NextDouble() * 360f, floorY + 0.0015f, hit.point.y);
+                    k++; dirt++;
+                }
+            }
+            // cobwebs in the ceiling corners
+            int webs = 0;
+            var corners = new List<Vector3>(); webCorners.Clear();
+            foreach (var (area, _) in Rooms)
+                corners.AddRange(new[] { new Vector2(area.xMin, area.yMin), new Vector2(area.xMax, area.yMin), new Vector2(area.xMin, area.yMax), new Vector2(area.xMax, area.yMax) }
+                    .Select(c => new Vector3(c.x, 0f, c.y)));
+            corners.AddRange(new[] { new Vector3(0f, 0f, 3f), new Vector3(5f, 0f, 3f), new Vector3(9.8f, 0f, 10.4f), new Vector3(11f, 0f, 10.4f), new Vector3(1.8f, 0f, -6.8f), new Vector3(9.8f, 0f, -6.2f) });
+            foreach (var c in corners)
+                foreach (var sx in new[] { -1f, 1f })
+                    foreach (var sz in new[] { -1f, 1f })
+                        webs += Cobweb(c + new Vector3(-sx * 0.5f, 2.45f, -sz * 0.5f), new Vector3(sx, 0f, 0f), new Vector3(0f, 0f, sz)) ? 1 : 0;
+            // soot over the bare bulbs
+            int soot = 0;
+            foreach (var bulb in Children("Level/Lights").Where(t => t.name == "Bulb").ToList())
+            {
+                var at = bulb.position + Vector3.right * 0.4f;
+                if (!Physics.Raycast(at, Vector3.up, out var hit, 2f, ~0, QueryTriggerInteraction.Ignore)) continue;
+                Overlay("Ceiling_Soot", new Vector3(bulb.position.x, hit.point.y - 0.0035f, bulb.position.z),
+                        Quaternion.LookRotation(Vector3.up, Vector3.forward) * Quaternion.Euler(0f, 0f, (float)rng.NextDouble() * 360f), 1.1f, 1.1f);
+                soot++;
+            }
+            // paper peeled off in strips, hanging
+            int peels = 0;
+            foreach (var (from, dir, w, len) in new[]
+            {
+                (new Vector3(3.3f, 1.35f, 1.0f), Vector3.back, 0.53f, 1.0f),
+                (new Vector3(8.0f, 1.2f, 2.2f), Vector3.right, 0.5f, 1.2f),
+                (new Vector3(2.9f, 1.4f, 7.0f), Vector3.forward, 0.53f, 0.95f),
+                (new Vector3(7.4f, 1.25f, 7.2f), Vector3.forward, 0.45f, 1.1f),
+                (new Vector3(-0.6f, 1.3f, -3.6f), Vector3.forward, 0.53f, 1.05f),
+                (new Vector3(-1.9f, 1.5f, -6.3f), Vector3.back, 0.4f, 0.9f),
+                (new Vector3(0.6f, 1.2f, 5.6f), Vector3.left, 0.5f, 1.1f),
+            })
+                peels += Peel(from, dir, w, len) ? 1 : 0;
+            log.Add($"{n} stains, holes and torn patches, {dirt} dirt patches, {webs} cobwebs, {soot} soot marks, {peels} peeling strips");
+        }
+
+        static readonly List<Vector3> webCorners = new List<Vector3>();
+
+        /// <summary>A cobweb hung across the ceiling corner that rays from `near` along a and b find close by.</summary>
+        static bool Cobweb(Vector3 near, Vector3 a, Vector3 b)
+        {
+            const QueryTriggerInteraction Q = QueryTriggerInteraction.Ignore;
+            if (!Physics.Raycast(near, a, out var ha, 1.2f, ~0, Q) || !Physics.Raycast(near, b, out var hb, 1.2f, ~0, Q)) return false;
+            if (!Physics.Raycast(near, Vector3.up, out var hc, 1f, ~0, Q)) return false;
+            if (Vector3.Dot(ha.normal, -a) < 0.9f || Vector3.Dot(hb.normal, -b) < 0.9f) return false;   // not two square walls
+            var corner = near + a * ha.distance + b * hb.distance;
+            // that corner must be inside: a probe just off it, in the room, must not be in a wall
+            if (Physics.CheckSphere(corner - (a + b) * 0.08f + Vector3.down * 0.1f, 0.03f, ~0, Q)) return false;
+            if (webCorners.Any(w => (w - corner).sqrMagnitude < 0.25f)) return false;   // one to a corner
+            webCorners.Add(corner);
+            Vector3 diag = (a + b).normalized;
+            float d = 0.26f + (float)rng.NextDouble() * 0.12f, h = d * 1.7f;
+            Vector3 c = corner - diag * d; c.y = hc.point.y - h * 0.5f + 0.005f;
+            Overlay("Cobweb", c, Quaternion.LookRotation(diag, Vector3.up), d * 2.05f, h);
+            return true;
+        }
+
+        /// <summary>A strip of the wallpaper come unstuck: it still holds along a line `len` above `from` and hangs
+        /// down from there, its loose end curling away from the wall; behind it, from `from` up, the bare plaster.</summary>
+        static bool Peel(Vector3 from, Vector3 dir, float w, float len)
+        {
+            if (!Physics.Raycast(from, dir, out var hit, 4f, ~0, QueryTriggerInteraction.Ignore) || hit.collider.transform.parent?.name != "Shell")
+            { log.Add($"no wall to peel at {from}"); return false; }
+            var room = Rooms.FirstOrDefault(r => r.area.Contains(new Vector2(from.x, from.z)));
+            if (room.paper == null) { log.Add($"no paper at {from}"); return false; }
+            Vector3 n = hit.normal; n.y = 0f; n.Normalize();
+            Vector3 along = Vector3.Cross(Vector3.up, n);
+            Vector3 hinge = new Vector3(hit.point.x, from.y + len, hit.point.z) + n * 0.004f;
+            Overlay("Wall_Peeled", hinge - Vector3.up * (len * 0.5f) + n * 0.003f, Quaternion.LookRotation(-n, Vector3.up), w, len + 0.03f);
+
+            const int N = 14;
+            float th1 = 1.0f + (float)rng.NextDouble() * 0.9f, twist = ((float)rng.NextDouble() - 0.5f) * 0.3f;
+            float flap = len * (0.8f + (float)rng.NextDouble() * 0.15f);
+            var pos = new List<Vector3>(); var nrm = new List<Vector3>(); var uv = new List<Vector2>();
+            var front = new List<int>(); var back = new List<int>();
+            Vector3 p = hinge; float ds = flap / N;
+            var centre = new Vector3[N + 1]; var faceN = new Vector3[N + 1]; var side = new Vector3[N + 1];
+            for (int i = 0; i <= N; i++)
+            {
+                float t = i / (float)N, th = 0.12f + (th1 - 0.12f) * Mathf.Pow(t, 2.2f);   // away from the wall, most at the end
+                Vector3 tan = Vector3.down * Mathf.Cos(th) + n * Mathf.Sin(th);
+                if (i > 0) p += tan * ds;
+                centre[i] = p;
+                faceN[i] = n * Mathf.Cos(th) + Vector3.up * Mathf.Sin(th);   // the printed side
+                side[i] = Quaternion.AngleAxis(twist * 57.3f * t, tan) * along;
+            }
+            float u0 = Vector3.Dot(hinge, along) / PaperTile;
+            for (int s = 0; s < 2; s++)   // 0: the printed side, 1: the backing, a hair behind it
+                for (int i = 0; i <= N; i++)
+                {
+                    float t = i / (float)N, half = w * 0.5f * (1f - 0.12f * t * t);
+                    Vector3 off = s == 0 ? Vector3.zero : -faceN[i] * 0.0015f;
+                    Vector3 nn = s == 0 ? faceN[i] : -faceN[i];
+                    pos.Add(centre[i] - side[i] * half + off); pos.Add(centre[i] + side[i] * half + off);
+                    nrm.Add(nn); nrm.Add(nn);
+                    float v = (hinge.y - t * flap) / PaperTile;
+                    uv.Add(new Vector2(u0 - half / PaperTile, v)); uv.Add(new Vector2(u0 + half / PaperTile, v));
+                }
+            int sideCount = (N + 1) * 2;
+            for (int s = 0; s < 2; s++)
+                for (int i = 0; i < N; i++)
+                {
+                    int o = s * sideCount, A = o + i * 2, B = A + 1, C = A + 3, D = A + 2;
+                    var want = s == 0 ? faceN[i] : -faceN[i];
+                    var list = s == 0 ? front : back;
+                    if (Vector3.Dot(Vector3.Cross(pos[B] - pos[A], pos[D] - pos[A]), want) > 0f) list.AddRange(new[] { A, B, C, A, C, D });
+                    else list.AddRange(new[] { A, D, C, A, C, B });
+                }
+            var mesh = new Mesh { name = "PeeledPaper" };
+            mesh.SetVertices(pos); mesh.SetNormals(nrm); mesh.SetUVs(0, uv);
+            mesh.subMeshCount = 2; mesh.SetTriangles(front, 0); mesh.SetTriangles(back, 1);
+            mesh.RecalculateTangents(); mesh.RecalculateBounds();
+            var go = new GameObject("PeeledPaper");
+            go.transform.SetParent(group, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterials = new[] { mats[room.paper], mats["Paper_Back"] };
+            go.isStatic = true;
+            return true;
         }
 
         // ================================================================ blood
@@ -541,16 +873,60 @@ namespace BodycamHorror.EditorTools
             n += Floor("Blood_Drops", new Vector3(5.45f, 0f, 4.3f), 0.5f, 0.5f, 33f, 0.006f);
             n += Floor("Blood_Drops", new Vector3(5.8f, 0f, 5.3f), 0.4f, 0.4f, 200f, 0.006f);
             n += Floor("Blood_Drops", new Vector3(3.9f, 0f, 6.6f), 0.4f, 0.4f, 300f, 0.006f);
+            // someone walked through it: boot prints out of the start room, and back from the locked door
+            n += Strip("Blood_Steps", new Vector3(-0.6f, 0f, -5.0f), new Vector3(3.4f, 0f, -5.2f), 1.0f, 0.0058f);
+            n += Strip("Blood_Steps", new Vector3(10.6f, 0f, 9.3f), new Vector3(10.6f, 0f, 5.3f), 1.0f, 0.0058f);
             log.Add($"{n} blood marks");
         }
 
-        static int Drag(Vector3 from, Vector3 to, float width, float lift)
+        static int Drag(Vector3 from, Vector3 to, float width, float lift) => Strip("Blood_Drag", from, to, width, lift);
+
+        /// <summary>A floor overlay whose U runs from `from` to `to`.</summary>
+        static int Strip(string mat, Vector3 from, Vector3 to, float width, float lift)
         {
             Vector3 d = to - from; d.y = 0f;
             Vector3 c = (from + to) * 0.5f; c.y = lift;
             var q = Quaternion.LookRotation(Vector3.down, Vector3.Cross(Vector3.down, d.normalized));
-            Overlay("Blood_Drag", c, q, d.magnitude, width);
+            Overlay(mat, c, q, d.magnitude, width);
             return 1;
+        }
+
+        // ================================================================ atmosphere: dust in the lamps' light
+
+        static void Atmosphere()
+        {
+            Group("Atmosphere");
+            int n = 0;
+            foreach (var bulb in Children("Level/Lights").Where(t => t.name == "Bulb").ToList())
+            {
+                var go = new GameObject("DustMotes");
+                go.transform.SetParent(group, false);
+                go.transform.position = new Vector3(bulb.position.x, 1.3f, bulb.position.z);
+                var ps = go.AddComponent<ParticleSystem>();
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                var main = ps.main;
+                main.duration = 10f; main.loop = true; main.prewarm = true;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(10f, 16f);
+                main.startSpeed = new ParticleSystem.MinMaxCurve(0f, 0.02f);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.006f, 0.016f);
+                main.maxParticles = 140;
+                main.gravityModifier = 0.0005f;
+                main.simulationSpace = ParticleSystemSimulationSpace.World;
+                var em = ps.emission; em.rateOverTime = 10f;
+                var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Box; shape.scale = new Vector3(2.2f, 2.2f, 2.2f);
+                var noise = ps.noise; noise.enabled = true; noise.strength = 0.04f; noise.frequency = 0.25f; noise.scrollSpeed = 0.05f;
+                var col = ps.colorOverLifetime; col.enabled = true;
+                var g = new Gradient();
+                g.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                          new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.2f), new GradientAlphaKey(1f, 0.8f), new GradientAlphaKey(0f, 1f) });
+                col.color = g;
+                var r = go.GetComponent<ParticleSystemRenderer>();
+                r.sharedMaterial = mats["Dust"];
+                r.shadowCastingMode = ShadowCastingMode.Off; r.receiveShadows = false;
+                ps.Play();
+                n++;
+            }
+            log.Add($"{n} dust motes");
         }
 
         static int Floor(string mat, Vector3 at, float w, float h, float yaw, float lift, float? onTop = null)
@@ -719,6 +1095,27 @@ namespace BodycamHorror.EditorTools
                 if (first) { b = r.bounds; first = false; } else b.Encapsulate(r.bounds);
             }
             return b;
+        }
+
+        /// <summary>Drops `count` of a prefab at random clear spots of floor in the area (no collider: litter).</summary>
+        static int Scatter(string prefab, Rect area, int count, float clearance)
+        {
+            int placed = 0;
+            for (int tries = 0; placed < count && tries < count * 12; tries++)
+            {
+                var p = new Vector3(Mathf.Lerp(area.xMin + 0.3f, area.xMax - 0.3f, (float)rng.NextDouble()), 1.2f,
+                                    Mathf.Lerp(area.yMin + 0.3f, area.yMax - 0.3f, (float)rng.NextDouble()));
+                if (!Physics.Raycast(p, Vector3.down, out var hit, 2f, ~0, QueryTriggerInteraction.Ignore)) continue;
+                if (!hit.collider.name.StartsWith("Floor")) continue;   // on furniture, or outside the flat
+                if (Physics.OverlapSphere(hit.point + Vector3.up * (clearance + 0.03f), clearance, ~0, QueryTriggerInteraction.Ignore).Length > 0) continue;
+                var go = Put(prefab, hit.point, (float)rng.NextDouble() * 360f);
+                if (!go) return placed;
+                foreach (var c in go.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(c);
+                var wb = WorldBounds(go);
+                go.transform.position += Vector3.up * (hit.point.y + (hit.collider.name == "Floor" || hit.collider.name == "Floor_Room1" ? 0.002f : 0f) - wb.min.y);
+                placed++;
+            }
+            return placed;
         }
 
         /// <summary>Sets something on the shelf of a rack that is nearest below `height`.</summary>

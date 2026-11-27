@@ -55,6 +55,11 @@ namespace BodycamHorror.Enemies
         public float reactionDelay = 0.2f;
         [Tooltip("Seconds it keeps staring after the sting before it ducks away.")]
         public float holdAfterSting = 0.45f;
+        [Tooltip("Count Hold After Sting only while it is actually on screen (anywhere, nothing in between): the player " +
+                 "gets that long to look at it even if they glance away and back.")]
+        public bool holdOnlyWhileSeen = true;
+        [Tooltip("With Hold Only While Seen: it goes anyway after this many seconds since the sting (s).")]
+        public float maxHold = 1.5f;
         [Tooltip("Goes anyway if the player comes this close without looking (m).")]
         public float closeDistance = 2.2f;
         [Tooltip("Goes quietly if never seen for this long (s); 0 = waits for ever.")]
@@ -164,7 +169,7 @@ namespace BodycamHorror.Enemies
         Quaternion neckRest;
         AudioSource voice, feet, sting;
         PlayableGraph graph;
-        float timer, peekTimer, stepTimer, lightIntensity, runTime;
+        float timer, peekTimer, stepTimer, lightIntensity, runTime, holdElapsed;
         int waypoint;
         static AudioClip generatedStinger;
 
@@ -372,9 +377,10 @@ namespace BodycamHorror.Enemies
                     if (timer <= 0f) Sting();
                     break;
                 case Phase.Holding:
-                    timer -= dt;
+                    holdElapsed += dt;
+                    if (!holdOnlyWhileSeen || Seen(0f)) timer -= dt;   // the stare only runs down while it is looked at
                     if (flickerLight) Flicker();
-                    if (timer <= 0f) Flee();
+                    if (timer <= 0f || (holdOnlyWhileSeen && holdElapsed >= maxHold)) Flee();
                     break;
                 case Phase.Fleeing:
                     Run(dt);
@@ -620,7 +626,9 @@ namespace BodycamHorror.Enemies
 
         Vector3 LookPoint => head ? head.position : monster.transform.position + monster.transform.up * 1.5f;
 
-        bool Seen()
+        bool Seen() => Seen(viewMargin);
+
+        bool Seen(float margin)
         {
             if (!eye || !eye.isActiveAndEnabled) eye = Camera.main;
             if (!eye || !monster) return false;
@@ -628,14 +636,14 @@ namespace BodycamHorror.Enemies
             // comes out first, so a head half round the jamb counts too
             Vector3 outward = new Vector3(peekOffset.x, 0f, peekOffset.z);
             outward = outward.sqrMagnitude > 0.0001f ? outward.normalized : Vector3.zero;
-            return Visible(LookPoint) || Visible(LookPoint + outward * 0.09f) ||
-                   Visible(monster.transform.position + monster.transform.up * 1.2f);
+            return Visible(LookPoint, margin) || Visible(LookPoint + outward * 0.09f, margin) ||
+                   Visible(monster.transform.position + monster.transform.up * 1.2f, margin);
         }
 
-        bool Visible(Vector3 point)
+        bool Visible(Vector3 point, float margin)
         {
             Vector3 v = eye.WorldToViewportPoint(point);
-            if (v.z <= 0f || v.x < viewMargin || v.x > 1f - viewMargin || v.y < viewMargin * 0.5f || v.y > 1f - viewMargin * 0.5f) return false;
+            if (v.z <= 0f || v.x < margin || v.x > 1f - margin || v.y < margin * 0.5f || v.y > 1f - margin * 0.5f) return false;
 
             Vector3 from = eye.transform.position, dir = point - from;
             float distance = dir.magnitude;
@@ -659,6 +667,7 @@ namespace BodycamHorror.Enemies
         {
             phase = Phase.Holding;
             timer = holdAfterSting;
+            holdElapsed = 0f;
             if (silent) restoreTimer = Mathf.Max(restoreAfterSting, 0.01f);
             AudioClip clip = stinger ? stinger : generatedStinger ? generatedStinger : (generatedStinger = ProceduralAudio.ScareStinger());
             sting.PlayOneShot(clip, stingerVolume);

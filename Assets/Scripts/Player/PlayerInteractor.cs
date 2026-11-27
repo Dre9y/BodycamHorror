@@ -193,7 +193,7 @@ namespace BodycamHorror.Player
                 Vector3 to = pickup.Centre + Vector3.up * 0.02f - eye;
                 float distance = to.magnitude;
                 pickup.Limits(eye, pickupReach, pickupLookAngle, out float maxReach, out float maxAngle);   // more from its easy side
-                if (distance > maxReach || distance < 0.01f) continue;
+                if (distance > maxReach || distance < 0.01f || !pickup.LookingDown(forward)) continue;
                 float a = Vector3.Angle(forward, to);
                 if (a >= bestAngle || a >= maxAngle) continue;
                 // not through a wall or a crate

@@ -67,6 +67,8 @@ namespace BodycamHorror.UI
         {
             KeyPickup.Taken -= OnKey;
             WeaponPickup.Taken -= OnWeapon;
+            RenderPipelineManager.beginContextRendering -= HideHands;
+            foreach (var r in hiddenHands) if (r) r.enabled = true;
             if (open) Restore();
             if (grab) grab.Release();
             if (blurred) blurred.Release();
@@ -166,17 +168,28 @@ namespace BodycamHorror.UI
             age = 0f;
             fade = 0f;
             // the hands and gun are left out of that frame: taking a gun swaps the hands' pose that very frame, and
-            // frozen there, half-drawn, they showed through the blur as broken arms
-            var hidden = new List<Renderer>();
-            foreach (var r in FindObjectsByType<Renderer>(FindObjectsInactive.Exclude))
-                if (r.enabled && (r.renderingLayerMask & Player.ViewModelLighting.ViewModelLayer) != 0) { r.enabled = false; hidden.Add(r); }
+            // frozen there, half-drawn, they showed through the blur as broken arms. They are hidden as the frame starts
+            // rendering, not now: the new gun and its hands are switched on later this frame and were missed
+            hiddenHands.Clear();
+            RenderPipelineManager.beginContextRendering += HideHands;
             yield return new WaitForEndOfFrame();
+            RenderPipelineManager.beginContextRendering -= HideHands;
             Grab();
-            foreach (var r in hidden) if (r) r.enabled = true;
+            foreach (var r in hiddenHands) if (r) r.enabled = true;
+            hiddenHands.Clear();
             timeScaleBefore = Time.timeScale > 0f ? Time.timeScale : 1f;
             Time.timeScale = 0f;
             stage.gameObject.SetActive(true);
             cam.enabled = true;
+        }
+
+        readonly List<Renderer> hiddenHands = new List<Renderer>();
+
+        /// <summary>Switches off every drawn view-model renderer (hands, gun, held light) for the frame being grabbed.</summary>
+        void HideHands(ScriptableRenderContext context, List<Camera> cameras)
+        {
+            foreach (var r in FindObjectsByType<Renderer>(FindObjectsInactive.Exclude))
+                if (r.enabled && (r.renderingLayerMask & Player.ViewModelLighting.ViewModelLayer) != 0) { r.enabled = false; hiddenHands.Add(r); }
         }
 
         void Update()

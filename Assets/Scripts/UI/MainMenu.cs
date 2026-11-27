@@ -11,7 +11,7 @@ namespace BodycamHorror.UI
     /// Play: the words and the picture go down to black; then the lore comes up in white in the middle, stays
     /// ten seconds and fades out again, the music fading out with it (Enter / Space / click skips it). The first
     /// level loads behind all this and opens on black too (the wake-up cutscene), so it follows straight on.
-    /// Mouse, or keyboard / gamepad (up and down to pick, Enter / Space / A to choose, Escape / B back).
+    /// Mouse, or keyboard / gamepad (up and down to pick, Enter / A to choose, Escape / B back). Space does not choose.
     /// Drawn with IMGUI like the rest of the game's menus.
     /// </summary>
     [DefaultExecutionOrder(-1100)]   // before the pause menu reads Escape
@@ -26,6 +26,10 @@ namespace BodycamHorror.UI
         public string settingsLabel = "НАСТРОЙКИ";
         public string exitLabel = "ВЫХОД";
         public string backLabel = "НАЗАД";
+        [Tooltip("The same words in English (Loc: the language picked in the settings).")]
+        public string startLabelEn = "PLAY";
+        public string settingsLabelEn = "SETTINGS";
+        public string exitLabelEn = "QUIT";
         public Font titleFont;
         public Font itemFont;
         [Tooltip("Left edge of the title and items, as a share of the screen width.")]
@@ -57,6 +61,15 @@ namespace BodycamHorror.UI
             "Ты — тот самый полицейский, которого отправили разобраться.\n\n" +
             "Ты помнишь лестничную клетку. Что-то шевельнулось в темноте. Удар по голове.\n\n" +
             "А потом — ничего.";
+        [TextArea(6, 14)]
+        public string loreEn =
+            "Block 13.\n" +
+            "A nine-storey panel block on the edge of town.\n\n" +
+            "For a week the calls have not stopped: screaming behind the walls, " +
+            "the lights going out floor by floor, the tenants no longer opening their doors.\n\n" +
+            "You are the policeman they sent to sort it out.\n\n" +
+            "You remember the stairwell. Something moved in the dark. A blow to the head.\n\n" +
+            "And then — nothing.";
         [Tooltip("Black between the menu's words going and the lore appearing (s).")]
         public float loreGap = 0.6f;
         public float loreFadeIn = 1.5f;
@@ -67,6 +80,7 @@ namespace BodycamHorror.UI
         public float loreAfter = 0.4f;
         [Tooltip("Words beside the eye in the corner while the lore is up (SaveIndicator).")]
         public string saveLabel = "СОХРАНЕНИЕ";
+        public string saveLabelEn = "SAVING";
 
         [Header("Music")]
         public AudioClip music;
@@ -117,7 +131,6 @@ namespace BodycamHorror.UI
             down.AddBinding("<Gamepad>/leftStick/down");
             choose = new InputAction("MenuChoose", InputActionType.Button, "<Keyboard>/enter");
             choose.AddBinding("<Keyboard>/numpadEnter");
-            choose.AddBinding("<Keyboard>/space");
             choose.AddBinding("<Gamepad>/buttonSouth");
             back = new InputAction("MenuBack", InputActionType.Button, "<Keyboard>/escape");
             back.AddBinding("<Keyboard>/backspace");
@@ -174,7 +187,7 @@ namespace BodycamHorror.UI
             float loreOutStart = loreStart + loreFadeIn + loreHold;
             // Enter / Space / click skips the rest of the lore: it fades out from where it is
             if (state == State.Starting && skipAt < 0f && since > loreStart && since < loreOutStart
-                && (choose.WasPressedThisFrame() || (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)))
+                && (choose.WasPressedThisFrame() || (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame) || (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)))
                 skipAt = since;
             float loreEnd, m;   // m: how much of the music is left
             if (!hasLore)
@@ -211,7 +224,7 @@ namespace BodycamHorror.UI
                 if (!saveShown && since >= loreStart)
                 {
                     saveShown = true;
-                    SaveIndicator.Begin(saveLabel, SaveIndicator.NaturalFillSeconds, false, itemFont, SaveIndicator.NaturalFullSeconds);
+                    SaveIndicator.Begin(Loc.T(saveLabel, saveLabelEn), SaveIndicator.NaturalFillSeconds, false, itemFont, SaveIndicator.NaturalFullSeconds);
                 }
                 if (saveShown && !saveEnded && (loading == null || loading.progress >= 0.9f))
                 {
@@ -292,7 +305,7 @@ namespace BodycamHorror.UI
                 // the lore card: white on black in the middle, in a column narrow enough to read
                 float colW = Mathf.Min(w * 0.8f, h * 1.1f);
                 GUI.color = new Color(1f, 1f, 1f, loreAlpha);
-                GUI.Label(new Rect((w - colW) * 0.5f, h * 0.15f, colW, h * 0.7f), lore, loreStyle);
+                GUI.Label(new Rect((w - colW) * 0.5f, h * 0.15f, colW, h * 0.7f), Loc.T(lore, loreEn), loreStyle);
                 GUI.color = Color.white;
             }
             if (alpha <= 0f) return;
@@ -324,7 +337,7 @@ namespace BodycamHorror.UI
 
             if (page == Page.Main)
             {
-                string[] items = { startLabel, settingsLabel, exitLabel };
+                string[] items = { Loc.T(startLabel, startLabelEn), Loc.T(settingsLabel, settingsLabelEn), Loc.T(exitLabel, exitLabelEn) };
                 for (int i = 0; i < items.Length; i++)
                 {
                     float y = h * (itemsY + i * itemGap);

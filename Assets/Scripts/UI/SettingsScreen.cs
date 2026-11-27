@@ -21,7 +21,9 @@ namespace BodycamHorror.UI
         enum List { None, Resolution, DisplayMode }
         enum Mark { None, On, Off, Cycle, Drop }
 
-        static readonly string[] TabNames = { "Общее", "Графика", "Звук", "Управление" };
+        static string[] TabNames => Loc.English ? TabNamesEn : TabNamesRu;
+        static readonly string[] TabNamesRu = { "Общее", "Графика", "Звук", "Управление" };
+        static readonly string[] TabNamesEn = { "General", "Graphics", "Sound", "Controls" };
 
         static Tab tab = Tab.General;
         static List open;
@@ -81,7 +83,7 @@ namespace BodycamHorror.UI
             }
 
             Osd(W);
-            GUI.Label(R(65f, 137f, 400f, 16f), "Н А С Т Р О Й К И", kicker);
+            GUI.Label(R(65f, 137f, 400f, 16f), Loc.T("Н А С Т Р О Й К И", "S E T T I N G S"), kicker);
             Title();
             Tabs();
 
@@ -107,7 +109,7 @@ namespace BodycamHorror.UI
                 GUI.DrawTexture(new Rect(0f, (footY - 34.5f) * u, W, 5f * u), tear, ScaleMode.StretchToFill);
             GUI.Label(R(64f, footY - 8f, 60f, 16f), "CH 01", osd);
             GUI.Label(R(128f, footY - 8f, 20f, 16f), "/", osd);
-            GUI.Label(R(158f, footY - 8f, 80f, 16f), "БК-04", osd);
+            GUI.Label(R(158f, footY - 8f, 80f, 16f), Loc.T("БК-04", "BC-04"), osd);
 
             if (open != List.None) DrawList();
             if (pressed) open = List.None;
@@ -136,7 +138,7 @@ namespace BodycamHorror.UI
                 GUI.color = was;
             }
             GUI.Label(R(81f, 45f, 60f, 18f), "REC", osdRed);
-            GUI.Label(R(147f, 45f, 80f, 18f), "КАМ-04", osd);
+            GUI.Label(R(147f, 45f, 80f, 18f), Loc.T("КАМ-04", "CAM-04"), osd);
 
             double t = Time.realtimeSinceStartupAsDouble;
             int frames = (int)(t * 30.0);
@@ -190,7 +192,7 @@ namespace BodycamHorror.UI
             GUI.color = hover ? Red : Ink;
             GUI.Label(R(66f, y - 13f, 30f, 26f), "←", arrow);
             GUI.color = Ink;
-            GUI.Label(R(107f, y - 15f, 80f, 30f), "Назад", back);
+            GUI.Label(R(107f, y - 15f, 80f, 30f), Loc.T("Назад", "Back"), back);
             GUI.color = was;
             GUI.Label(R(175.5f, y - 8f, 70f, 16f), "[ ESC ]", key);
             return GUI.Button(hit, GUIContent.none, GUIStyle.none);
@@ -201,39 +203,45 @@ namespace BodycamHorror.UI
         static float General()
         {
             bool fps = GameSettings.ShowFps;
-            if (Row("Счётчик кадров", fps ? "Вкл" : "Выкл", fps ? Mark.On : Mark.Off, true, out _)) GameSettings.ShowFps = !fps;
+            if (Row(Loc.T("Счётчик кадров", "FPS counter"), fps ? Loc.T("Вкл", "On") : Loc.T("Выкл", "Off"), fps ? Mark.On : Mark.Off, true, out _)) GameSettings.ShowFps = !fps;
             bool ringing = GameSettings.EarRinging;
-            if (Row("Писк в ушах при страхе", ringing ? "Вкл" : "Выкл", ringing ? Mark.On : Mark.Off, true, out _)) GameSettings.EarRinging = !ringing;
+            if (Row(Loc.T("Писк в ушах при страхе", "Ear ringing when scared"), ringing ? Loc.T("Вкл", "On") : Loc.T("Выкл", "Off"), ringing ? Mark.On : Mark.Off, true, out _)) GameSettings.EarRinging = !ringing;
             int light = GameSettings.FlashlightColorIndex;
-            if (Row("Цвет фонарика", GameSettings.FlashlightColors[light].name, Mark.Cycle, true, out _)) GameSettings.FlashlightColorIndex = light + 1;
+            var lc = GameSettings.FlashlightColors[light];
+            if (Row(Loc.T("Цвет фонарика", "Flashlight colour"), Loc.T(lc.ru, lc.en), Mark.Cycle, true, out _)) GameSettings.FlashlightColorIndex = light + 1;
+            int lang = (int)GameSettings.Language;
+            if (Row(Loc.T("Язык", "Language"), Loc.Names[lang], Mark.Cycle, true, out _))
+                GameSettings.Language = (Loc.Language)((lang + 1) % Loc.Names.Length);
             return rowY;
         }
 
         static float Graphics()
         {
             var res = GameSettings.Resolution;
-            if (Row("Разрешение экрана", res.x + " × " + res.y, Mark.Drop, true, out var at)) Toggle(List.Resolution);
+            if (Row(Loc.T("Разрешение экрана", "Resolution"), res.x + " × " + res.y, Mark.Drop, true, out var at)) Toggle(List.Resolution);
             if (Event.current.type == EventType.Repaint) resolutionAt = at;
             int mode = GameSettings.DisplayModeIndex;
-            if (Row("Режим экрана", GameSettings.DisplayModes[mode].name, Mark.Drop, true, out at)) Toggle(List.DisplayMode);
+            var dm = GameSettings.DisplayModes[mode];
+            if (Row(Loc.T("Режим экрана", "Display mode"), Loc.T(dm.ru, dm.en), Mark.Drop, true, out at)) Toggle(List.DisplayMode);
             if (Event.current.type == EventType.Repaint) modeAt = at;
 
             int up = GameSettings.UpscalerIndex;
-            if (Row("Апскейлер", GameSettings.Upscalers[up].name, Mark.Cycle, true, out _))
+            var upName = GameSettings.Upscalers[up];
+            if (Row(Loc.T("Апскейлер", "Upscaler"), Loc.T(upName.ru, upName.en), Mark.Cycle, true, out _))
                 GameSettings.UpscalerIndex = (up + 1) % GameSettings.Upscalers.Length;
             int sc = GameSettings.RenderScaleIndex;
             var scale = GameSettings.RenderScales[sc];
-            int scStep = Stepper("Масштаб рендера", Mathf.RoundToInt(scale.scale * 100f) + "% " + scale.name);
+            int scStep = Stepper(Loc.T("Масштаб рендера", "Render scale"), Mathf.RoundToInt(scale.scale * 100f) + "% " + Loc.T(scale.ru, scale.en));
             if (scStep != 0) GameSettings.RenderScaleIndex = sc + scStep;
 
             bool vsync = GameSettings.VSync;
-            if (Row("Вертикальная синхронизация", vsync ? "Вкл" : "Выкл", vsync ? Mark.On : Mark.Off, true, out _)) GameSettings.VSync = !vsync;
+            if (Row(Loc.T("Вертикальная синхронизация", "V-Sync"), vsync ? Loc.T("Вкл", "On") : Loc.T("Выкл", "Off"), vsync ? Mark.On : Mark.Off, true, out _)) GameSettings.VSync = !vsync;
             int cap = GameSettings.FpsCap;
-            string capText = cap <= 0 ? "Без ограничения" : cap + " к/с";
-            if (Row("Ограничение кадров", vsync ? "По монитору" : capText, Mark.Cycle, !vsync, out _)) GameSettings.FpsCap = NextCap(cap);
+            string capText = cap <= 0 ? Loc.T("Без ограничения", "Unlimited") : cap + Loc.T(" к/с", " fps");
+            if (Row(Loc.T("Ограничение кадров", "Frame rate cap"), vsync ? Loc.T("По монитору", "Monitor rate") : capText, Mark.Cycle, !vsync, out _)) GameSettings.FpsCap = NextCap(cap);
 
             string text = UpscalerHint(up, scale.scale);
-            if (Application.isEditor) text += "\nРазрешение и режим экрана меняются в собранной игре.";
+            if (Application.isEditor) text += Loc.T("\nРазрешение и режим экрана меняются в собранной игре.", "\nResolution and display mode change only in a built game.");
             float h = hint.CalcHeight(new GUIContent(text), RowW * u) / u;
             GUI.Label(R(RowX, rowY + 2f, RowW, h), text, hint);
             return rowY + 2f + h;
@@ -245,21 +253,25 @@ namespace BodycamHorror.UI
             switch (GameSettings.Upscalers[upscaler].filter)
             {
                 case UnityEngine.Rendering.Universal.UpscalingFilterSelection.STP:
-                    return native ? "При 100% STP сглаживает края. Снизьте масштаб для большей частоты кадров."
-                                  : "STP: картинка считается в меньшем размере и восстанавливается по нескольким кадрам.";
+                    return native ? Loc.T("При 100% STP сглаживает края. Снизьте масштаб для большей частоты кадров.",
+                                         "At 100% STP smooths the edges. Lower the scale for a higher frame rate.")
+                                  : Loc.T("STP: картинка считается в меньшем размере и восстанавливается по нескольким кадрам.",
+                                         "STP: the picture is rendered smaller and rebuilt from several frames.");
                 case UnityEngine.Rendering.Universal.UpscalingFilterSelection.FSR:
-                    return native ? "FSR 1.0 работает только при масштабе ниже 100%."
-                                  : "FSR 1.0: картинка считается в меньшем размере и растягивается с подчёркиванием резкости.";
+                    return native ? Loc.T("FSR 1.0 работает только при масштабе ниже 100%.", "FSR 1.0 works only below 100% scale.")
+                                  : Loc.T("FSR 1.0: картинка считается в меньшем размере и растягивается с подчёркиванием резкости.",
+                                         "FSR 1.0: the picture is rendered smaller and stretched with extra sharpening.");
                 default:
-                    return native ? "Игра рисуется в полном разрешении."
-                                  : "Без апскейлера уменьшенная картинка просто растягивается: будет мыльно. Выберите STP или FSR.";
+                    return native ? Loc.T("Игра рисуется в полном разрешении.", "The game is rendered at full resolution.")
+                                  : Loc.T("Без апскейлера уменьшенная картинка просто растягивается: будет мыльно. Выберите STP или FSR.",
+                                         "Without an upscaler the smaller picture is simply stretched and looks blurry. Pick STP or FSR.");
             }
         }
 
         static float Sound()
         {
             float v = GameSettings.MasterVolume;
-            int step = Stepper("Общая громкость", Mathf.RoundToInt(v * 100f) + "%");
+            int step = Stepper(Loc.T("Общая громкость", "Master volume"), Mathf.RoundToInt(v * 100f) + "%");
             if (step != 0) GameSettings.MasterVolume = Mathf.Round(v * 10f + step) / 10f;
             return rowY;
         }
@@ -267,11 +279,11 @@ namespace BodycamHorror.UI
         static float Controls()
         {
             float s = GameSettings.MouseSensitivity;
-            float picked = Slider("Чувствительность обзора", s, 0.1f, 3f, s.ToString("0.00") + "×");
+            float picked = Slider(Loc.T("Чувствительность обзора", "Look sensitivity"), s, 0.1f, 3f, s.ToString("0.00") + "×");
             picked = Mathf.Round(picked * 20f) / 20f;   // steps of 0.05
             if (!Mathf.Approximately(picked, s)) GameSettings.MouseSensitivity = picked;
             bool invert = GameSettings.InvertY;
-            if (Row("Инверсия по вертикали", invert ? "Вкл" : "Выкл", invert ? Mark.On : Mark.Off, true, out _)) GameSettings.InvertY = !invert;
+            if (Row(Loc.T("Инверсия по вертикали", "Invert vertical look"), invert ? Loc.T("Вкл", "On") : Loc.T("Выкл", "Off"), invert ? Mark.On : Mark.Off, true, out _)) GameSettings.InvertY = !invert;
             return rowY;
         }
 
@@ -301,7 +313,7 @@ namespace BodycamHorror.UI
             }
             current = GameSettings.DisplayModeIndex;
             var modes = new string[GameSettings.DisplayModes.Length];
-            for (int i = 0; i < modes.Length; i++) modes[i] = GameSettings.DisplayModes[i].name;
+            for (int i = 0; i < modes.Length; i++) modes[i] = Loc.T(GameSettings.DisplayModes[i].ru, GameSettings.DisplayModes[i].en);
             return modes;
         }
 

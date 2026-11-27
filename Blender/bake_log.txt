@@ -1,15 +1,6 @@
 DONE
-Wardrobe: 36 objs, 4 mats, 239.5s
-Sideboard: 58 objs, 7 mats, 351.4s
-Bed: 20 objs, 4 mats, 155.5s
-CRT_TV: 29 objs, 5 mats, 113.5s
-TV_Stand: 17 objs, 4 mats, 72.4s
-DiningTable: 10 objs, 2 mats, 47.5s
-CoffeeTable: 12 objs, 3 mats, 55.1s
-Radiator_Cast: 55 objs, 2 mats, 209.4s
-WallCarpet: 78 objs, 3 mats, 508.1s
-Rug_Floor: 71 objs, 2 mats, 479.4s
-Curtains: 25 objs, 2 mats, 187.2s
-Chandelier: 12 objs, 2 mats, 54.9s
-FlatDecor: 48 objs, 18 mats, 351.5s
-FlatFurniture: 77 objs, 6 mats, 538.1s
+Crates: 82 objs, 4 mats, 451.1s
+Fixtures: 24 objs, 7 mats, 142.8s
+SoftGoods: 15 objs, 2 mats, 100.1s
+Debris: 38 objs, 8 mats, 213.6s
+WindowFrame: 83 objs, 5 mats, 420.4s

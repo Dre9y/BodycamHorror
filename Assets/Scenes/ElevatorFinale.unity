@@ -520,6 +520,16 @@ MonoBehaviour:
     fadeOut: 0.05
     loop: 1
     gunshot: 0
+  - name: Drone
+    clip: {fileID: 8300000, guid: e614a6559d7da344e9ca04aedc83375b, type: 3}
+    frame: 0
+    from: 0
+    length: 0
+    volume: 0.35
+    fadeIn: 2
+    fadeOut: 0.05
+    loop: 1
+    gunshot: 0
   - name: Doors closing
     clip: {fileID: 8300000, guid: 37097c7691f73a44f9e2180e5ea2b6e0, type: 3}
     frame: 15
@@ -548,6 +558,16 @@ MonoBehaviour:
     volume: 1
     fadeIn: 0
     fadeOut: 0.15
+    loop: 0
+    gunshot: 0
+  - name: Riser
+    clip: {fileID: 8300000, guid: 4bc3ccc88206b0f43b0cbe4ade4dc9a6, type: 3}
+    frame: 47
+    from: 3.6
+    length: 5
+    volume: 0.8
+    fadeIn: 0.4
+    fadeOut: 0.03
     loop: 0
     gunshot: 0
   - name: Bang
@@ -730,16 +750,6 @@ MonoBehaviour:
     fadeOut: 0.05
     loop: 0
     gunshot: 0
-  - name: Lift ride
-    clip: {fileID: 8300000, guid: 9f5a2f9ae84a269459ac84f16ebf4f03, type: 3}
-    frame: 298
-    from: 3.6
-    length: 0
-    volume: 0.85
-    fadeIn: 0
-    fadeOut: 0.05
-    loop: 0
-    gunshot: 0
   - name: Lift hum
     clip: {fileID: 8300000, guid: 16cae9b744e7de6468ee7c1ea841ffd1, type: 3}
     frame: 296
@@ -747,6 +757,16 @@ MonoBehaviour:
     length: 0
     volume: 0.5
     fadeIn: 1.5
+    fadeOut: 0.05
+    loop: 0
+    gunshot: 0
+  - name: Lift ride
+    clip: {fileID: 8300000, guid: 9f5a2f9ae84a269459ac84f16ebf4f03, type: 3}
+    frame: 298
+    from: 3.6
+    length: 0
+    volume: 0.85
+    fadeIn: 0
     fadeOut: 0.05
     loop: 0
     gunshot: 0
@@ -1180,6 +1200,7 @@ GameObject:
   m_Component:
   - component: {fileID: 276735593}
   - component: {fileID: 276735594}
+  - component: {fileID: 276735595}
   m_Layer: 0
   m_Name: Landing_Light
   m_TagString: Untagged
@@ -1267,6 +1288,35 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
+--- !u!114 &276735595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 276735592}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!64 &298267439
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -1409,6 +1459,7 @@ GameObject:
   m_Component:
   - component: {fileID: 414986491}
   - component: {fileID: 414986492}
+  - component: {fileID: 414986493}
   m_Layer: 0
   m_Name: Cab_Light
   m_TagString: Untagged
@@ -1496,6 +1547,35 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
+--- !u!114 &414986493
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 414986490}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!64 &432475873
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -1878,6 +1958,32 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &811492160
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1636770593}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bf2fc2f613433fc4d8e0c84aaed341a1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BodycamHorror.Cutscenes.EndTitles
+  cutscene: {fileID: 67321470}
+  endRu: "\u041A\u041E\u041D\u0415\u0426"
+  endEn: END
+  question: '?'
+  endFont: {fileID: 12800000, guid: 79a35895686b5344a9a3fbdf356bec88, type: 3}
+  endColor: {r: 0.82, g: 0.78, b: 0.72, a: 1}
+  sound: {fileID: 8300000, guid: ec6cac518e9da724ba63be44f39f2794, type: 3}
+  volume: 0.9
+  blackBefore: 0.9
+  rippleTime: 0.7
+  questionDelay: 2.2
+  questionRippleTime: 0.45
+  settledRipple: 0.12
+  endSize: 0.16
 --- !u!64 &857493838
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -3255,6 +3361,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: c3079b1babf7f60498cde43cb65056d9, type: 3}
       insertIndex: -1
       addedObject: {fileID: 67321470}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: c3079b1babf7f60498cde43cb65056d9, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 811492160}
     - targetCorrespondingSourceObject: {fileID: -394657201882025355, guid: c3079b1babf7f60498cde43cb65056d9, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1636770710}
@@ -4494,6 +4603,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1815450361}
   - component: {fileID: 1815450362}
+  - component: {fileID: 1815450363}
   m_Layer: 0
   m_Name: Cab_Spill_OnInfected
   m_TagString: Untagged
@@ -4581,6 +4691,35 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
+--- !u!114 &1815450363
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1815450360}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!64 &1830016317
 MeshCollider:
   m_ObjectHideFlags: 0

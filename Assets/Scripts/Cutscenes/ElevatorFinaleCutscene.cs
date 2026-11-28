@@ -450,7 +450,9 @@ namespace BodycamHorror.Cutscenes
                 src.time = Mathf.Clamp(cue.from, 0f, cue.clip.length - 0.01f);
                 src.volume = cue.fadeIn > 0f ? 0f : cue.volume;
                 src.Play();
-                voices.Add(new Voice { cue = cue, source = src, started = time });
+                // timed from the cue's own frame, not from when this frame came round: after a hitch a cue still ends
+                // where it was laid out (the riser breaks off on the shot, not a few frames after it)
+                voices.Add(new Voice { cue = cue, source = src, started = Mathf.Min(time, cue.frame / Fps) });
             }
 
             float master = fade ? 1f - fade.alpha : 1f;

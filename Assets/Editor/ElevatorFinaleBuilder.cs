@@ -209,6 +209,12 @@ namespace BodycamHorror.EditorTools
             cut.cabIntensity = 1.6f;
             cut.landingIntensity = 0.6f;
 
+            // END? on the black once it is over
+            var titles = root.AddComponent<EndTitles>();
+            titles.cutscene = cut;
+            titles.endFont = AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/RubikDistressed-Regular.ttf");
+            titles.sound = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Finale/end_titles.wav");
+
             EditorSceneManager.SaveScene(scene, ScenePath);
             Debug.Log("Elevator finale built: " + ScenePath);
         }
@@ -262,12 +268,17 @@ namespace BodycamHorror.EditorTools
             var cues = new List<ElevatorFinaleCutscene.SoundCue>
             {
                 Cue("Cab buzz", Audio("Assets/Audio/Ambience/hum_fluorescent.mp3"), 0, 0f, 0f, 0.22f, loop: true),
+                // a low dark drone under the whole scene
+                Cue("Drone", Audio("Assets/Audio/Finale/finale_hum.wav"), 0, 0f, 0f, 0.35f, loop: true, fadeIn: 2f),
                 // doors start at 15 and bite on the arm at 47: line the clip's thump (2.0 s) up with the bite
                 Cue("Doors closing", door, 15, Lead(2.0f, 15, 47), 0f, 0.9f),
                 Cue("Groan", Audio("Assets/Audio/Monster/zombie_groan.wav"), 40, 0f, 2.6f, 0.8f),
 
                 // the arm slams through and the leaves bang on it; the motor keeps shoving, the arm thrashes
                 Cue("Slam: arm in", slam, 46, 0.2f, 1.6f, 1f),
+                // a reversed metal swell climbing from the bite to the shot, where it breaks off dead: the clip ends on
+                // its peak (7.95 s), and 150 frames at 1.15x are 4.35 s, so it starts 3.6 s in
+                Cue("Riser", Audio("Assets/Audio/Finale/finale_riser.wav"), 47, 3.6f, (197 - 47) / 30f, 0.8f, fadeIn: 0.4f, fadeOut: 0.03f),
                 Cue("Bang", bang, 58, 0.65f, 0.6f, 0.75f),
                 Cue("Doors bite", door, 72, 1.85f, 0.6f, 0.55f),
                 Cue("Bang", bang, 84, 1.4f, 0.6f, 0.7f),
@@ -297,11 +308,12 @@ namespace BodycamHorror.EditorTools
         }
 
         static ElevatorFinaleCutscene.SoundCue Cue(string name, AudioClip clip, int frame, float from, float length,
-                                                    float volume, bool loop = false, float fadeIn = 0f, bool gunshot = false)
+                                                    float volume, bool loop = false, float fadeIn = 0f, bool gunshot = false,
+                                                    float fadeOut = -1f)
             => new ElevatorFinaleCutscene.SoundCue
             {
                 name = name, clip = clip, frame = frame, from = from, length = length, volume = volume,
-                loop = loop, fadeIn = fadeIn, gunshot = gunshot, fadeOut = length > 0f ? 0.15f : 0.05f,
+                loop = loop, fadeIn = fadeIn, gunshot = gunshot, fadeOut = fadeOut >= 0f ? fadeOut : length > 0f ? 0.15f : 0.05f,
             };
 
         /// <summary>Loads a clip, set up so a cue can start it from the middle (mono, decoded on load).</summary>

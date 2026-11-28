@@ -118,7 +118,8 @@ namespace BodycamHorror.Environment
             // the player) and not the surface itself, so no highlight of its own shows on a glossy floor.
             // The virtual lamp sits *behind* the surface: a patch of light has no hot point, so nothing standing in
             // the pool (an enemy, the player's legs) gets blown out the way it would next to a point source.
-            Vector3 target = hit.point - hit.normal * standOff;
+            depth = BehindDepth(hit.point, hit.normal);
+            Vector3 target = hit.point - hit.normal * depth;
             Vector3 normal = hit.normal;
             // a jump to a far surface (the beam off an edge, onto the far wall) fades out, moves, and fades back in,
             // instead of the patch of light sliding across the room
@@ -145,11 +146,67 @@ namespace BodycamHorror.Environment
             bounce.intensity = source.intensity * strength * 2f * cone * lum * level;
             // stays local: a pool of reflected light around the lit patch, not a fill for the whole room
             float far = maxRange > 0f ? Mathf.Min(maxRange, source.range) : source.range;
-            bounce.range = Mathf.Clamp((hit.distance + 2f) * rangeScale, Mathf.Min(2.5f, far), far) + standOff;
+            float range = Mathf.Clamp((hit.distance + 2f) * rangeScale, Mathf.Min(2.5f, far), far);
+            // the bounce has no shadows: kept inside the room it is in, or it shines through the walls next door
+            range = Mathf.Min(range, RoomReach(hit.point, hit.normal, range));
+            bounce.range = range + depth;
             bounce.enabled = level > 0.01f;
         }
 
         static readonly RaycastHit[] hits = new RaycastHit[16];
+
+        /// <summary>
+        /// How far behind the lit surface the virtual lamp may sit: <see cref="standOff"/>, but never out through the
+        /// back of a thin wall or floor, where it would sit in the room next door and light it (it has no shadows).
+        /// </summary>
+        float BehindDepth(Vector3 point, Vector3 normal)
+        {
+            Vector3 back = point - normal * standOff;
+            // from the far spot back towards the surface: hitting something first means that spot is past the
+            // wall's other face, in open space; the wall is only (standOff - distance) thick
+            if (Physics.Raycast(back, normal, out RaycastHit face, standOff - 0.005f, mask & ~(1 << 2), QueryTriggerInteraction.Ignore))
+                return Mathf.Max(0.01f, (standOff - face.distance) * 0.7f);
+            return standOff;
+        }
+
+        float depth;
+        Vector3 reachAt;
+        float reachCached = -1f;
+        static readonly float[] spokes = new float[24];
+
+        /// <summary>
+        /// How far the room reaches from the lit patch: the farthest of the nearest surfaces in a fan of directions
+        /// out of it (along the surface and up off it), from about head height above a floor. Everything the bounce
+        /// may light is within that, so the light stops at the room's own walls. Cached while the patch stays put.
+        /// </summary>
+        float RoomReach(Vector3 point, Vector3 normal, float limit)
+        {
+            if (reachCached >= 0f && (point - reachAt).sqrMagnitude < 0.0625f) return reachCached;
+            reachAt = point;
+            Vector3 origin = point + normal * 0.6f;
+            Vector3 t1 = Vector3.Cross(normal, Mathf.Abs(normal.y) > 0.9f ? Vector3.forward : Vector3.up).normalized;
+            Vector3 t2 = Vector3.Cross(normal, t1);
+            int roomMask = mask & ~(1 << 2);   // not the player or the living infected
+            const int Spokes = 12;
+            int n = 0;
+            for (int ring = 0; ring < 2; ring++)
+            {
+                float lift = ring == 0 ? 0.15f : 0.6f;   // nearly along the surface, then tilted up off it
+                for (int i = 0; i < Spokes; i++)
+                {
+                    float a = (i + ring * 0.5f) * Mathf.PI * 2f / Spokes;
+                    Vector3 dir = ((t1 * Mathf.Cos(a) + t2 * Mathf.Sin(a)) + normal * lift).normalized;
+                    spokes[n++] = Physics.Raycast(origin, dir, out RaycastHit h, limit, roomMask, QueryTriggerInteraction.Ignore) ? h.distance : limit;
+                }
+            }
+            // not the very farthest: down a corridor one or two spokes run long, and the side rooms within that
+            // distance would still be lit through their walls. Three quarters of the way out is the room's size.
+            System.Array.Sort(spokes, 0, n);
+            float reach = spokes[Mathf.Min(n - 1, Mathf.CeilToInt(n * 0.75f) - 1)];
+            float up = Physics.Raycast(origin, normal, out RaycastHit top, limit, roomMask, QueryTriggerInteraction.Ignore) ? top.distance : limit;
+            reachCached = Mathf.Clamp(Mathf.Max(reach, Mathf.Min(up, 3f)) + 0.6f + 0.3f, 1.5f, limit);
+            return reachCached;
+        }
 
         /// <summary>
         /// Nearest hit on level geometry. Enemies, props with rigidbodies and anything animated are skipped: they are

@@ -3257,6 +3257,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5445103882643380038, guid: 316d8e6877f15694488c31e212f896b9, type: 3}
+      propertyPath: unlockClip
+      value: 
+      objectReference: {fileID: 8300000, guid: 61db8ede22985984e979d984dfebdd9f, type: 3}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -3543,6 +3547,7 @@ MonoBehaviour:
   promptHeight: 0.22
   reach: 0
   lookAngle: 0
+  minLookDown: 0
   easySide: {x: 0, y: 0, z: 0}
   easySideReach: 0.5
   easySideLookAngle: 14
@@ -3550,7 +3555,7 @@ MonoBehaviour:
   glow: {fileID: 1305745701}
   glowPulse: 0.18
   glowPeriod: 2.6
-  pickupClip: {fileID: 0}
+  pickupClip: {fileID: 8300000, guid: f43c4dcf9f76b61418fabd4fe4b391fe, type: 3}
   volume: 0.7
 --- !u!1 &364487794
 GameObject:
@@ -9051,6 +9056,7 @@ MonoBehaviour:
   allowCrouch: 0
   allowJump: 0
   allowBackDive: 0
+  allowClimb: 0
   diveSpeed: 7.5
   diveHeight: 0.55
   diveCooldown: 0.4
@@ -9092,6 +9098,8 @@ MonoBehaviour:
   cornerSlipLookAhead: 0.25
   cornerSlipSpeed: 2
   cornerSlipMaxSpeed: 7
+  maxStepHeight: 0.12
+  stumbleLiftsOver: 0
   wallBumpMinSpeed: 7.2
   stumbleMinSpeed: 6.5
   stumbleMaxObstacleHeight: 0.65
@@ -9223,7 +9231,6 @@ MonoBehaviour:
   neckBelow: 0.12
   lyingHipHeight: 0.12
   hiddenBones: 0a0000000b0000000c000000i
-  castShadows: 1
   stencilShader: {fileID: 4800000, guid: b405c4bc00152fd4dafe5981ad12e0c4, type: 3}
   idle: {fileID: 7400000, guid: b32ce0c7db89fe94cbbcd4bde2b10358, type: 2}
   walkForward: {fileID: 7400000, guid: dfa2a37411e3777408e079e15e4232ab, type: 2}
@@ -9953,6 +9960,7 @@ MonoBehaviour:
   promptHeight: 0.15
   reach: 0
   lookAngle: 0
+  minLookDown: 0
   easySide: {x: 0, y: 0, z: 0}
   easySideReach: 0.5
   easySideLookAngle: 14
@@ -9960,7 +9968,7 @@ MonoBehaviour:
   glow: {fileID: 1207846855}
   glowPulse: 0.18
   glowPeriod: 2.6
-  pickupClip: {fileID: 0}
+  pickupClip: {fileID: 8300000, guid: eea8feeeac811c643b25812e0dec3a70, type: 3}
   volume: 0.7
 --- !u!1 &974915231
 GameObject:
@@ -11508,6 +11516,17 @@ MonoBehaviour:
   pumpTravel: 0.09
   pumpDelay: 0.16
   pumpTime: 0.34
+  recoilBoost: 1.55
+  cameraBoost: 1.7
+  flashBoost: 2.6
+  flashRangeBoost: 1.8
+  flashSizeBoost: 1.9
+  flashDurationBoost: 1.6
+  ownEchoTail: 0.9
+  spreadBoost: 1.3
+  muzzleSparks: 16
+  muzzleEmbers: 5
+  muzzleSmoke: 4
   modelPrefab: {fileID: 1615849217302968901, guid: 391819f09820ad9478ae665c649c63fb, type: 3}
   modelScale: 1
   modelEuler: {x: 0, y: -90, z: 0}
@@ -14084,6 +14103,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Door_Locked
       objectReference: {fileID: 0}
+    - target: {fileID: 7662507879149287255, guid: c6099cd1c78149e4c9ee7e45f12b8a00, type: 3}
+      propertyPath: unlockClip
+      value: 
+      objectReference: {fileID: 8300000, guid: 61db8ede22985984e979d984dfebdd9f, type: 3}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -18978,6 +19001,7 @@ MonoBehaviour:
   promptHeight: 0.22
   reach: 0
   lookAngle: 0
+  minLookDown: 0
   easySide: {x: 0, y: 0, z: 0}
   easySideReach: 0.5
   easySideLookAngle: 14
@@ -18985,7 +19009,7 @@ MonoBehaviour:
   glow: {fileID: 928743887}
   glowPulse: 0.18
   glowPeriod: 2.6
-  pickupClip: {fileID: 0}
+  pickupClip: {fileID: 8300000, guid: e124a9795322d684db214389c9774525, type: 3}
   volume: 0.7
 --- !u!1 &1738946987
 GameObject:

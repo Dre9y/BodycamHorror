@@ -46,6 +46,13 @@ namespace BodycamHorror.UI
         Color beamColor = Color.white;
         static Mesh beamMesh;
         static Material beamMat;
+        // the key and rim lights with their full intensity, dimmed for a light item (see SetStudioLight)
+        readonly List<(Light light, float full)> studio = new List<(Light light, float full)>();
+        // linear brightness the item's lightest parts may reach on the LDR stage before the studio light is dimmed
+        // (about 0.86 on screen: bright, not clipped), and the least the key and rim may be dimmed to
+        // share of the studio light for a key: what metering the flat keys' tags once gave (their brightest channel
+        // at about 0.7 linear: bright, not clipped)
+        const float KeyStudioLight = 0.37f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Create()
@@ -72,11 +79,67 @@ namespace BodycamHorror.UI
             if (open) Restore();
             if (grab) grab.Release();
             if (blurred) blurred.Release();
+            foreach (var satin in satinCopies.Values) if (satin) Destroy(satin);
+            satinCopies.Clear();
+            if (satinMap) Destroy(satinMap);
             if (Instance == this) Instance = null;
         }
 
         // keys sit further off than guns: close up, a little key filled the screen
-        void OnKey(KeyPickup key, GameObject player) => Show(key.gameObject, key.showcaseEuler, 0.7f);
+        void OnKey(KeyPickup key, GameObject player)
+        {
+            Show(key.gameObject, key.showcaseEuler, 0.7f, satin: true);
+        }
+
+        // per showcase, not static: Enter Play Mode runs without a domain reload here, so a static cache outlived the
+        // play session and handed out destroyed materials the next time, and the key was drawn error-purple
+        readonly Dictionary<Material, Material> satinCopies = new Dictionary<Material, Material>();
+        Texture2D satinMap;
+
+        /// <summary>
+        /// A key is polished metal: on this stage, with nothing around it to reflect, a mirror finish came out black
+        /// with a pin-prick highlight. Its showcase copy gets a satin, half-metal finish (the scene's own key is left
+        /// alone), so the studio light spreads over the metal and it reads as steel. Only properties change, never the
+        /// shader keywords, so the copy uses the very shader variant the key already has (no variant a build lacks).
+        /// </summary>
+        void Satin(Transform it)
+        {
+            if (!satinMap)
+            {
+                // metallic 0.35 (R), smoothness 0.5 (A): read as data, not colour
+                satinMap = new Texture2D(1, 1, TextureFormat.RGBA32, false, true) { name = "Showcase satin metal" };
+                satinMap.SetPixel(0, 0, new Color(0.35f, 0f, 0f, 0.5f));
+                satinMap.Apply(false, true);
+            }
+            foreach (var r in it.GetComponentsInChildren<MeshRenderer>())
+            {
+                var mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    Material m = mats[i];
+                    if (!m || !m.HasProperty("_Smoothness")) continue;
+                    if (!satinCopies.TryGetValue(m, out Material satin) || !satin)
+                    {
+                        satin = new Material(m) { name = m.name + " (showcase satin)" };
+                        // pure metal has no diffuse colour of its own, only reflections, and there is nothing here
+                        // to reflect: half-metal, half-gloss, so the studio light shows its colour and its shape
+                        if (satin.IsKeywordEnabled("_METALLICSPECGLOSSMAP") && satin.HasProperty("_MetallicGlossMap"))
+                        {
+                            satin.SetTexture("_MetallicGlossMap", satinMap);
+                            satin.SetFloat("_Smoothness", 1f);   // scales the map's alpha
+                        }
+                        else
+                        {
+                            if (satin.HasProperty("_Metallic")) satin.SetFloat("_Metallic", 0.35f);
+                            satin.SetFloat("_Smoothness", 0.5f);
+                        }
+                        satinCopies[m] = satin;
+                    }
+                    mats[i] = satin;
+                }
+                r.sharedMaterials = mats;
+            }
+        }
         void OnWeapon(WeaponPickup pickup, GameObject player)
         {
             // the weapon light is shown as it will be carried: fitted under the pistol
@@ -147,15 +210,17 @@ namespace BodycamHorror.UI
 
         /// <summary>Shows a copy of <paramref name="source"/>'s meshes. <paramref name="euler"/>: its pose to the camera
         /// (zero: turned to show its broad side). <paramref name="beams"/>: a spot light on it that is on is shown as its beam,
-        /// the item small and off to the left.</summary>
-        public void Show(GameObject source, Vector3 euler = default, float size = 1f, bool beams = true)
+        /// the item small and off to the left. <paramref name="satin"/>: a key, shown with a satin finish in a dimmer light.</summary>
+        public void Show(GameObject source, Vector3 euler = default, float size = 1f, bool beams = true, bool satin = false)
         {
             if (!source || open) return;
             BuildStage();
             if (item) Destroy(item.gameObject);
             item = CopyMeshes(source, beams);
             if (!item) return;
+            if (satin) Satin(item);
             Frame(item, euler, size);
+            SetStudioLight(satin ? KeyStudioLight : 1f);
             AddBeams(item);
             StartCoroutine(Open());
         }
@@ -376,6 +441,18 @@ namespace BodycamHorror.UI
             l.innerSpotAngle = angle * 0.4f;
             l.shadows = LightShadows.None;
             go.AddComponent<NoBounce>();
+            if (name != "Fill") studio.Add((l, intensity));
+        }
+
+        /// <summary>
+        /// The stage has no post-processing (no tonemapping), and its light was set for dark gunmetal: a key on a
+        /// bright orange tag came out blown, the tag a flat slab with a burnt highlight. A key gets the key and rim
+        /// at <see cref="KeyStudioLight"/> of full. (This was once metered by rendering the item and reading the
+        /// pixels back, but a synchronous render + readback in the end-of-frame coroutine could hang the editor.)
+        /// </summary>
+        void SetStudioLight(float share)
+        {
+            foreach (var (light, full) in studio) if (light) light.intensity = full * share;
         }
 
         /// <summary>The source's static and skinned meshes, as they look now, rebuilt under a fresh object (no scripts,
@@ -426,6 +503,9 @@ namespace BodycamHorror.UI
             foreach (var l in source.GetComponentsInChildren<Light>())
             {
                 if (!beams || !l.enabled || l.type != LightType.Spot) continue;
+                // the soft bounce a BounceLight hangs under the pickup's glow is not a beam: without this a shotgun
+                // was shown small and off to the left, like a torch
+                if (l.transform.parent && l.transform.parent.GetComponent<Environment.BounceLight>()) continue;
                 var go = new GameObject("Beam");
                 go.transform.SetParent(root, false);
                 Matrix4x4 m = toLocal * l.transform.localToWorldMatrix;

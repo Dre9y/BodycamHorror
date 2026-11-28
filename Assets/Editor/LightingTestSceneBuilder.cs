@@ -557,6 +557,7 @@ namespace BodycamHorror.EditorTools
             component.openClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_open.wav");
             component.closeClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_close.wav");
             component.shutClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_shut.wav");
+            component.unlockClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_unlock.mp3");
             component.openTime = 1.5f;   // as long as the recorded creak (1.6 s), so sound and swing end together
             component.volume = 0.4f;
 

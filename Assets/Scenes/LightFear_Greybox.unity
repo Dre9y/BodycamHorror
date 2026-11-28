@@ -33521,7 +33521,6 @@ MonoBehaviour:
   gap: 1.4
   landOffset: {x: 0.3, y: 0, z: 2.1}
   landYaw: 12
-  landFaceUp: 1
   flightTime: 0.45
   arcHeight: 0.3
   bounceHeight: 0.04
@@ -63886,6 +63885,8 @@ MonoBehaviour:
   cornerSlipLookAhead: 0.25
   cornerSlipSpeed: 2
   cornerSlipMaxSpeed: 7
+  maxStepHeight: 0.12
+  stumbleLiftsOver: 0
   wallBumpMinSpeed: 7.2
   stumbleMinSpeed: 6.5
   stumbleMaxObstacleHeight: 0.65
@@ -64017,7 +64018,6 @@ MonoBehaviour:
   neckBelow: 0.12
   lyingHipHeight: 0.12
   hiddenBones: 0a0000000b0000000c000000i
-  castShadows: 1
   stencilShader: {fileID: 4800000, guid: b405c4bc00152fd4dafe5981ad12e0c4, type: 3}
   idle: {fileID: 7400000, guid: b32ce0c7db89fe94cbbcd4bde2b10358, type: 2}
   walkForward: {fileID: 7400000, guid: dfa2a37411e3777408e079e15e4232ab, type: 2}
@@ -91640,6 +91640,7 @@ MonoBehaviour:
   levelLights: {fileID: 1771375209}
   bashDelay: 1.6
   blackoutDelay: 0.7
+  attackAfterBlackout: 1
   torchShotsToWake: 2
   slam: {fileID: 8300000, guid: 50615a8b899e46949b4587916cc6f096, type: 3}
   slamVolume: 1
@@ -103353,6 +103354,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5445103882643380038, guid: 316d8e6877f15694488c31e212f896b9, type: 3}
+      propertyPath: unlockClip
+      value: 
+      objectReference: {fileID: 8300000, guid: 61db8ede22985984e979d984dfebdd9f, type: 3}
     - target: {fileID: 5445103882643380038, guid: 316d8e6877f15694488c31e212f896b9, type: 3}
       propertyPath: enemiesCanOpen
       value: 0
@@ -120494,6 +120499,7 @@ MonoBehaviour:
   promptHeight: 0.22
   reach: 0
   lookAngle: 0
+  minLookDown: 0
   easySide: {x: 0, y: 0, z: 0}
   easySideReach: 0.5
   easySideLookAngle: 14
@@ -120501,7 +120507,7 @@ MonoBehaviour:
   glow: {fileID: 2126061844}
   glowPulse: 0.18
   glowPeriod: 2.6
-  pickupClip: {fileID: 0}
+  pickupClip: {fileID: 8300000, guid: e124a9795322d684db214389c9774525, type: 3}
   volume: 0.7
 --- !u!4 &1725165514
 Transform:
@@ -145361,6 +145367,10 @@ PrefabInstance:
       propertyPath: locked
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 5445103882643380038, guid: 316d8e6877f15694488c31e212f896b9, type: 3}
+      propertyPath: unlockClip
+      value: 
+      objectReference: {fileID: 8300000, guid: 61db8ede22985984e979d984dfebdd9f, type: 3}
     - target: {fileID: 5445103882643380038, guid: 316d8e6877f15694488c31e212f896b9, type: 3}
       propertyPath: enemiesCanOpen
       value: 0

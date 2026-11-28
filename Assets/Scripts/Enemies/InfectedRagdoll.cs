@@ -250,6 +250,22 @@ namespace BodycamHorror.Enemies
         }
         static int hitboxLayer = -1;
 
+        /// <summary>Layer of a limp body (and severed pieces): collides with the world and other bodies, but
+        /// not with Ignore Raycast, where the player and the living infected stand, so a body that falls in a
+        /// doorway never blocks the way. Shots still find it. Falls back to Default if the layer is missing.</summary>
+        public static int CorpseLayer
+        {
+            get
+            {
+                if (corpseLayer != -1) return corpseLayer;
+                corpseLayer = LayerMask.NameToLayer("Corpse");
+                if (corpseLayer < 0) corpseLayer = 0;
+                else Physics.IgnoreLayerCollision(corpseLayer, 2, true);
+                return corpseLayer;
+            }
+        }
+        static int corpseLayer = -1;
+
         readonly HashSet<Collider> severedColliders = new HashSet<Collider>();
 
         void SetDormant()
@@ -296,10 +312,11 @@ namespace BodycamHorror.Enemies
         {
             if (!IsBuilt) return;
             animator.enabled = false;
+            int layer = CorpseLayer;
             foreach (var p in parts)
             {
-                p.bone.gameObject.layer = 0;   // real body now: collides with the world
-                foreach (var c in Cols(p)) { c.gameObject.layer = 0; c.enabled = !severedColliders.Contains(c); }
+                p.bone.gameObject.layer = layer;   // real body now: collides with the world, the player walks through it
+                foreach (var c in Cols(p)) { c.gameObject.layer = layer; c.enabled = !severedColliders.Contains(c); }
                 p.rb.interpolation = RigidbodyInterpolation.Interpolate;
                 p.rb.isKinematic = false;
                 p.rb.linearVelocity = velocity;

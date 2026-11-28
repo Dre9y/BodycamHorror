@@ -109,10 +109,11 @@ MonoBehaviour:
   promptHeight: 0.08
   reach: 0
   lookAngle: 0
+  showcaseEuler: {x: 0, y: 0, z: 0}
   glow: {fileID: 4872511987167546429}
   glowPulse: 0.3
   glowPeriod: 2.2
-  pickupClip: {fileID: 0}
+  pickupClip: {fileID: 8300000, guid: 7fdfc6b148fcb4b4e88b830e8f5ecf1b, type: 3}
   volume: 0.6
 --- !u!1 &8137747755998130408
 GameObject:

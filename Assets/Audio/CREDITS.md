@@ -34,3 +34,8 @@ All recordings are from freesound.org under Creative Commons 0 (public domain), 
 | Lift/door_bang_reverb.mp3 | "REVERB Banging-Slamming Metal Cupboard" by wolfdoctor - https://freesound.org/s/555108/ |
 | Lift/door_bang_metal.mp3 | "Metal_Door_Banging.wav" by mickyman5000 - https://freesound.org/s/340491/ |
 | Lift/door_rattle.mp3 | "Security Screen Door Sounds" by MaltSTi - https://freesound.org/s/556348/ |
+| Door/door_unlock.mp3 | HQ preview, as downloaded (imported mono): "Key Twist in lock" by KieranKeegan - https://freesound.org/people/KieranKeegan/sounds/418846/ |
+| Pickups/pickup_keys.wav | Trimmed, mono, normalised: "Keys Grabbing.wav" by nebulasnails - https://freesound.org/people/nebulasnails/sounds/405531/ |
+| Pickups/pickup_pistol.wav | Trimmed, mono, normalised: "gun handle 7" by rubberduckie - https://freesound.org/people/rubberduckie/sounds/824803/ |
+| Pickups/pickup_shotgun.wav | "gun handle 7" by rubberduckie (https://freesound.org/people/rubberduckie/sounds/824803/) pitched down and low-passed + Weapons/shotgun_rack_01.wav ("Remington870_Pump" by Stoniac - https://freesound.org/s/842736/), mono, normalised |
+| Pickups/pickup_flashlight.wav | "ItemPickup.wav" by nicholasdaryl (https://freesound.org/people/nicholasdaryl/sounds/563465/) + one click of "Flashlight Clicking On.wav" by baidonovan (https://freesound.org/people/baidonovan/sounds/187335/), mono, normalised |

@@ -137,7 +137,7 @@ namespace BodycamHorror.Enemies
         public Light pickupLamp;
         [Tooltip("Its glowing bulb: goes dark with it.")]
         public Renderer pickupLampGlow;
-        [Tooltip("The switch. Empty = a generated click.")]
+        [Tooltip("The switch. Empty = silent (the pickup's own sound covers it).")]
         public AudioClip switchClip;
         [Range(0f, 1f)] public float switchVolume = 0.8f;
         [Tooltip("Other lamps (their roots) that go out with it, e.g. the one behind the player.")]
@@ -246,7 +246,6 @@ namespace BodycamHorror.Enemies
 
         float burstTimer = -1f;
 
-        static AudioClip generatedSwitch;
 
         /// <summary>The lamp over the gun goes out with a click as it is taken.</summary>
         void SwitchOffPickupLamp()
@@ -256,9 +255,8 @@ namespace BodycamHorror.Enemies
             foreach (var f in pickupLamp.GetComponents<LightFlicker>()) f.enabled = false;
             pickupLamp.enabled = false;
             if (pickupLampGlow) Darken(pickupLampGlow);
-            AudioClip clip = switchClip ? switchClip
-                : generatedSwitch ? generatedSwitch : (generatedSwitch = ProceduralAudio.Click(0.035f, 1400f, 0.9f));
-            PlayHere(clip, pickupLamp.transform.position, switchVolume, 1f, 15f);
+            // only a real recording: the pickup's own sound is what is heard as the gun is taken
+            if (switchClip) PlayHere(switchClip, pickupLamp.transform.position, switchVolume, 1f, 15f);
         }
 
         /// <summary>The lamp bursts: a very loud crack of glass where it hangs (and flat in the ears), dark for good.</summary>

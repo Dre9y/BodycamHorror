@@ -16,7 +16,7 @@ namespace BodycamHorror.Weapons
         public enum Kind { Pistol, Shotgun, PistolLight }
 
         public static readonly List<WeaponPickup> All = new List<WeaponPickup>();
-        static AudioClip generatedClip;
+
         /// <summary>A pickup was just taken by this player (raised before the pickup is destroyed).</summary>
         public static event Action<WeaponPickup, GameObject> Taken;
 
@@ -52,7 +52,7 @@ namespace BodycamHorror.Weapons
         [Tooltip("Seconds per breath.")]
         public float glowPeriod = 2.6f;
 
-        [Header("Sound (empty = generated)")]
+        [Header("Sound (empty = silent)")]
         public AudioClip pickupClip;
         [Range(0f, 1f)] public float volume = 0.7f;
 
@@ -131,9 +131,8 @@ namespace BodycamHorror.Weapons
             }
             else if (!gun || !shooting.Give(gun, equip)) return false;
 
-            AudioClip clip = pickupClip ? pickupClip
-                : generatedClip ? generatedClip : (generatedClip = ProceduralAudio.DoubleClick(0.09f, 1500f, 0.6f));
-            BodycamHorror.Audio.SpatialSound.PlayAt(clip, transform.position, volume, 1f, 100f);
+            // only the recorded pickup sound (Assets/Audio/Pickups), never a generated click
+            if (pickupClip) BodycamHorror.Audio.SpatialSound.PlayAt(pickupClip, transform.position, volume, 1f, 100f);
             if (flashlightOff)
             {
                 var flashlight = player.GetComponentInChildren<BodycamFlashlight>(true);

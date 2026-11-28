@@ -1055,6 +1055,12 @@ MonoBehaviour:
   faceForward: 1
   passive: 1
   bangHeadOnWall: 0
+  bangHearZone:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 0, y: 0, z: 0}
+  voiceClips: []
+  screams: 1
+  silent: 0
   groundMask:
     serializedVersion: 2
     m_Bits: 4294967291
@@ -3189,6 +3195,7 @@ MonoBehaviour:
   blurRadius: 1.2
   farBlur: 0.006
   focusSpeed: 7
+  fisheye: 0.9
   barrel: 0.42
   barrelScale: 1.04
   fringing: 0.32
@@ -9502,6 +9509,7 @@ MonoBehaviour:
   allowCrouch: 0
   allowJump: 0
   allowBackDive: 0
+  allowClimb: 0
   diveSpeed: 7.5
   diveHeight: 0.55
   diveCooldown: 0.4
@@ -9543,6 +9551,8 @@ MonoBehaviour:
   cornerSlipLookAhead: 0.25
   cornerSlipSpeed: 2
   cornerSlipMaxSpeed: 7
+  maxStepHeight: 0.12
+  stumbleLiftsOver: 0
   wallBumpMinSpeed: 7.2
   stumbleMinSpeed: 6.5
   stumbleMaxObstacleHeight: 0.65
@@ -9674,7 +9684,6 @@ MonoBehaviour:
   neckBelow: 0.12
   lyingHipHeight: 0.12
   hiddenBones: 0a0000000b0000000c000000i
-  castShadows: 1
   stencilShader: {fileID: 4800000, guid: b405c4bc00152fd4dafe5981ad12e0c4, type: 3}
   idle: {fileID: 7400000, guid: b32ce0c7db89fe94cbbcd4bde2b10358, type: 2}
   walkForward: {fileID: 7400000, guid: dfa2a37411e3777408e079e15e4232ab, type: 2}
@@ -9715,6 +9724,7 @@ MonoBehaviour:
   stress: {fileID: 0}
   flashlight: {fileID: 0}
   concussion: {fileID: 0}
+  deathCam: {fileID: 0}
   debugHitKey: 99
   hitsTaken: 0
   woundTimeLeft: 0
@@ -10473,6 +10483,12 @@ MonoBehaviour:
   faceForward: 1
   passive: 1
   bangHeadOnWall: 0
+  bangHearZone:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 0, y: 0, z: 0}
+  voiceClips: []
+  screams: 1
+  silent: 0
   groundMask:
     serializedVersion: 2
     m_Bits: 4294967291
@@ -10548,6 +10564,12 @@ MonoBehaviour:
   faceForward: 1
   passive: 1
   bangHeadOnWall: 1
+  bangHearZone:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 0, y: 0, z: 0}
+  voiceClips: []
+  screams: 1
+  silent: 0
   groundMask:
     serializedVersion: 2
     m_Bits: 4294967291
@@ -11435,6 +11457,17 @@ MonoBehaviour:
   pumpTravel: 0.09
   pumpDelay: 0.16
   pumpTime: 0.34
+  recoilBoost: 1.55
+  cameraBoost: 1.7
+  flashBoost: 2.6
+  flashRangeBoost: 1.8
+  flashSizeBoost: 1.9
+  flashDurationBoost: 1.6
+  ownEchoTail: 0.9
+  spreadBoost: 1.3
+  muzzleSparks: 16
+  muzzleEmbers: 5
+  muzzleSmoke: 4
   modelPrefab: {fileID: 1615849217302968901, guid: 391819f09820ad9478ae665c649c63fb, type: 3}
   modelScale: 1
   modelEuler: {x: 0, y: -90, z: 0}
@@ -14608,6 +14641,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Door_LightRoom
       objectReference: {fileID: 0}
+    - target: {fileID: 3997233131510277538, guid: 3a7e66ac9eba7c54fa91ec8d2207c732, type: 3}
+      propertyPath: unlockClip
+      value: 
+      objectReference: {fileID: 8300000, guid: 61db8ede22985984e979d984dfebdd9f, type: 3}
     - target: {fileID: 5042191561566013404, guid: 3a7e66ac9eba7c54fa91ec8d2207c732, type: 3}
       propertyPath: m_LocalPosition.x
       value: 1.35
@@ -20493,6 +20530,12 @@ MonoBehaviour:
   faceForward: 1
   passive: 1
   bangHeadOnWall: 0
+  bangHearZone:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 0, y: 0, z: 0}
+  voiceClips: []
+  screams: 1
+  silent: 0
   groundMask:
     serializedVersion: 2
     m_Bits: 4294967291

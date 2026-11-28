@@ -117,6 +117,14 @@ namespace BodycamHorror.Player
         [Tooltip("Fastest sideways ease round a corner (m/s).")]
         public float cornerSlipMaxSpeed = 7f;
 
+        [Header("Stepping")]
+        [Tooltip("Highest edge the player walks up onto by itself (m): thresholds and floor seams, not crates or "
+                 + "furniture. Caps the CharacterController's Step Offset. Stairs need a ramp collider.")]
+        public float maxStepHeight = 0.12f;
+        [Tooltip("Tripping over a low obstacle lifts the feet over its edge (and can leave you standing on it). "
+                 + "Off: you stagger in front of it and stay on the floor.")]
+        public bool stumbleLiftsOver = false;
+
         [Header("Impacts")]
         [Tooltip("Slowest head-on run into a wall that stuns you (speed into the wall, m/s): a full sprint nearly square-on. Anything less, or more glancing, just stops you or slides you along.")]
         public float wallBumpMinSpeed = 7.2f;
@@ -260,7 +268,12 @@ namespace BodycamHorror.Player
         void Awake()
         {
             cc = GetComponent<CharacterController>();
-            standStepOffset = cc.stepOffset;
+            standStepOffset = Mathf.Min(cc.stepOffset, maxStepHeight);
+            cc.stepOffset = standStepOffset;
+            // bodies (limp or dormant hitboxes) are never obstacles: no tripping, ledges or corner slips on them
+            int corpse = LayerMask.NameToLayer("Corpse"), hitbox = LayerMask.NameToLayer("Hitbox");
+            if (corpse >= 0) environmentMask &= ~(1 << corpse);
+            if (hitbox >= 0) environmentMask &= ~(1 << hitbox);
             cc.height = standHeight;
             cc.center = Vector3.up * (standHeight * 0.5f);
             yaw = transform.eulerAngles.y;
@@ -1056,7 +1069,9 @@ namespace BodycamHorror.Player
             crouching = false;
             hVel *= 0.6f;
             vVel = 2.5f;
-            pendingLift = obstacleHeight + 0.05f;   // feet are lifted over the edge next frame: tripped over it, not through it
+            // feet are lifted over the edge next frame: tripped over it, not through it (off: stays on the floor)
+            pendingLift = stumbleLiftsOver ? obstacleHeight + 0.05f : 0f;
+            if (!stumbleLiftsOver) { vVel = 0f; hVel = Vector3.zero; }
             groundedLast = false;
             impactCooldown = 0.6f;
             impactDuringMove = true;

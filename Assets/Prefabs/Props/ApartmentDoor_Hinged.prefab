@@ -267,7 +267,7 @@ MonoBehaviour:
   keyId: 
   keyUsedUp: 1
   latch: 0
-  unlockClip: {fileID: 0}
+  unlockClip: {fileID: 8300000, guid: 61db8ede22985984e979d984dfebdd9f, type: 3}
   enemiesCanOpen: 1
   enemyReach: 1.5
   enemyOpenTime: 0.3

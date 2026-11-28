@@ -371,7 +371,7 @@ namespace BodycamHorror.Enemies
             m.SetTriangles(skin, 0, true);
             m.SetTriangles(flesh, 1, true);
 
-            var go = new GameObject("Severed " + part);
+            var go = new GameObject("Severed " + part) { layer = InfectedRagdoll.CorpseLayer };   // never blocks the player
             go.transform.SetPositionAndRotation(centroid, frame);
             go.AddComponent<MeshFilter>().sharedMesh = m;
             var r2 = go.AddComponent<MeshRenderer>();

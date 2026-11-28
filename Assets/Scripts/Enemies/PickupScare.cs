@@ -44,7 +44,7 @@ namespace BodycamHorror.Enemies
         public RuntimeAnimatorController animatorController;
         public AnimationClip[] idleVariants;
 
-        [Header("Sound (empty = generated)")]
+        [Header("Sound (empty = silent)")]
         public AudioClip onClip;
         public AudioClip offClip;
         [Range(0f, 1f)] public float volume = 0.9f;
@@ -87,7 +87,7 @@ namespace BodycamHorror.Enemies
             lamp.color = lightColor;
             lamp.range = lightRange;
             lamp.enabled = true;
-            Play(onClip ? onClip : ProceduralAudio.DoubleClick(0.05f, 700f, 0.9f), lamp.transform.position);
+            if (onClip) Play(onClip, lamp.transform.position);   // no generated click over the pickup's own sound
 
             float t = 0f;
             while (t < duration)
@@ -100,7 +100,7 @@ namespace BodycamHorror.Enemies
             }
 
             lamp.enabled = false;
-            Play(offClip ? offClip : ProceduralAudio.Click(0.04f, 500f, 0.8f), lamp.transform.position);
+            if (offClip) Play(offClip, lamp.transform.position);
             Clear();
             running = false;
         }

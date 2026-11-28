@@ -120,6 +120,7 @@ namespace BodycamHorror.EditorTools
             door.closeClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_close.wav");
             door.shutClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_shut.wav");
             door.lockedClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_locked.wav");   // yanked against the bolt
+            door.unlockClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_unlock.mp3");   // key turning in the lock
 
             if (locked)
             {

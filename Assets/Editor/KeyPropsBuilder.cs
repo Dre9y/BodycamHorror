@@ -70,6 +70,7 @@ namespace BodycamHorror.EditorTools
             pickup.keyId = id;
             pickup.label = label;
             pickup.promptHeight = 0.08f;
+            pickup.pickupClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Pickups/pickup_keys.wav");
 
             // a faint warm glint on it, so it can be found without a flashlight: dim and tight, it must not light up
             // its surroundings (in the key cabinet, under a wall lamp, a brighter one flooded the whole box)
@@ -200,6 +201,7 @@ namespace BodycamHorror.EditorTools
             door.closeClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_close.wav");
             door.shutClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_shut.wav");
             door.lockedClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_locked.wav");
+            door.unlockClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/Door/door_unlock.mp3");   // key turning in the lock
         }
 
         /// <summary>

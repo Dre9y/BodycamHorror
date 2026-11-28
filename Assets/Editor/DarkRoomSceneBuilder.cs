@@ -180,6 +180,8 @@ namespace BodycamHorror.EditorTools
             root.transform.position = floorPoint;
             var pickup = root.AddComponent<WeaponPickup>();
             pickup.weapon = kind;
+            pickup.pickupClip = AssetDatabase.LoadAssetAtPath<AudioClip>(kind == WeaponPickup.Kind.Shotgun ? "Assets/Audio/Pickups/pickup_shotgun.wav"
+                : kind == WeaponPickup.Kind.PistolLight ? "Assets/Audio/Pickups/pickup_flashlight.wav" : "Assets/Audio/Pickups/pickup_pistol.wav");
 
             model.name = "Model";
             model.SetActive(true);
